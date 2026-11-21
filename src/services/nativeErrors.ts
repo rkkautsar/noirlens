@@ -33,7 +33,7 @@ export function describeNativeError(
       return {
         code: 'capture_failed',
         message: 'No frame arrived. Hold steady and try again.',
-        fatal: false,
+        fatal: true,
       };
     case 'ERR_OCR_FAILED':
       return {
@@ -65,7 +65,7 @@ export function describeNativeError(
       return {
         code: 'capture_failed',
         message: nativeMessage ?? 'The scan failed. Try again.',
-        fatal: false,
+        fatal: true,
       };
   }
 }

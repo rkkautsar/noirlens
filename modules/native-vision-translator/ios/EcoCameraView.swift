@@ -54,6 +54,7 @@ class EcoCameraView: ExpoView {
     edgesLayer.frame = bounds
     CATransaction.commit()
 
+    CameraController.shared.updatePreviewSize(bounds.size)
     updatePreviewRotation()
   }
 

@@ -123,6 +123,7 @@ export default function ScannerScreen() {
               remaining={snapshot.remainingToday}
               unlimited={snapshot.unlimited}
               error={snapshot.error}
+              onReticleFrame={scanner.setReticleFrame}
               onStop={scanner.stop}
               onOpenLanguages={openLanguages}
               onOpenPaywall={openPaywall}

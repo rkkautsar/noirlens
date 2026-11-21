@@ -9,7 +9,7 @@ import {
 } from 'react';
 import { AppState } from 'react-native';
 
-import vision from '../../modules/native-vision-translator';
+import vision, { type OcrCrop } from '../../modules/native-vision-translator';
 import { isEnglishLanguageCode } from '@/constants/languages';
 import { localDayKey } from '@/services/day';
 import { entitlements } from '@/services/entitlements';
@@ -31,6 +31,7 @@ const CAPTURE_TIMEOUT_MS = 12_000;
 export interface ScannerController {
   snapshot: ScannerSnapshot;
   beginHold: () => void;
+  setReticleFrame: (crop: OcrCrop | null) => void;
   scanAgain: () => void;
   captureNow: () => void;
   stop: () => void;
@@ -60,6 +61,7 @@ export function useScanner(): ScannerController {
   );
 
   const focusedRef = useRef(false);
+  const reticleCropRef = useRef<OcrCrop | null>(null);
 
   useKeepAwake();
 
@@ -119,8 +121,16 @@ export function useScanner(): ScannerController {
 
       try {
         const selectedLanguage = sourceLanguage.current();
+        const crop =
+          reticleCropRef.current ?? {
+            x: 0.2,
+            y: 0.2,
+            width: 0.6,
+            height: 0.6,
+          };
         const ocr = await vision.captureFrame(
           selectedLanguage === 'auto' ? '' : selectedLanguage,
+          crop,
         );
         if (token !== captureToken) {
           return;
@@ -409,6 +419,10 @@ export function useScanner(): ScannerController {
     };
   }, [store]);
 
+  const setReticleFrame = useCallback((crop: OcrCrop | null) => {
+    reticleCropRef.current = crop;
+  }, []);
+
   const beginHold = useCallback(() => {
     if (store.getSnapshot().state === 'SLEEP') {
       store.send({ type: 'WAKE', timestampMs: Date.now() });
@@ -434,6 +448,7 @@ export function useScanner(): ScannerController {
   return {
     snapshot,
     beginHold,
+    setReticleFrame,
     scanAgain,
     captureNow,
     stop,

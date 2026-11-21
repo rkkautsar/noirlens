@@ -5,6 +5,13 @@ struct TranslateParams: Record {
   @Field var sourceLanguage: String = ""
 }
 
+struct CropRect: Record {
+  @Field var x: Double = 0
+  @Field var y: Double = 0
+  @Field var width: Double = 0
+  @Field var height: Double = 0
+}
+
 public final class NativeVisionTranslatorModule: Module {
   public func definition() -> ModuleDefinition {
     Name("NativeVisionTranslator")
@@ -27,8 +34,8 @@ public final class NativeVisionTranslatorModule: Module {
       await CameraController.shared.status()
     }
 
-    AsyncFunction("captureFrame") { (sourceLanguage: String) async throws -> [String: Any] in
-      let frame = try await CameraController.shared.captureFrame()
+    AsyncFunction("captureFrame") { (sourceLanguage: String, crop: CropRect?) async throws -> [String: Any] in
+      let frame = try await CameraController.shared.captureFrame(crop: crop)
       guard let pixelBuffer = frame.pixelBuffer else {
         throw cameraException(
           name: "NoFrame",
@@ -39,7 +46,8 @@ public final class NativeVisionTranslatorModule: Module {
       return try TextRecognizer.recognize(
         pixelBuffer: pixelBuffer,
         previewJpegBase64: frame.previewJpegBase64,
-        languageHint: sourceLanguage
+        languageHint: sourceLanguage,
+        cropRect: frame.cropRect
       )
     }
 

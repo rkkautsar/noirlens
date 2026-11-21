@@ -1,3 +1,4 @@
+import CoreImage
 import CryptoKit
 import ExpoModulesCore
 import Foundation
@@ -30,6 +31,7 @@ enum TextRecognizer {
     "ja-JP", "ko-KR", "zh-Hans", "zh-Hant", "th-TH",
     "vi-VT", "vi-VN", "id-ID",
   ]
+  private static let ciContext = CIContext(options: [.useSoftwareRenderer: false])
   private static let punctuationNoise = CharacterSet(
     charactersIn: "0123456789.,:;+-*/%$€£¥₩₹()[]{}#*·•°'\"`~^_=<>|\\"
   )
@@ -37,11 +39,23 @@ enum TextRecognizer {
   static func recognize(
     pixelBuffer: CVPixelBuffer,
     previewJpegBase64: String?,
-    languageHint: String
+    languageHint: String,
+    cropRect: CGRect? = nil
   ) throws -> [String: Any] {
-    // The upright frame is the landscape buffer rotated 90 degrees.
-    let width = CVPixelBufferGetHeight(pixelBuffer)
-    let height = CVPixelBufferGetWidth(pixelBuffer)
+    // The upright frame is the landscape buffer rotated 90 degrees. Crop it
+    // to the reticle so off-preview UI (URL bars, browser chrome) never
+    // reaches OCR.
+    let upright = CIImage(cvPixelBuffer: pixelBuffer).oriented(.right)
+    let cropped = cropRect.map { upright.cropped(to: $0) } ?? upright
+    guard let image = ciContext.createCGImage(cropped, from: cropped.extent) else {
+      throw Exception(
+        name: "TextRecognitionFailed",
+        description: "The captured frame could not be prepared for OCR.",
+        code: "ERR_OCR_FAILED"
+      )
+    }
+    let width = image.width
+    let height = image.height
 
     // Prefer an explicit list covering every language pack the app can
     // translate. Vision's auto-detection can latch onto a short English
@@ -53,7 +67,7 @@ enum TextRecognizer {
 
     if !preferred.isEmpty {
       do {
-        lines = try runPass(pixelBuffer, automatic: false, languages: preferred)
+        lines = try runPass(image, automatic: false, languages: preferred)
       } catch {
         NSLog("[NoirLens] OCR explicit pass failed: %@", error.localizedDescription)
       }
@@ -61,7 +75,7 @@ enum TextRecognizer {
 
     if lines.isEmpty {
       do {
-        lines = try runPass(pixelBuffer, automatic: true, languages: [])
+        lines = try runPass(image, automatic: true, languages: [])
       } catch {
         throw Exception(
           name: "TextRecognitionFailed",
@@ -200,7 +214,7 @@ enum TextRecognizer {
   }
 
   private static func runPass(
-    _ pixelBuffer: CVPixelBuffer,
+    _ image: CGImage,
     automatic: Bool,
     languages: [String]
   ) throws -> [Line] {
@@ -213,8 +227,8 @@ enum TextRecognizer {
     }
 
     let handler = VNImageRequestHandler(
-      cvPixelBuffer: pixelBuffer,
-      orientation: .right,
+      cgImage: image,
+      orientation: .up,
       options: [:]
     )
     try handler.perform([request])

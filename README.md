@@ -15,7 +15,9 @@ No accounts. No uploads. No server. Apple's `Vision` and `Translation` framework
 
 The transition table is implemented as a pure reducer in `src/scanner/machine.ts`. There is no motion gesture: the hold shutter is the only camera trigger.
 
-**Hold to scan:** press and hold almost anywhere on the standby or aiming screen (top-bar chips and buttons still take their own taps). The camera opens while your finger is down; aim at the sign, then release to capture. A normal hold is under a second. The result stays on screen when you lower the phone to read it. On the result, the bottom bar is **HOLD FOR NEXT SCAN**; the translated/source text is selectable and **COPY** copies the shown text plus any price estimates. Tapping **SCAN AGAIN** returns to standby if you prefer tapping over holding.
+**Hold to scan:** press and hold almost anywhere on the standby or aiming screen (top-bar chips and buttons still take their own taps). The camera opens while your finger is down; aim at the sign through the reticle, then release to capture. A normal hold is under a second. **OCR reads only the square inside the reticle**, not the full sensor frame, so browser URL bars and page chrome outside the aim area cannot leak into the result; the frozen **ORIGINAL** view shows that same crop. URL/percent-encoded query lines are also dropped even if they fall inside the reticle.
+
+The result stays on screen when you lower the phone to read it. On the result, the bottom bar is **HOLD FOR NEXT SCAN**; the translated/source text is selectable and **COPY** copies the shown text plus any price estimates. Tapping **SCAN AGAIN** returns to standby if you prefer tapping over holding.
 
 
 **Source language** is selectable from the top-bar language chip. The default is **AUTO**, which never claims English: an English-only scene shows a short notice instead of a fake translation, and mixed text prefers the non-English language. AUTO picks the best of the nine supported source languages, plus script and German function-word hints, so a short umlaut-free German sign is not misread as Romanian or Polish; unsupported detections are reported as unknown rather than offering a pack this app cannot install. Choosing a specific language forces that source. If the needed offline pack is missing, the result still shows the captured source text with a one-tap pack prompt — it is not treated as a failed scan and does not consume a free scan. Only a completed translation counts against the daily limit.
@@ -129,6 +131,7 @@ npx expo export --platform ios --output-dir dist
 - Unsigned builds cannot be submitted to the App Store and expire weekly with a free Apple ID.
 - Language packs are installed by iOS, not by the app; deleting one in Settings requires re-downloading it.
 - Price detection requires an explicit currency symbol or ISO code; bare numbers, times and dates are ignored. Rates are bundled estimates, not live market data, and no network request is made.
+- OCR is limited to the reticle square. Text outside it is intentionally ignored; step back to fit a wide sign.
 
 ## Layout
 

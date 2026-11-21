@@ -6,6 +6,7 @@ import UIKit
 struct CapturedFrame {
   let sampleBuffer: CMSampleBuffer
   let previewJpegBase64: String?
+  let cropRect: CGRect?
 
   var pixelBuffer: CVPixelBuffer? {
     CMSampleBufferGetImageBuffer(sampleBuffer)
@@ -41,6 +42,7 @@ final class CameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDele
   private weak var edgeSink: EcoCameraView?
   private var ecoMode = false
   private var lastEdgeFrameAt: CFTimeInterval = 0
+  private var previewViewSize: CGSize = .zero
 
   private override init() {
     super.init()
@@ -113,7 +115,7 @@ final class CameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDele
 
   // MARK: - Capture
 
-  func captureFrame() async throws -> CapturedFrame {
+  func captureFrame(crop: CropRect? = nil) async throws -> CapturedFrame {
     // Re-focus and re-expose at the reticle center, then take a fresh frame.
     // The auto arm can fire while AF is still settling; this gives every
     // capture a dedicated, sharp frame instead of whatever was on screen.
@@ -141,10 +143,67 @@ final class CameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDele
       )
     }
 
+    let cropRect = imageCropRect(for: crop, pixelBuffer: pixelBuffer)
     return CapturedFrame(
       sampleBuffer: sampleBuffer,
-      previewJpegBase64: makePreviewJPEG(pixelBuffer: pixelBuffer)
+      previewJpegBase64: makePreviewJPEG(pixelBuffer: pixelBuffer, cropRect: cropRect),
+      cropRect: cropRect
     )
+  }
+
+  func updatePreviewSize(_ size: CGSize) {
+    stateLock.lock()
+    previewViewSize = size
+    stateLock.unlock()
+  }
+
+  private func imageCropRect(
+    for crop: CropRect?,
+    pixelBuffer: CVPixelBuffer
+  ) -> CGRect? {
+    guard let crop, crop.width > 0, crop.height > 0 else {
+      return nil
+    }
+
+    stateLock.lock()
+    let viewSize = previewViewSize
+    stateLock.unlock()
+
+    guard viewSize.width > 0, viewSize.height > 0 else {
+      return nil
+    }
+
+    // The upright image is the landscape buffer rotated right.
+    let uprightWidth = CGFloat(CVPixelBufferGetHeight(pixelBuffer))
+    let uprightHeight = CGFloat(CVPixelBufferGetWidth(pixelBuffer))
+    guard uprightWidth > 0, uprightHeight > 0 else {
+      return nil
+    }
+
+    // The preview layer is resizeAspectFill; map the reticle's view rect
+    // through the same scale and center crop before OCR.
+    let scale = max(viewSize.width / uprightWidth, viewSize.height / uprightHeight)
+    let displayWidth = uprightWidth * scale
+    let displayHeight = uprightHeight * scale
+    let offsetX = (displayWidth - viewSize.width) / 2
+    let offsetY = (displayHeight - viewSize.height) / 2
+
+    let viewRect = CGRect(
+      x: CGFloat(crop.x) * viewSize.width,
+      y: CGFloat(crop.y) * viewSize.height,
+      width: CGFloat(crop.width) * viewSize.width,
+      height: CGFloat(crop.height) * viewSize.height
+    )
+    let imageRect = CGRect(
+      x: (viewRect.minX + offsetX) / scale,
+      y: (viewRect.minY + offsetY) / scale,
+      width: viewRect.width / scale,
+      height: viewRect.height / scale
+    )
+    let clipped = imageRect.intersection(
+      CGRect(x: 0, y: 0, width: uprightWidth, height: uprightHeight)
+    )
+    return clipped.isNull ? nil : clipped
   }
 
   private func prepareForCapture() async {
@@ -423,9 +482,13 @@ final class CameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDele
     }
   }
 
-  private func makePreviewJPEG(pixelBuffer: CVPixelBuffer) -> String? {
+  private func makePreviewJPEG(
+    pixelBuffer: CVPixelBuffer,
+    cropRect: CGRect?
+  ) -> String? {
     let upright = CIImage(cvPixelBuffer: pixelBuffer).oriented(.right)
-    guard let cgImage = ciContext.createCGImage(upright, from: upright.extent) else {
+    let cropped = cropRect.map { upright.cropped(to: $0) } ?? upright
+    guard let cgImage = ciContext.createCGImage(cropped, from: cropped.extent) else {
       return nil
     }
     guard let data = UIImage(cgImage: cgImage).jpegData(compressionQuality: 0.55) else {

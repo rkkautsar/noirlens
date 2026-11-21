@@ -1,6 +1,14 @@
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  StyleSheet,
+  Text,
+  View,
+  useWindowDimensions,
+  type LayoutChangeEvent,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import type { OcrCrop } from '../../modules/native-vision-translator';
 import type { ScanError } from '@/scanner/machine';
 import { colors, typography } from '@/theme';
 import { TopBar } from './TopBar';
@@ -13,6 +21,7 @@ export function AimHud({
   remaining,
   unlimited,
   error,
+  onReticleFrame,
   onStop,
   onOpenLanguages,
   onOpenPaywall,
@@ -23,11 +32,30 @@ export function AimHud({
   remaining: number | null;
   unlimited: boolean;
   error: ScanError | null;
+  onReticleFrame?: (crop: OcrCrop) => void;
   onStop: () => void;
   onOpenLanguages: () => void;
   onOpenPaywall: () => void;
 }) {
   const insets = useSafeAreaInsets();
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
+
+  const reportReticle = (event: LayoutChangeEvent) => {
+    if (!onReticleFrame) {
+      return;
+    }
+    const { x, y, width, height } = event.nativeEvent.layout;
+    const size = Math.min(RETICLE_SIZE, width, height);
+    if (size <= 0 || windowWidth <= 0 || windowHeight <= 0) {
+      return;
+    }
+    onReticleFrame({
+      x: (x + (width - size) / 2) / windowWidth,
+      y: (y + (height - size) / 2) / windowHeight,
+      width: size / windowWidth,
+      height: size / windowHeight,
+    });
+  };
 
   return (
     <View style={styles.container} pointerEvents="box-none">
@@ -41,7 +69,11 @@ export function AimHud({
         showNavigation={false}
       />
 
-      <View style={styles.reticleArea} pointerEvents="none">
+      <View
+        style={styles.reticleArea}
+        pointerEvents="none"
+        onLayout={reportReticle}
+      >
         <View style={styles.reticle}>
           <View style={[styles.corner, styles.topLeft]} />
           <View style={[styles.corner, styles.topRight]} />
@@ -84,6 +116,7 @@ export function AimHud({
   );
 }
 
+const RETICLE_SIZE = 230;
 const CORNER = 22;
 const CORNER_WIDTH = 1.5;
 
@@ -101,8 +134,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   reticle: {
-    width: 230,
-    height: 230,
+    width: RETICLE_SIZE,
+    height: RETICLE_SIZE,
   },
   corner: {
     position: 'absolute',

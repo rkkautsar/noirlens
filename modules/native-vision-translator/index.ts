@@ -13,6 +13,13 @@ export interface OcrBlockPayload {
   height: number;
 }
 
+export interface OcrCrop {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
 export interface OcrPayload {
   text: string;
   sourceLanguage: string;
@@ -55,7 +62,7 @@ export interface NativeVisionTranslatorModule extends NativeModule {
   startCamera(): Promise<void>;
   stopCamera(): Promise<void>;
   getCameraStatus(): Promise<CameraStatus>;
-  captureFrame(sourceLanguage: string): Promise<OcrPayload>;
+  captureFrame(sourceLanguage: string, crop?: OcrCrop): Promise<OcrPayload>;
   translate(params: {
     text: string;
     sourceLanguage: string;

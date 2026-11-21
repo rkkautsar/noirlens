@@ -65,12 +65,17 @@ enum TextRecognizer {
     let hint = languageHint.trimmingCharacters(in: .whitespacesAndNewlines)
     let forced = !hint.isEmpty
     let preferred = supportedPreferredLanguages()
+    let english = preferred.first { $0.lowercased().hasPrefix("en") }
+    let traveler = preferred.filter { !$0.lowercased().hasPrefix("en") }
+    // AUTO keeps English available for the English-only notice but puts it
+    // last, so a watermark cannot outrank the actual traveler script.
+    let autoLanguages = english.map { traveler + [$0] } ?? traveler
     let languages = forced
       ? forcedLanguages(hint: hint, preferred: preferred)
-      : preferred
+      : autoLanguages
     // Small foreign print is often below the conservative auto floor. When
     // the user has explicitly chosen the source language, keep it.
-    let confidenceFloor: Float = forced ? 0.35 : 0.50
+    let confidenceFloor: Float = forced ? 0.35 : 0.40
 
     var lines: [Line] = []
     if !languages.isEmpty {

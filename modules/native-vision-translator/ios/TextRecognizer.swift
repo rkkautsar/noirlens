@@ -27,9 +27,9 @@ enum TextRecognizer {
   }
 
   private static let preferredLanguageCodes = [
-    "en-US", "de-DE", "fr-FR", "es-ES", "it-IT", "pt-BR",
-    "ja-JP", "ko-KR", "zh-Hans", "zh-Hant", "th-TH",
-    "vi-VT", "vi-VN", "id-ID",
+    "th-TH", "ko-KR", "ja-JP", "zh-Hans", "zh-Hant",
+    "de-DE", "fr-FR", "es-ES", "vi-VN", "id-ID",
+    "en-US",
   ]
   private static let ciContext = CIContext(options: [.useSoftwareRenderer: false])
   private static let punctuationNoise = CharacterSet(
@@ -315,12 +315,12 @@ enum TextRecognizer {
 
     // Strong orthographic signals (umlauts, kana, Hangul, Thai, Han) and
     // common German function words should win over generic probabilities.
-    if let germanHint = germanSignalLanguage(for: trimmed) {
-      return germanHint
-    }
-
     if let scriptHint = scriptHint(for: trimmed) {
       return scriptHint
+    }
+
+    if let germanHint = germanSignalLanguage(for: trimmed) {
+      return germanHint
     }
 
     // Genuinely English text: no traveler language is plausible, so let the
@@ -364,9 +364,9 @@ enum TextRecognizer {
       }
     }
 
-    if hasKana { return "ja" }
-    if hasHangul { return "ko" }
     if hasThai { return "th" }
+    if hasHangul { return "ko" }
+    if hasKana { return "ja" }
     if hasHan { return "zh-Hans" }
     if text.contains(where: { "äöüßÄÖÜ".contains($0) }) { return "de" }
     return nil

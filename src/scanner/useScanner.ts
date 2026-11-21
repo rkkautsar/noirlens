@@ -10,7 +10,10 @@ import {
 import { AppState } from 'react-native';
 
 import vision, { type OcrCrop } from '../../modules/native-vision-translator';
-import { isEnglishLanguageCode } from '@/constants/languages';
+import {
+  isEnglishLanguageCode,
+  TRAVELER_LANGUAGES,
+} from '@/constants/languages';
 import { localDayKey } from '@/services/day';
 import { entitlements } from '@/services/entitlements';
 import {
@@ -155,7 +158,7 @@ export function useScanner(): ScannerController {
 
         const base = {
           sourceText: ocr.text,
-          sourceLanguage: language,
+          sourceLanguage: language ?? 'und',
           sourceHash: ocr.sourceHash,
           blocks: ocr.blocks,
           imageWidth: ocr.imageWidth,
@@ -169,6 +172,7 @@ export function useScanner(): ScannerController {
           kind: 'translated' | 'english' | 'pack_missing',
           translatedText: string,
           cached: boolean,
+          sourceLanguage: string = language ?? 'und',
         ) => {
           if (
             token !== captureToken ||
@@ -178,7 +182,7 @@ export function useScanner(): ScannerController {
           }
           store.send({
             type: 'CAPTURE_SUCCEEDED',
-            result: { ...base, kind, translatedText, cached },
+            result: { ...base, sourceLanguage, kind, translatedText, cached },
             timestampMs: Date.now(),
           });
         };
@@ -203,6 +207,62 @@ export function useScanner(): ScannerController {
         if (cachedText !== null) {
           sendResult('translated', cachedText, true);
           return;
+        }
+
+        // If AUTO's detected pack is missing and the OCR was unsure, try
+        // already-installed source packs before prompting for a download.
+        const sourceStatus = await vision
+          .checkLanguagePackStatus(language ?? 'und')
+          .catch(() => null);
+        if (
+          selectedLanguage === 'auto' &&
+          sourceStatus?.status !== 'installed' &&
+          ocr.confidence < 0.65
+        ) {
+          const installed = (
+            await Promise.all(
+              TRAVELER_LANGUAGES.map(async (option) => {
+                try {
+                  const status = await vision.checkLanguagePackStatus(
+                    option.code,
+                  );
+                  return status.status === 'installed' ? option.code : null;
+                } catch {
+                  return null;
+                }
+              }),
+            )
+          ).filter((code): code is string => code !== null);
+
+          for (const candidate of installed) {
+            if (token !== captureToken) {
+              return;
+            }
+            try {
+              const translation = await vision.translate({
+                text: ocr.text,
+                sourceLanguage: candidate,
+              });
+              if (token !== captureToken) {
+                return;
+              }
+              void writeCachedTranslation({
+                sourceHash: ocr.sourceHash,
+                sourceText: ocr.text,
+                sourceLanguage: candidate,
+                targetText: translation.translatedText,
+              }).catch(() => {});
+              sendResult(
+                'translated',
+                translation.translatedText,
+                false,
+                candidate,
+              );
+              return;
+            } catch {
+              // Try the next installed source pack.
+            }
+          }
         }
 
         try {

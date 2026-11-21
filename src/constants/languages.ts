@@ -5,13 +5,13 @@ export interface LanguageOption {
 }
 
 export const TRAVELER_LANGUAGES: LanguageOption[] = [
-  { code: 'ja', name: 'Japanese', nativeName: '日本語' },
-  { code: 'ko', name: 'Korean', nativeName: '한국어' },
-  { code: 'zh-Hans', name: 'Chinese (Simplified)', nativeName: '简体中文' },
-  { code: 'es', name: 'Spanish', nativeName: 'Español' },
-  { code: 'fr', name: 'French', nativeName: 'Français' },
-  { code: 'de', name: 'German', nativeName: 'Deutsch' },
   { code: 'th', name: 'Thai', nativeName: 'ไทย' },
+  { code: 'ko', name: 'Korean', nativeName: '한국어' },
+  { code: 'ja', name: 'Japanese', nativeName: '日本語' },
+  { code: 'zh-Hans', name: 'Chinese (Simplified)', nativeName: '简体中文' },
+  { code: 'de', name: 'German', nativeName: 'Deutsch' },
+  { code: 'fr', name: 'French', nativeName: 'Français' },
+  { code: 'es', name: 'Spanish', nativeName: 'Español' },
   { code: 'vi', name: 'Vietnamese', nativeName: 'Tiếng Việt' },
   { code: 'id', name: 'Indonesian', nativeName: 'Bahasa Indonesia' },
 ];

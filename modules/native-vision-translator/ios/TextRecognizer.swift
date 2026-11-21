@@ -62,12 +62,25 @@ enum TextRecognizer {
     // watermark on an otherwise German/Japanese sign and then apply English
     // correction to the wrong glyphs. Fall back to auto-detection only when
     // the explicit pass finds nothing.
-    var lines: [Line] = []
+    let hint = languageHint.trimmingCharacters(in: .whitespacesAndNewlines)
+    let forced = !hint.isEmpty
     let preferred = supportedPreferredLanguages()
+    let languages = forced
+      ? forcedLanguages(hint: hint, preferred: preferred)
+      : preferred
+    // Small foreign print is often below the conservative auto floor. When
+    // the user has explicitly chosen the source language, keep it.
+    let confidenceFloor: Float = forced ? 0.35 : 0.50
 
-    if !preferred.isEmpty {
+    var lines: [Line] = []
+    if !languages.isEmpty {
       do {
-        lines = try runPass(image, automatic: false, languages: preferred)
+        lines = try runPass(
+          image,
+          automatic: false,
+          languages: languages,
+          confidenceFloor: confidenceFloor
+        )
       } catch {
         NSLog("[NoirLens] OCR explicit pass failed: %@", error.localizedDescription)
       }
@@ -75,7 +88,12 @@ enum TextRecognizer {
 
     if lines.isEmpty {
       do {
-        lines = try runPass(image, automatic: true, languages: [])
+        lines = try runPass(
+          image,
+          automatic: true,
+          languages: [],
+          confidenceFloor: 0.50
+        )
       } catch {
         throw Exception(
           name: "TextRecognitionFailed",
@@ -90,7 +108,6 @@ enum TextRecognizer {
     lines = lines.filter { !isUrlNoise($0.text) }
 
     let rawText = lines.map(\.text).joined(separator: "\n")
-    let hint = languageHint.trimmingCharacters(in: .whitespacesAndNewlines)
     let language = hint.isEmpty ? dominantLanguage(in: rawText) : hint
 
     guard !lines.isEmpty else {
@@ -140,7 +157,10 @@ enum TextRecognizer {
 
   // MARK: - Observation parsing
 
-  private static func parse(_ observation: VNRecognizedTextObservation) -> Line? {
+  private static func parse(
+    _ observation: VNRecognizedTextObservation,
+    confidenceFloor: Float
+  ) -> Line? {
     guard let candidate = observation.topCandidates(1).first else {
       return nil
     }
@@ -148,9 +168,9 @@ enum TextRecognizer {
     let text = candidate.string.trimmingCharacters(in: .whitespacesAndNewlines)
     // Long strings are kept at a permissive confidence floor; short strings
     // need to be convincing so signage noise does not flood the result.
-    let confidenceFloor: Float = text.count >= 4 ? 0.50 : 0.72
+    let floor: Float = text.count >= 4 ? confidenceFloor : 0.72
     guard
-      candidate.confidence >= confidenceFloor,
+      candidate.confidence >= floor,
       text.count >= 2,
       !isNoise(text)
     else {
@@ -197,6 +217,26 @@ enum TextRecognizer {
 
   // MARK: - Recognition passes
 
+  /// A forced source language must also lead OCR, not only label the result.
+  /// English is kept as a secondary model for embedded Latin text.
+  private static func forcedLanguages(hint: String, preferred: [String]) -> [String] {
+    let normalized = hint.lowercased()
+    let prefix = normalized.contains("-")
+      ? normalized
+      : String(normalized.prefix(2))
+    let primary = preferred.first { $0.lowercased().hasPrefix(prefix) }
+    guard let primary else {
+      return preferred
+    }
+    var languages = [primary]
+    if let english = preferred.first(where: { $0.lowercased().hasPrefix("en") }),
+       english != primary {
+      languages.append(english)
+    }
+    return languages
+  }
+
+
   private static func supportedPreferredLanguages() -> [String] {
     let probe = VNRecognizeTextRequest()
     guard
@@ -216,7 +256,8 @@ enum TextRecognizer {
   private static func runPass(
     _ image: CGImage,
     automatic: Bool,
-    languages: [String]
+    languages: [String],
+    confidenceFloor: Float
   ) throws -> [Line] {
     let request = VNRecognizeTextRequest()
     request.recognitionLevel = .accurate
@@ -234,7 +275,7 @@ enum TextRecognizer {
     try handler.perform([request])
 
     let observations = request.results ?? []
-    let lines = observations.compactMap(parse)
+    let lines = observations.compactMap { parse($0, confidenceFloor: confidenceFloor) }
     let characters = lines.reduce(0) { $0 + $1.text.count }
     NSLog(
       "[NoirLens] OCR pass automatic=%d languages=%d lines=%d chars=%d",

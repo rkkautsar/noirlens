@@ -10,11 +10,9 @@ export function Standby({
   remaining,
   unlimited,
   hydrated,
-  motionAvailable,
   error,
   ecoMode,
   onEcoChange,
-  onWake,
   onOpenLanguages,
   onOpenPaywall,
   onDismissError,
@@ -22,11 +20,9 @@ export function Standby({
   remaining: number | null;
   unlimited: boolean;
   hydrated: boolean;
-  motionAvailable: boolean;
   error: ScanError | null;
   ecoMode: boolean;
   onEcoChange: (eco: boolean) => void;
-  onWake: () => void;
   onOpenLanguages: () => void;
   onOpenPaywall: () => void;
   onDismissError: () => void;
@@ -34,10 +30,10 @@ export function Standby({
   const insets = useSafeAreaInsets();
   const exhausted = remaining === 0;
 
-  const heading = exhausted ? 'DAILY LIMIT REACHED' : 'RAISE OR TAP';
+  const heading = exhausted ? 'DAILY LIMIT REACHED' : 'HOLD TO SCAN';
   const subheading = exhausted
     ? 'Unlock unlimited scans to keep going.'
-    : 'Lift the phone to arm automatically, or start the camera manually.';
+    : 'Press and hold the shutter. Aim while it is held, then release to capture.';
 
   const counter = !hydrated
     ? 'LOADING COUNTER'
@@ -45,7 +41,7 @@ export function Standby({
       ? 'PRO · UNLIMITED SCANS'
       : `${remaining ?? 0} OF 15 FREE SCANS LEFT TODAY`;
 
-  const primaryAction = exhausted ? onOpenPaywall : onWake;
+  const primaryAction = exhausted ? onOpenPaywall : null;
 
   return (
     <View style={styles.container}>
@@ -60,31 +56,23 @@ export function Standby({
       />
 
       <View style={styles.center}>
-        <MicroLabel tone="dim">SENSOR ASLEEP · 0 W</MicroLabel>
+        <MicroLabel tone="dim">CAMERA OFF · 0 W</MicroLabel>
         <Text style={styles.heading}>{heading}</Text>
         <Text style={styles.subheading}>{subheading}</Text>
 
-        <View style={styles.primaryAction}>
-          <SolidButton
-            label={exhausted ? 'VIEW OPTIONS' : 'START CAMERA'}
-            onPress={primaryAction}
-            primary
-          />
-        </View>
-        <Text style={styles.counterText}>{counter}</Text>
-
-        {!motionAvailable ? (
-          <MicroLabel tone="warning" style={styles.motionNote}>
-            MOTION UNAVAILABLE · TAP TO SCAN
-          </MicroLabel>
+        {primaryAction ? (
+          <View style={styles.primaryAction}>
+            <SolidButton label="VIEW OPTIONS" onPress={primaryAction} primary />
+          </View>
         ) : null}
+        <Text style={styles.counterText}>{counter}</Text>
       </View>
 
       {error ? (
         <View
           style={[
             styles.errorCard,
-            { marginBottom: insets.bottom + 16 },
+            { marginBottom: insets.bottom + 104 },
           ]}
         >
           <MicroLabel
@@ -112,7 +100,7 @@ export function Standby({
       ) : (
         <MicroLabel
           tone="dim"
-          style={[styles.footer, { marginBottom: insets.bottom + 20 }]}
+          style={[styles.footer, { marginBottom: insets.bottom + 104 }]}
         >
           CAMERA OFF · SENSOR POWERED DOWN
         </MicroLabel>
@@ -159,10 +147,6 @@ const styles = StyleSheet.create({
   counterText: {
     ...typography.micro,
     color: colors.accent,
-    textAlign: 'center',
-  },
-  motionNote: {
-    marginTop: 8,
     textAlign: 'center',
   },
   footer: {

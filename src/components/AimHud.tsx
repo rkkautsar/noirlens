@@ -1,32 +1,28 @@
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import type { ScanError, ScannerArmMode } from '@/scanner/machine';
+import type { ScanError } from '@/scanner/machine';
 import { colors, typography } from '@/theme';
 import { TopBar } from './TopBar';
 import { MicroLabel, SolidButton } from './ui';
 
 export function AimHud({
   scanning,
-  mode,
   ecoMode,
   onEcoChange,
   remaining,
   unlimited,
   error,
-  onCapture,
   onStop,
   onOpenLanguages,
   onOpenPaywall,
 }: {
   scanning: boolean;
-  mode: ScannerArmMode;
   ecoMode: boolean;
   onEcoChange: (eco: boolean) => void;
   remaining: number | null;
   unlimited: boolean;
   error: ScanError | null;
-  onCapture: () => void;
   onStop: () => void;
   onOpenLanguages: () => void;
   onOpenPaywall: () => void;
@@ -58,7 +54,7 @@ export function AimHud({
       </View>
 
       <View style={styles.footerWrap}>
-        <View style={[styles.footer, { paddingBottom: insets.bottom + 24 }]}>
+        <View style={[styles.footer, { paddingBottom: insets.bottom + 104 }]}>
           {scanning ? (
             <>
               <View style={styles.readingRow}>
@@ -69,21 +65,12 @@ export function AimHud({
             </>
           ) : (
             <>
-              <Text style={styles.status}>
-                {mode === 'MANUAL' ? 'FRAME THE TEXT' : 'HOLD STEADY'}
-              </Text>
+              <Text style={styles.status}>FRAME THE TEXT</Text>
               <MicroLabel tone="dim">
-                {mode === 'MANUAL'
-                  ? 'MANUAL · TAP CAPTURE WHEN READY'
-                  : 'AUTO · CAPTURE FIRES WHEN STILL'}
+                HOLD · AIM · RELEASE TO CAPTURE
               </MicroLabel>
               <View style={styles.actions}>
-                <View style={styles.captureAction}>
-                  <SolidButton label="CAPTURE" onPress={onCapture} primary />
-                </View>
-                <View style={styles.stopAction}>
-                  <SolidButton label="STOP" onPress={onStop} />
-                </View>
+                <SolidButton label="STOP" onPress={onStop} />
               </View>
             </>
           )}
@@ -192,14 +179,8 @@ const styles = StyleSheet.create({
   actions: {
     flexDirection: 'row',
     alignSelf: 'stretch',
-    gap: 10,
+    justifyContent: 'flex-end',
     marginTop: 6,
-  },
-  captureAction: {
-    flex: 1,
-  },
-  stopAction: {
-    width: 110,
   },
   errorText: {
     ...typography.body,

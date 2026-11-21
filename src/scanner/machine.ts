@@ -395,10 +395,15 @@ function evaluateActive(
     return context;
   }
 
+  // A frozen result is a reading surface. Motion, timeouts and walking must
+  // not take it away; only SCAN AGAIN/STOP leaves this state.
+  if (context.state === 'LOCKED_READ') {
+    return { ...context, nowMs: timestampMs };
+  }
+
   // MANUAL keeps the camera on until STOP or the safety timeout. AUTO follows
   // the phone: lowering it or walking away powers the session down.
-  const manual =
-    context.armMode === 'MANUAL' && context.state !== 'LOCKED_READ';
+  const manual = context.armMode === 'MANUAL';
 
   if (
     !manual &&
@@ -539,13 +544,7 @@ function onMotion(
   }
 
   if (next.state === 'LOCKED_READ') {
-    // Hysteresis: micro-drift and re-aiming inside the band must not re-arm.
-    if (sample.pitchDeg < tuning.dropPitchDeg) {
-      return enterSleep(next, effects, { clearResult: true }, sample.timestampMs);
-    }
-    if (isWalking(history, tuning)) {
-      return enterSleep(next, effects, { clearResult: true }, sample.timestampMs);
-    }
+    // Never discard a result because the phone was lowered to read it.
     return next;
   }
 
@@ -584,6 +583,9 @@ export function reduceScanner(
     case 'TICK': {
       const next = { ...context, nowMs: event.timestampMs };
       if (next.state === 'SLEEP') {
+        return { context: next, effects };
+      }
+      if (next.state === 'LOCKED_READ') {
         return { context: next, effects };
       }
       if (
@@ -729,8 +731,7 @@ export function reduceScanner(
       };
     }
 
-    case 'WAKE':
-    case 'SCAN_AGAIN': {
+    case 'WAKE': {
       return {
         context: attemptArm(
           context,
@@ -738,6 +739,28 @@ export function reduceScanner(
           tuning,
           effects,
           'MANUAL',
+        ),
+        effects,
+      };
+    }
+
+    case 'SCAN_AGAIN': {
+      if (!canScan(context, tuning)) {
+        return {
+          context: {
+            ...showPaywallIfDue(context, event.timestampMs, tuning, effects),
+            nowMs: event.timestampMs,
+          },
+          effects,
+        };
+      }
+      // Return to standby so the next scan is the deliberate hold gesture.
+      return {
+        context: enterSleep(
+          context,
+          effects,
+          { clearResult: true },
+          event.timestampMs,
         ),
         effects,
       };

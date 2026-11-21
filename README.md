@@ -8,23 +8,22 @@ No accounts. No uploads. No server. Apple's `Vision` and `Translation` framework
 
 | State | Camera | Screen | Moves on |
 | --- | --- | --- | --- |
-| `SLEEP` | `stopRunning()`; sensor, AF/OIS and ISP powered down | Pure `#000000`; raise or tap **START CAMERA**; auto-brightness untouched | AUTO: enters the 20–85° band and holds 300 ms; or manual START |
-| `PREWARM` | 1280×720, 30 fps, continuous AF/AE, no HDR/multi-cam | Color preview by default; **NOIR** toggles the warm-white edge HUD. CAPTURE/STOP controls | AUTO: AF/AE settled + angular speed < 0.15 rad/s for 250 ms; MANUAL: CAPTURE |
+| `SLEEP` | `stopRunning()`; sensor, AF/OIS and ISP powered down | Pure `#000000`; hold the bottom shutter; auto-brightness untouched | Press and hold the shutter |
+| `PREWARM` | 1280×720, 30 fps, continuous AF/AE, no HDR/multi-cam | Color preview by default; **NOIR** toggles the warm-white edge HUD. Release-to-capture shutter; STOP | Release the shutter |
 | `SCANNING` | One raw frame grabbed, then `stopRunning()` immediately | "Reading on-device" | OCR + translation finish |
-| `LOCKED_READ` | Off | Black result card; frozen-frame wireframe toggle | Lower phone (<15°) or walking, or "Scan Again" (starts a MANUAL session) |
+| `LOCKED_READ` | Off | Black result card; frozen-frame wireframe toggle | **SCAN AGAIN** (returns to standby); lowering or walking never clears it |
 
-The transition table is implemented as a pure reducer in `src/scanner/machine.ts`, with every threshold in `DEFAULT_TUNING`. Motion is sampled at 20 Hz; pitch comes from the gravity vector (0° = flat, 90° = upright) and walking is detected from 600 ms of angular-speed variance.
+The transition table is implemented as a pure reducer in `src/scanner/machine.ts`. There is no motion gesture: the hold shutter is the only camera trigger.
 
-**Manual mode is always available:** tap **START CAMERA** on the standby screen, frame the text, then tap **CAPTURE** or **STOP**. Manual sessions ignore motion, so lowering the phone does not end them; a 90-second safety timeout does.
+**Hold to scan:** press and hold the shutter at the bottom of the standby screen. The camera opens while your finger is down; aim at the sign, then release to capture. A normal hold is under a second. The result stays on screen when you lower the phone to read it; **SCAN AGAIN** returns to standby for the next hold.
 
-**AUTO mode** arms only after the phone enters the 20–85° reading band and stays there for 300 ms, with an 800 ms cooldown after sleeping. The dwell is what stops a phone that is merely passing through the band on its way down from waking the camera. Either entry direction counts, so a phone carried vertically in a pocket can arm on the way down to eye level.
 
 **Source language** is selectable from the top-bar language chip. The default is **AUTO**, which never claims English: an English-only scene shows a short notice instead of a fake translation, and mixed text prefers the non-English language. AUTO picks the best of the nine supported source languages, plus script and German function-word hints, so a short umlaut-free German sign is not misread as Romanian or Polish; unsupported detections are reported as unknown rather than offering a pack this app cannot install. Choosing a specific language forces that source. If the needed offline pack is missing, the result still shows the captured source text with a one-tap pack prompt — it is not treated as a failed scan and does not consume a free scan. Only a completed translation counts against the daily limit.
 
 ## Stack
 
 - Expo SDK 58, React Native 0.88, React 19, TypeScript strict, New Architecture
-- `expo-router`, `expo-sensors` (CoreMotion), `expo-keep-awake`, `expo-sqlite`
+- `expo-router`, `expo-keep-awake`, `expo-sqlite`
 - Local Expo module `modules/native-vision-translator` (Swift, iOS 18 deployment target)
   - `AVCaptureSession` power lifecycle
   - CoreImage luma-edge HUD (`CIEdges` + `CIColorMonochrome`, 15 fps)
@@ -106,7 +105,7 @@ Apple's supported language pairs are the ceiling. If detection returns a script 
 - The eco HUD runs a GPU-backed CoreImage edge pass over the 720p frame at 15 fps and renders warm-white outlines on black; the color preview layer is hidden in that mode.
 - Frame rate is capped by the 720p/30 fps session preset; HDR video, low-light boost, subject-area monitoring and multi-camera devices are deliberately not used.
 - Screen brightness is never touched; the OLED black standby plus auto-brightness handle idle power. The scanner keeps the screen awake while mounted.
-- App backgrounding or a 2.5 s motion-sample gap forces `SLEEP` and stops the session.
+- App backgrounding forces `SLEEP` and stops the session. A frozen result is never interrupted by backgrounding the camera.
 
 ## Verify
 
@@ -122,7 +121,7 @@ npx expo export --platform ios --output-dir dist
 ## Limits
 
 - iOS-only, iPhone-only, portrait-locked. No Android or web build.
-- The simulator has no camera and no motion sensors; use a device.
+- The simulator has no camera; use a device.
 - OCR is tuned for signage: strings shorter than 2 characters and pure numbers/currency are discarded. Long strings use a permissive 0.50 confidence floor; 2–3 character strings require 0.72.
 - OCR prefers the traveler language list (German, Japanese, Chinese, etc.) so a short English watermark cannot skew language correction. Auto-detection is the fallback when that list finds nothing. AUTO source selection weighs language hypotheses toward non-English and falls back to the script hint for umlauts, kana, Hangul, Thai and Han characters.
 - Unsigned builds cannot be submitted to the App Store and expire weekly with a free Apple ID.
@@ -138,7 +137,7 @@ app/                         Expo Router screens
 modules/native-vision-translator/
   ios/                       Swift camera, OCR, Translation bridge
 src/scanner/                 pure reducer, store, controller, geometry
-src/services/                SQLite, cache, ledger, entitlements, motion
+src/services/                SQLite, cache, ledger, entitlements, source language
 src/components/              OLED UI primitives and views
 assets/icon.png              black + warm-white reticle app icon
 .github/workflows/           unsigned IPA CI

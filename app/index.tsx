@@ -5,6 +5,7 @@ import { StyleSheet, View } from 'react-native';
 import { AimHud } from '@/components/AimHud';
 import { OriginalView } from '@/components/OriginalView';
 import { ResultCard } from '@/components/ResultCard';
+import { ScanShutter } from '@/components/ScanShutter';
 import { Standby } from '@/components/Standby';
 import { useScanner } from '@/scanner/useScanner';
 import {
@@ -25,6 +26,7 @@ export default function ScannerScreen() {
   const active = state === 'PREWARM' || state === 'SCANNING';
   const locked = state === 'LOCKED_READ' && result !== null;
   const standby = state === 'SLEEP' || (state === 'LOCKED_READ' && result === null);
+  const exhausted = snapshot.remainingToday === 0;
 
   useEffect(() => {
     let cancelled = false;
@@ -74,8 +76,6 @@ export default function ScannerScreen() {
           remaining={snapshot.remainingToday}
           unlimited={snapshot.unlimited}
           error={snapshot.error}
-          mode={snapshot.mode}
-          onCapture={scanner.captureNow}
           onStop={scanner.stop}
           onOpenLanguages={openLanguages}
           onOpenPaywall={openPaywall}
@@ -87,11 +87,9 @@ export default function ScannerScreen() {
           remaining={snapshot.remainingToday}
           unlimited={snapshot.unlimited}
           hydrated={snapshot.hydrated}
-          motionAvailable={scanner.motionAvailable}
           error={snapshot.error}
           ecoMode={ecoMode}
           onEcoChange={updateEcoMode}
-          onWake={scanner.startManual}
           onOpenLanguages={openLanguages}
           onOpenPaywall={openPaywall}
           onDismissError={scanner.dismissError}
@@ -127,6 +125,15 @@ export default function ScannerScreen() {
           }}
           onOpenLanguages={openLanguages}
           onOpenPaywall={openPaywall}
+        />
+      ) : null}
+
+      {!locked && !exhausted ? (
+        <ScanShutter
+          active={state === 'PREWARM'}
+          scanning={state === 'SCANNING'}
+          onStart={scanner.beginHold}
+          onCapture={scanner.captureNow}
         />
       ) : null}
     </View>

@@ -5,7 +5,6 @@ import {
   useCallback,
   useEffect,
   useRef,
-  useState,
   useSyncExternalStore,
 } from 'react';
 import { AppState } from 'react-native';
@@ -14,7 +13,6 @@ import vision from '../../modules/native-vision-translator';
 import { isEnglishLanguageCode } from '@/constants/languages';
 import { localDayKey } from '@/services/day';
 import { entitlements } from '@/services/entitlements';
-import { startMotionSampler, type MotionSampler } from '@/services/motion';
 import {
   describeNativeError,
   isLanguagePackFailure,
@@ -32,8 +30,7 @@ const CAPTURE_TIMEOUT_MS = 12_000;
 
 export interface ScannerController {
   snapshot: ScannerSnapshot;
-  motionAvailable: boolean;
-  startManual: () => void;
+  beginHold: () => void;
   scanAgain: () => void;
   captureNow: () => void;
   stop: () => void;
@@ -62,7 +59,6 @@ export function useScanner(): ScannerController {
     store.getSnapshot,
   );
 
-  const [motionAvailable, setMotionAvailable] = useState(true);
   const focusedRef = useRef(false);
 
   useKeepAwake();
@@ -91,7 +87,6 @@ export function useScanner(): ScannerController {
     let capturing = false;
     let captureToken = 0;
     let pollingStatus = false;
-    let sampler: MotionSampler | null = null;
     let statusTimer: ReturnType<typeof setInterval> | null = null;
     let currentDay = localDayKey();
 
@@ -369,25 +364,6 @@ export function useScanner(): ScannerController {
       }
     })();
 
-    void startMotionSampler((sample) => {
-      if (!disposed && focusedRef.current) {
-        store.send({ type: 'MOTION', sample });
-      }
-    })
-      .then((result) => {
-        if (disposed) {
-          result?.stop();
-          return;
-        }
-        sampler = result;
-        setMotionAvailable(result !== null);
-      })
-      .catch(() => {
-        if (!disposed) {
-          setMotionAvailable(false);
-        }
-      });
-
     const tickTimer = setInterval(() => {
       store.send({ type: 'TICK', timestampMs: Date.now() });
     }, 250);
@@ -429,13 +405,14 @@ export function useScanner(): ScannerController {
       clearInterval(tickTimer);
       clearInterval(dayTimer);
       clearInterval(statusTimer);
-      sampler?.stop();
       void vision.stopCamera().catch(() => {});
     };
   }, [store]);
 
-  const startManual = useCallback(() => {
-    store.send({ type: 'WAKE', timestampMs: Date.now() });
+  const beginHold = useCallback(() => {
+    if (store.getSnapshot().state === 'SLEEP') {
+      store.send({ type: 'WAKE', timestampMs: Date.now() });
+    }
   }, [store]);
 
   const scanAgain = useCallback(() => {
@@ -456,8 +433,7 @@ export function useScanner(): ScannerController {
 
   return {
     snapshot,
-    motionAvailable,
-    startManual,
+    beginHold,
     scanAgain,
     captureNow,
     stop,

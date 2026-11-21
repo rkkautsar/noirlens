@@ -552,14 +552,14 @@ describe('LOCKED_READ hysteresis', () => {
     expect(hasEffect(result.effects, 'START_CAMERA')).toBe(false);
   });
 
-  it('sleeps when lowered', () => {
+  it('keeps the result when lowered', () => {
     const result = run(locked(), [motion(2000, 10, -220, 0.5)]);
-    expect(result.context.state).toBe('SLEEP');
-    expect(result.context.result).toBeNull();
-    expect(hasEffect(result.effects, 'STOP_CAMERA')).toBe(true);
+    expect(result.context.state).toBe('LOCKED_READ');
+    expect(result.context.result).toBe(RESULT);
+    expect(result.effects).toEqual([]);
   });
 
-  it('sleeps when the reader starts walking', () => {
+  it('keeps the result when the reader starts walking', () => {
     let state = locked();
     const effects: ScannerEffect[] = [];
     for (let i = 0; i < 9; i += 1) {
@@ -570,16 +570,17 @@ describe('LOCKED_READ hysteresis', () => {
       state = result.context;
       effects.push(...result.effects);
     }
-    expect(state.state).toBe('SLEEP');
-    expect(hasEffect(effects, 'STOP_CAMERA')).toBe(true);
+    expect(state.state).toBe('LOCKED_READ');
+    expect(state.result).toBe(RESULT);
+    expect(effects).toEqual([]);
   });
 
-  it('re-arms in MANUAL mode on Scan Again', () => {
+  it('returns to standby so the next scan can be held', () => {
     const result = run(locked(), [{ type: 'SCAN_AGAIN', timestampMs: 3000 }]);
-    expect(result.context.state).toBe('PREWARM');
-    expect(result.context.armMode).toBe('MANUAL');
+    expect(result.context.state).toBe('SLEEP');
     expect(result.context.result).toBeNull();
-    expect(hasEffect(result.effects, 'START_CAMERA')).toBe(true);
+    expect(hasEffect(result.effects, 'START_CAMERA')).toBe(false);
+    expect(hasEffect(result.effects, 'STOP_CAMERA')).toBe(true);
   });
 
   it('keeps the result visible and opens the paywall when out of scans', () => {

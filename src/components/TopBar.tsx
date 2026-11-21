@@ -1,6 +1,8 @@
 import { StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { languageShortLabel } from '@/constants/languages';
+import { useSourceLanguage } from '@/services/sourceLanguage';
 import { colors, typography } from '@/theme';
 import { ChipButton, MicroLabel } from './ui';
 
@@ -24,7 +26,10 @@ export function TopBar({
   showNavigation?: boolean;
 }) {
   const insets = useSafeAreaInsets();
+  const source = useSourceLanguage();
   const counter = unlimited ? 'PRO' : `${remaining ?? 0} LEFT`;
+  const sourceLabel =
+    source.code === 'auto' ? 'AUTO' : languageShortLabel(source.code);
 
   return (
     <View style={[styles.container, { paddingTop: insets.top + 8 }]}>
@@ -39,7 +44,7 @@ export function TopBar({
 
         {showNavigation ? (
           <View style={styles.actions}>
-            <ChipButton label="PACKS" onPress={onOpenLanguages} />
+            <ChipButton label={sourceLabel} onPress={onOpenLanguages} />
             <ChipButton label={counter} onPress={onOpenPaywall} />
           </View>
         ) : null}

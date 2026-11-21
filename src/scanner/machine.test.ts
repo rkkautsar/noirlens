@@ -15,6 +15,7 @@ import {
 const DAY = '2026-11-21';
 
 const RESULT: ScanResult = {
+  kind: 'translated',
   sourceText: '出口',
   translatedText: 'Exit',
   sourceLanguage: 'ja',
@@ -401,6 +402,47 @@ describe('CAPTURE flow', () => {
       dayKey: DAY,
       scansUsedToday: 1,
     });
+  });
+
+  it('shows a missing-pack result without charging a scan', () => {
+    const result = run(scanning(), [
+      {
+        type: 'CAPTURE_SUCCEEDED',
+        result: {
+          ...RESULT,
+          kind: 'pack_missing',
+          translatedText: '',
+          sourceLanguage: 'de',
+        },
+        timestampMs: 1800,
+      },
+    ]);
+
+    expect(result.context.state).toBe('LOCKED_READ');
+    expect(result.context.scansUsedToday).toBe(0);
+    expect(result.context.result?.kind).toBe('pack_missing');
+    expect(hasEffect(result.effects, 'PERSIST_SCAN')).toBe(false);
+    expect(hasEffect(result.effects, 'HAPTIC_ERROR')).toBe(true);
+  });
+
+  it('shows an English detection without charging a scan', () => {
+    const result = run(scanning(), [
+      {
+        type: 'CAPTURE_SUCCEEDED',
+        result: {
+          ...RESULT,
+          kind: 'english',
+          translatedText: '',
+          sourceLanguage: 'en',
+        },
+        timestampMs: 1800,
+      },
+    ]);
+
+    expect(result.context.state).toBe('LOCKED_READ');
+    expect(result.context.scansUsedToday).toBe(0);
+    expect(result.context.result?.kind).toBe('english');
+    expect(hasEffect(result.effects, 'PERSIST_SCAN')).toBe(false);
   });
 
   it('discards a result that arrives after the phone was lowered', () => {

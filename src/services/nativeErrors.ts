@@ -69,3 +69,11 @@ export function describeNativeError(
       };
   }
 }
+
+export function isLanguagePackFailure(error: unknown): boolean {
+  const code = readString(error, 'code');
+  return (
+    code === 'ERR_LANGUAGE_PACK_MISSING' ||
+    code === 'ERR_LANGUAGE_UNSUPPORTED'
+  );
+}

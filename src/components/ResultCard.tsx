@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { languageLabel } from '@/constants/languages';
+import { languageLabel, languageShortLabel } from '@/constants/languages';
 import type { ScanResult } from '@/scanner/machine';
 import { colors, typography } from '@/theme';
 import { TopBar } from './TopBar';
@@ -34,6 +34,12 @@ export function ResultCard({
   const [copied, setCopied] = useState(false);
   const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const translated = result.kind === 'translated';
+  const englishOnly = result.kind === 'english';
+  const packMissing = result.kind === 'pack_missing';
+  const language = languageLabel(result.sourceLanguage);
+  const shortLanguage = languageShortLabel(result.sourceLanguage);
+
   useEffect(() => {
     return () => {
       clearTimeout(copyTimer.current ?? undefined);
@@ -41,6 +47,9 @@ export function ResultCard({
   }, []);
 
   const copy = async () => {
+    if (!translated) {
+      return;
+    }
     await Clipboard.setStringAsync(result.translatedText);
     setCopied(true);
     clearTimeout(copyTimer.current ?? undefined);
@@ -48,6 +57,29 @@ export function ResultCard({
       setCopied(false);
     }, 1400);
   };
+
+  const kicker = translated
+    ? 'TRANSLATED · ENGLISH'
+    : englishOnly
+      ? result.sourceLanguage === 'und'
+        ? 'NO LANGUAGE DETECTED'
+        : 'ENGLISH DETECTED'
+      : `${language} PACK NEEDED`;
+
+  const notice = englishOnly
+    ? result.sourceLanguage === 'und'
+      ? 'No non-English text was detected. Aim at a foreign sign or choose a source language.'
+      : 'English text detected. NoirLens translates non-English text into English. Aim at a foreign sign or choose a source language.'
+    : packMissing
+      ? `The ${language} offline pack is not installed. Download it once, then scan again. You can still read the source below.`
+      : '';
+
+  const primaryLabel = translated
+    ? 'SCAN AGAIN'
+    : packMissing
+      ? `GET ${shortLanguage} PACK`
+      : 'CHOOSE LANGUAGE';
+  const primaryAction = translated ? onScanAgain : onOpenLanguages;
 
   return (
     <View style={styles.container}>
@@ -69,42 +101,63 @@ export function ResultCard({
         ]}
       >
         <View style={styles.kickerRow}>
-          <MicroLabel tone="accent">TRANSLATED · ENGLISH</MicroLabel>
-          {result.cached ? <MicroLabel tone="dim">LOCAL CACHE</MicroLabel> : null}
+          <MicroLabel
+            tone={translated ? 'accent' : packMissing ? 'warning' : 'dim'}
+          >
+            {kicker}
+          </MicroLabel>
+          {translated && result.cached ? (
+            <MicroLabel tone="dim">LOCAL CACHE</MicroLabel>
+          ) : null}
         </View>
 
-        <Text style={styles.resultText} selectable>
-          {result.translatedText}
-        </Text>
+        {translated ? (
+          <Text style={styles.resultText} selectable>
+            {result.translatedText}
+          </Text>
+        ) : (
+          <View style={styles.noticeBlock}>
+            <Text style={styles.noticeText}>{notice}</Text>
+            <MicroLabel tone="dim">NOT CHARGED AS A SCAN</MicroLabel>
+          </View>
+        )}
 
         <Hairline />
 
         <View style={styles.sourceBlock}>
-          <MicroLabel tone="dim">
-            SOURCE · {languageLabel(result.sourceLanguage)}
-          </MicroLabel>
-          <Text style={styles.sourceText} numberOfLines={3} selectable>
+          <MicroLabel tone="dim">SOURCE · {language}</MicroLabel>
+          <Text
+            style={styles.sourceText}
+            numberOfLines={translated ? 3 : 6}
+            selectable
+          >
             {result.sourceText}
           </Text>
         </View>
 
         <View style={styles.actions}>
           <View style={styles.primaryAction}>
-            <SolidButton label="SCAN AGAIN" onPress={onScanAgain} primary />
+            <SolidButton label={primaryLabel} onPress={primaryAction} primary />
           </View>
-          <ChipButton
-            label={copied ? 'COPIED' : 'COPY'}
-            onPress={() => {
-              void copy();
-            }}
-          />
+          {translated ? (
+            <ChipButton
+              label={copied ? 'COPIED' : 'COPY'}
+              onPress={() => {
+                void copy();
+              }}
+            />
+          ) : (
+            <ChipButton label="SCAN AGAIN" onPress={onScanAgain} />
+          )}
           <ChipButton label="ORIGINAL" onPress={onShowOriginal} />
         </View>
 
         <MicroLabel tone="dim" style={styles.footer}>
           {unlimited
             ? 'PRO · UNLIMITED SCANS'
-            : `${remaining ?? 0} OF 15 FREE SCANS LEFT TODAY`}
+            : translated
+              ? `${remaining ?? 0} OF 15 FREE SCANS LEFT TODAY`
+              : `NOT CHARGED · ${remaining ?? 0} OF 15 FREE SCANS LEFT TODAY`}
         </MicroLabel>
       </ScrollView>
     </View>
@@ -135,6 +188,18 @@ const styles = StyleSheet.create({
   },
   resultText: {
     ...typography.result,
+    color: colors.foreground,
+  },
+  noticeBlock: {
+    borderLeftWidth: 2,
+    borderLeftColor: colors.warning,
+    paddingLeft: 12,
+    gap: 8,
+  },
+  noticeText: {
+    ...typography.body,
+    fontSize: 17,
+    lineHeight: 24,
     color: colors.foreground,
   },
   sourceBlock: {

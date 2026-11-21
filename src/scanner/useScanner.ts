@@ -11,11 +11,16 @@ import {
 import { AppState } from 'react-native';
 
 import vision from '../../modules/native-vision-translator';
+import { isEnglishLanguageCode } from '@/constants/languages';
 import { localDayKey } from '@/services/day';
 import { entitlements } from '@/services/entitlements';
 import { startMotionSampler, type MotionSampler } from '@/services/motion';
-import { describeNativeError } from '@/services/nativeErrors';
+import {
+  describeNativeError,
+  isLanguagePackFailure,
+} from '@/services/nativeErrors';
 import { readScanCount, writeScanCount } from '@/services/scanLedger';
+import { sourceLanguage } from '@/services/sourceLanguage';
 import {
   readCachedTranslation,
   writeCachedTranslation,
@@ -118,11 +123,17 @@ export function useScanner(): ScannerController {
       }, CAPTURE_TIMEOUT_MS);
 
       try {
-        const ocr = await vision.captureFrame();
+        const selectedLanguage = sourceLanguage.current();
+        const ocr = await vision.captureFrame(
+          selectedLanguage === 'auto' ? '' : selectedLanguage,
+        );
         if (token !== captureToken) {
           return;
         }
-        language = ocr.sourceLanguage || undefined;
+
+        language =
+          ocr.sourceLanguage ||
+          (selectedLanguage === 'auto' ? 'und' : selectedLanguage);
 
         if (ocr.text.trim().length === 0) {
           store.send({
@@ -137,6 +148,46 @@ export function useScanner(): ScannerController {
           return;
         }
 
+        const base = {
+          sourceText: ocr.text,
+          sourceLanguage: language,
+          sourceHash: ocr.sourceHash,
+          blocks: ocr.blocks,
+          imageWidth: ocr.imageWidth,
+          imageHeight: ocr.imageHeight,
+          ...(ocr.previewJpegBase64
+            ? { previewJpegBase64: ocr.previewJpegBase64 }
+            : {}),
+        };
+
+        const sendResult = (
+          kind: 'translated' | 'english' | 'pack_missing',
+          translatedText: string,
+          cached: boolean,
+        ) => {
+          if (
+            token !== captureToken ||
+            store.getSnapshot().state !== 'SCANNING'
+          ) {
+            return;
+          }
+          store.send({
+            type: 'CAPTURE_SUCCEEDED',
+            result: { ...base, kind, translatedText, cached },
+            timestampMs: Date.now(),
+          });
+        };
+
+        // AUTO must never claim English as the source language. Show the
+        // detection and let the user aim at another sign or choose a language.
+        if (
+          selectedLanguage === 'auto' &&
+          isEnglishLanguageCode(language)
+        ) {
+          sendResult('english', '', false);
+          return;
+        }
+
         const cachedText = await readCachedTranslation(ocr.sourceHash).catch(
           () => null,
         );
@@ -144,51 +195,38 @@ export function useScanner(): ScannerController {
           return;
         }
 
-        let translatedText = cachedText;
-        let cached = cachedText !== null;
+        if (cachedText !== null) {
+          sendResult('translated', cachedText, true);
+          return;
+        }
 
-        if (translatedText === null) {
+        try {
           const translation = await vision.translate({
             text: ocr.text,
-            sourceLanguage: ocr.sourceLanguage,
+            sourceLanguage: language,
           });
           if (token !== captureToken) {
             return;
           }
-          translatedText = translation.translatedText;
-          cached = false;
           void writeCachedTranslation({
             sourceHash: ocr.sourceHash,
             sourceText: ocr.text,
-            sourceLanguage: ocr.sourceLanguage,
-            targetText: translatedText,
+            sourceLanguage: language,
+            targetText: translation.translatedText,
           }).catch(() => {});
+          sendResult('translated', translation.translatedText, false);
+        } catch (error) {
+          if (token !== captureToken) {
+            return;
+          }
+          if (isLanguagePackFailure(error)) {
+            // Still surface the source text and a download prompt; this is a
+            // notice, not a fatal scan failure, and it does not use a scan.
+            sendResult('pack_missing', '', false);
+            return;
+          }
+          throw error;
         }
-
-        if (
-          token !== captureToken ||
-          store.getSnapshot().state !== 'SCANNING'
-        ) {
-          return;
-        }
-
-        store.send({
-          type: 'CAPTURE_SUCCEEDED',
-          result: {
-            sourceText: ocr.text,
-            translatedText,
-            sourceLanguage: ocr.sourceLanguage,
-            sourceHash: ocr.sourceHash,
-            blocks: ocr.blocks,
-            imageWidth: ocr.imageWidth,
-            imageHeight: ocr.imageHeight,
-            cached,
-            ...(ocr.previewJpegBase64
-              ? { previewJpegBase64: ocr.previewJpegBase64 }
-              : {}),
-          },
-          timestampMs: Date.now(),
-        });
       } catch (error) {
         if (token !== captureToken) {
           return;
@@ -303,7 +341,10 @@ export function useScanner(): ScannerController {
 
     void (async () => {
       try {
-        await entitlements.hydrate();
+        await Promise.all([
+          entitlements.hydrate(),
+          sourceLanguage.hydrate(),
+        ]);
         const used = await readScanCount(currentDay);
         if (disposed) {
           return;

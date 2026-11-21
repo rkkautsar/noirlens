@@ -28,7 +28,10 @@ export interface ScanBlock {
   height: number;
 }
 
+export type ScanResultKind = 'translated' | 'english' | 'pack_missing';
+
 export interface ScanResult {
+  kind: ScanResultKind;
   sourceText: string;
   translatedText: string;
   /** BCP-47 code reported by on-device language identification. */
@@ -644,15 +647,20 @@ export function reduceScanner(
         };
       }
 
-      const scansUsedToday = context.scansUsedToday + 1;
-      effects.push(
-        {
+      // Only a produced translation consumes a free scan. English detections
+      // and missing-pack results are shown but not charged.
+      const counted = event.result.kind === 'translated';
+      const scansUsedToday = context.scansUsedToday + (counted ? 1 : 0);
+      if (counted) {
+        effects.push({
           type: 'PERSIST_SCAN',
           dayKey: context.dayKey,
           scansUsedToday,
-        },
+        });
+      }
+      effects.push(
         { type: 'STOP_CAMERA' },
-        { type: 'HAPTIC_SUCCESS' },
+        counted ? { type: 'HAPTIC_SUCCESS' } : { type: 'HAPTIC_ERROR' },
       );
       return {
         context: {

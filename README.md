@@ -19,6 +19,8 @@ The transition table is implemented as a pure reducer in `src/scanner/machine.ts
 
 **AUTO mode** arms only after the phone enters the 20–85° reading band and stays there for 300 ms, with an 800 ms cooldown after sleeping. The dwell is what stops a phone that is merely passing through the band on its way down from waking the camera. Either entry direction counts, so a phone carried vertically in a pocket can arm on the way down to eye level.
 
+**Source language** is selectable from the top-bar language chip. The default is **AUTO**, which never claims English: an English-only scene shows a short notice instead of a fake translation, and mixed text prefers the non-English language. Choosing a specific language forces that source. If the needed offline pack is missing, the result still shows the captured source text with a one-tap pack prompt — it is not treated as a failed scan and does not consume a free scan. Only a completed translation counts against the daily limit.
+
 ## Stack
 
 - Expo SDK 58, React Native 0.88, React 19, TypeScript strict, New Architecture
@@ -76,7 +78,7 @@ Apple's supported language pairs are the ceiling. If detection returns a script 
 
 ## Entitlements
 
-- `FREE`: 15 scans per local calendar day, persisted in SQLite
+- `FREE`: 15 translated scans per local calendar day, persisted in SQLite (English detections and missing-pack notices are free)
 - `TRIP_PASS_14D`: unlimited for 14 days (non-renewing, local expiry)
 - `LIFETIME_PRO`: unlimited
 
@@ -91,7 +93,7 @@ Apple's supported language pairs are the ceiling. If detection returns a script 
 | `startCamera()` | Permission check, configure and start the 720p session |
 | `stopCamera()` | `stopRunning()`; powers down the sensor |
 | `getCameraStatus()` | `{ authorized, running, adjustingFocus, adjustingExposure, settled }` |
-| `captureFrame()` | Grab one raw `CVPixelBuffer`, stop the session, run OCR; returns text, detected language, normalized paragraph boxes, SHA-256 hash and a frozen JPEG preview |
+| `captureFrame(sourceLanguage)` | Grab one raw `CVPixelBuffer`, stop the session, run OCR; `""` means AUTO detection, a code forces the source language. Returns text, language, normalized paragraph boxes, SHA-256 hash and a frozen JPEG preview |
 | `translate({ text, sourceLanguage })` | On-device NMT to English; throws `ERR_LANGUAGE_PACK_MISSING` when the pack is absent |
 | `checkLanguagePackStatus(langCode)` | `installed` / `supported` / `unsupported` |
 | `prepareLanguagePack(langCode)` | Presents Apple's download prompt, then re-checks status |
@@ -122,7 +124,7 @@ npx expo export --platform ios --output-dir dist
 - iOS-only, iPhone-only, portrait-locked. No Android or web build.
 - The simulator has no camera and no motion sensors; use a device.
 - OCR is tuned for signage: strings shorter than 2 characters and pure numbers/currency are discarded. Long strings use a permissive 0.50 confidence floor; 2–3 character strings require 0.72.
-- OCR prefers the traveler language list (German, Japanese, Chinese, etc.) so a short English watermark cannot skew language correction. Auto-detection is the fallback when that list finds nothing.
+- OCR prefers the traveler language list (German, Japanese, Chinese, etc.) so a short English watermark cannot skew language correction. Auto-detection is the fallback when that list finds nothing. AUTO source selection weighs language hypotheses toward non-English and falls back to the script hint for umlauts, kana, Hangul, Thai and Han characters.
 - Unsigned builds cannot be submitted to the App Store and expire weekly with a free Apple ID.
 - Language packs are installed by iOS, not by the app; deleting one in Settings requires re-downloading it.
 

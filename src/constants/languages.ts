@@ -38,3 +38,24 @@ const LABELS: Record<string, string> = {
 export function languageLabel(code: string): string {
   return LABELS[code] ?? code.toUpperCase();
 }
+
+const SHORT_LABELS: Record<string, string> = {
+  auto: 'AUTO',
+  ja: 'JA',
+  ko: 'KO',
+  'zh-Hans': 'ZH',
+  es: 'ES',
+  fr: 'FR',
+  de: 'DE',
+  th: 'TH',
+  vi: 'VI',
+  id: 'ID',
+};
+
+export function languageShortLabel(code: string): string {
+  return SHORT_LABELS[code] ?? code.toUpperCase();
+}
+
+export function isEnglishLanguageCode(code: string): boolean {
+  return code === 'und' || code === 'en' || code.startsWith('en-');
+}

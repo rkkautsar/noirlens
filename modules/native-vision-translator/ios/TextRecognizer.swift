@@ -36,7 +36,8 @@ enum TextRecognizer {
 
   static func recognize(
     pixelBuffer: CVPixelBuffer,
-    previewJpegBase64: String?
+    previewJpegBase64: String?,
+    languageHint: String
   ) throws -> [String: Any] {
     // The upright frame is the landscape buffer rotated 90 degrees.
     let width = CVPixelBufferGetHeight(pixelBuffer)
@@ -71,7 +72,8 @@ enum TextRecognizer {
     }
 
     let rawText = lines.map(\.text).joined(separator: "\n")
-    let language = dominantLanguage(in: rawText)
+    let hint = languageHint.trimmingCharacters(in: .whitespacesAndNewlines)
+    let language = hint.isEmpty ? dominantLanguage(in: rawText) : hint
 
     guard !lines.isEmpty else {
       return payload(
@@ -218,11 +220,25 @@ enum TextRecognizer {
 
     let recognizer = NLLanguageRecognizer()
     recognizer.processString(trimmed)
+
+    // AUTO must never claim English. If a plausible non-English language is
+    // present anywhere in the result (a German sign with an English watermark,
+    // for example), use that language as the translation source.
+    let hypotheses = recognizer.languageHypotheses(withMaximum: 6)
+    let nonEnglish = hypotheses.filter { language, probability in
+      language != .undetermined
+        && !language.rawValue.hasPrefix("en")
+        && probability >= 0.10
+    }
+    if let best = nonEnglish.max(by: { $0.value < $1.value }) {
+      return best.key.rawValue
+    }
+
     let detected = recognizer.dominantLanguage?.rawValue
 
-    if let hint = scriptHint(for: trimmed),
+    if let scriptHint = scriptHint(for: trimmed),
        detected == nil || detected == "en" || detected == "und" {
-      return hint
+      return scriptHint
     }
 
     guard let detected, detected != "und" else {

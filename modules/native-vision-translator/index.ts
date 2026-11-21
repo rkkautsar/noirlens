@@ -55,7 +55,7 @@ export interface NativeVisionTranslatorModule extends NativeModule {
   startCamera(): Promise<void>;
   stopCamera(): Promise<void>;
   getCameraStatus(): Promise<CameraStatus>;
-  captureFrame(): Promise<OcrPayload>;
+  captureFrame(sourceLanguage: string): Promise<OcrPayload>;
   translate(params: {
     text: string;
     sourceLanguage: string;

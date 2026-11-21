@@ -2,6 +2,7 @@ import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -12,6 +13,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SheetHeader } from '@/components/SheetHeader';
 import { Badge, ChipButton, MicroLabel } from '@/components/ui';
 import { TRAVELER_LANGUAGES, languageLabel } from '@/constants/languages';
+import { sourceLanguage, useSourceLanguage } from '@/services/sourceLanguage';
 import { colors, typography } from '@/theme';
 import vision, {
   type LanguagePackStatus,
@@ -23,6 +25,7 @@ export default function LanguagesScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const mounted = useRef(true);
+  const selectedSource = useSourceLanguage();
 
   const [statuses, setStatuses] = useState<Record<string, RowStatus>>(() =>
     Object.fromEntries(
@@ -105,8 +108,8 @@ export default function LanguagesScreen() {
   return (
     <View style={styles.container}>
       <SheetHeader
-        title="LANGUAGE PACKS"
-        subtitle="CORE APPLE MODELS · ON-DEVICE"
+        title="LANGUAGES & PACKS"
+        subtitle="SCAN SOURCE · OFFLINE MODELS"
         onClose={() => {
           router.back();
         }}
@@ -126,32 +129,84 @@ export default function LanguagesScreen() {
           </Text>
         </View>
 
-        <View style={styles.toolsRow}>
-          <MicroLabel tone="dim">
-            {refreshing ? 'CHECKING SYSTEM MODELS' : 'TAP TO PREPARE'}
-          </MicroLabel>
-          <ChipButton
-            label={refreshing ? 'CHECKING' : 'REFRESH'}
-            onPress={() => {
-              void refresh();
-            }}
-            disabled={refreshing || busy !== null}
-          />
-        </View>
+        <View style={styles.sourceSection}>
+          <View style={styles.sectionHeading}>
+            <MicroLabel tone="accent">SCAN LANGUAGE</MicroLabel>
+            <Text style={styles.sourceHint}>
+              Auto uses the sign&apos;s language and never English. Pick a
+              language to force it, and download its pack below.
+            </Text>
+          </View>
 
-        <View style={styles.list}>
+          <View style={styles.toolsRow}>
+            <MicroLabel tone="dim">
+              {refreshing ? 'CHECKING SYSTEM MODELS' : 'PACK STATUS'}
+            </MicroLabel>
+            <ChipButton
+              label={refreshing ? 'CHECKING' : 'REFRESH'}
+              onPress={() => {
+                void refresh();
+              }}
+              disabled={refreshing || busy !== null}
+            />
+          </View>
+
+          <Pressable
+            onPress={() => {
+              void sourceLanguage.set('auto').catch(() => {});
+            }}
+            style={[
+              styles.sourceRow,
+              selectedSource.code === 'auto' && styles.sourceRowActive,
+            ]}
+          >
+            <View
+              style={[
+                styles.radio,
+                selectedSource.code === 'auto' && styles.radioActive,
+              ]}
+            >
+              {selectedSource.code === 'auto' ? (
+                <View style={styles.radioDot} />
+              ) : null}
+            </View>
+            <View style={styles.sourceRowText}>
+              <Text style={styles.sourceName}>AUTO</Text>
+              <MicroLabel tone="dim">DETECT THE SIGN · NEVER ENGLISH</MicroLabel>
+            </View>
+            {selectedSource.code === 'auto' ? (
+              <Badge label="SOURCE" tone="accent" />
+            ) : null}
+          </Pressable>
+
           {TRAVELER_LANGUAGES.map((language) => {
             const status = statuses[language.code] ?? 'loading';
             const isBusy = busy === language.code;
+            const isSelected = selectedSource.code === language.code;
 
             return (
-              <View key={language.code} style={styles.row}>
-                <View style={styles.rowText}>
-                  <Text style={styles.nativeName}>{language.nativeName}</Text>
-                  <MicroLabel tone="dim">
-                    {language.name.toUpperCase()} · EN
-                  </MicroLabel>
-                </View>
+              <View
+                key={language.code}
+                style={[styles.sourceRow, isSelected && styles.sourceRowActive]}
+              >
+                <Pressable
+                  style={styles.selectArea}
+                  onPress={() => {
+                    void sourceLanguage.set(language.code).catch(() => {});
+                  }}
+                >
+                  <View
+                    style={[styles.radio, isSelected && styles.radioActive]}
+                  >
+                    {isSelected ? <View style={styles.radioDot} /> : null}
+                  </View>
+                  <View style={styles.sourceRowText}>
+                    <Text style={styles.sourceName}>{language.nativeName}</Text>
+                    <MicroLabel tone="dim">
+                      {language.name.toUpperCase()} · EN
+                    </MicroLabel>
+                  </View>
+                </Pressable>
 
                 {status === 'loading' ? (
                   <ActivityIndicator size="small" color={colors.dim} />
@@ -200,6 +255,68 @@ const styles = StyleSheet.create({
     paddingTop: 18,
     gap: 18,
   },
+  sourceSection: {
+    gap: 8,
+  },
+  sectionHeading: {
+    gap: 4,
+    marginBottom: 4,
+  },
+  sourceHint: {
+    ...typography.body,
+    color: colors.muted,
+    fontSize: 12,
+  },
+  sourceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+    borderWidth: 1,
+    borderColor: colors.borderSoft,
+    borderRadius: 12,
+  },
+  sourceRowActive: {
+    borderColor: colors.accent,
+    backgroundColor: colors.surface,
+  },
+  selectArea: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  sourceRowText: {
+    flex: 1,
+    gap: 3,
+  },
+  sourceName: {
+    ...typography.body,
+    fontSize: 16,
+    color: colors.foreground,
+  },
+  radio: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    borderWidth: 1,
+    borderColor: colors.dim,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  radioActive: {
+    borderColor: colors.accent,
+  },
+  radioDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.accent,
+  },
+  packsLabel: {
+    marginTop: 4,
+  },
   noteCard: {
     borderWidth: 1,
     borderColor: colors.border,
@@ -216,28 +333,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-  },
-  list: {
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.borderSoft,
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 16,
-    gap: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.borderSoft,
-  },
-  rowText: {
-    flexShrink: 1,
-    gap: 4,
-  },
-  nativeName: {
-    ...typography.body,
-    fontSize: 19,
-    color: colors.foreground,
   },
   notice: {
     borderLeftWidth: 2,

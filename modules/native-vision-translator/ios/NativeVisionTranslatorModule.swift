@@ -27,7 +27,7 @@ public final class NativeVisionTranslatorModule: Module {
       await CameraController.shared.status()
     }
 
-    AsyncFunction("captureFrame") { () async throws -> [String: Any] in
+    AsyncFunction("captureFrame") { (sourceLanguage: String) async throws -> [String: Any] in
       let frame = try await CameraController.shared.captureFrame()
       guard let pixelBuffer = frame.pixelBuffer else {
         throw cameraException(
@@ -38,7 +38,8 @@ public final class NativeVisionTranslatorModule: Module {
       }
       return try TextRecognizer.recognize(
         pixelBuffer: pixelBuffer,
-        previewJpegBase64: frame.previewJpegBase64
+        previewJpegBase64: frame.previewJpegBase64,
+        languageHint: sourceLanguage
       )
     }
 

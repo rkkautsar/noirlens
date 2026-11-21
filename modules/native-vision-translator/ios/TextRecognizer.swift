@@ -221,30 +221,44 @@ enum TextRecognizer {
     let recognizer = NLLanguageRecognizer()
     recognizer.processString(trimmed)
 
-    // AUTO must never claim English. If a plausible non-English language is
-    // present anywhere in the result (a German sign with an English watermark,
-    // for example), use that language as the translation source.
-    let hypotheses = recognizer.languageHypotheses(withMaximum: 6)
-    let nonEnglish = hypotheses.filter { language, probability in
-      language != .undetermined
-        && !language.rawValue.hasPrefix("en")
-        && probability >= 0.10
-    }
-    if let best = nonEnglish.max(by: { $0.value < $1.value }) {
-      return best.key.rawValue
+    // AUTO is limited to the languages this app can actually translate. Short
+    // German signs are easily mistaken for Romanian/Polish by the generic
+    // detector, so pick the best traveler-language hypothesis instead of the
+    // best arbitrary non-English one.
+    let hypotheses = recognizer.languageHypotheses(withMaximum: 16)
+    let traveler = hypotheses
+      .filter { isTravelerLanguage($0.key) }
+      .max(by: { $0.value < $1.value })
+    let englishProbability = hypotheses[.english] ?? 0
+
+    // Strong orthographic signals (umlauts, kana, Hangul, Thai, Han) and
+    // common German function words should win over generic probabilities.
+    if let germanHint = germanSignalLanguage(for: trimmed) {
+      return germanHint
     }
 
-    let detected = recognizer.dominantLanguage?.rawValue
-
-    if let scriptHint = scriptHint(for: trimmed),
-       detected == nil || detected == "en" || detected == "und" {
+    if let scriptHint = scriptHint(for: trimmed) {
       return scriptHint
     }
 
-    guard let detected, detected != "und" else {
-      return "und"
+    // Genuinely English text: no traveler language is plausible, so let the
+    // result card explain that this app translates into English.
+    if englishProbability >= 0.5, (traveler?.value ?? 0) < 0.15 {
+      return "en"
     }
-    return detected
+
+    if let traveler, traveler.value >= 0.02 {
+      return traveler.key.rawValue
+    }
+
+    if let detected = recognizer.dominantLanguage?.rawValue,
+       detected.hasPrefix("en") || isTravelerLanguageCode(detected) {
+      return detected
+    }
+
+    // Unsupported language (Romanian, Polish, ...): do not offer a pack the
+    // app cannot download. The user can still force a traveler language.
+    return "und"
   }
 
   private static func scriptHint(for text: String) -> String? {
@@ -274,6 +288,39 @@ enum TextRecognizer {
     if hasHan { return "zh-Hans" }
     if text.contains(where: { "äöüßÄÖÜ".contains($0) }) { return "de" }
     return nil
+  }
+
+  private static let travelerLanguagePrefixes = [
+    "de", "ja", "ko", "zh", "es", "fr", "th", "vi", "id",
+  ]
+
+  private static func isTravelerLanguage(_ language: NLLanguage) -> Bool {
+    isTravelerLanguageCode(language.rawValue)
+  }
+
+  private static func isTravelerLanguageCode(_ code: String) -> Bool {
+    travelerLanguagePrefixes.contains { code.hasPrefix($0) }
+  }
+
+  /// Short German signs without umlauts are often assigned to Romanian or
+  /// Polish by NLLanguage. A handful of high-signal function words is enough
+  /// to recover German without hard-coding a full dictionary.
+  private static func germanSignalLanguage(for text: String) -> String? {
+    let words = Set(
+      text
+        .lowercased()
+        .split(whereSeparator: { !$0.isLetter })
+        .map(String.init)
+    )
+    let signalWords: Set<String> = [
+      "und", "der", "die", "das", "ein", "eine", "einen", "einem",
+      "nicht", "mit", "für", "frei", "uhr", "straße", "platz",
+      "entladen", "beladen", "aussteigen", "einsteigen", "halten",
+      "montag", "dienstag", "mittwoch", "donnerstag", "freitag",
+      "samstag", "sonntag",
+    ]
+    let hits = words.intersection(signalWords).count
+    return hits >= 2 ? "de" : nil
   }
 
   private static func isCJK(_ language: String) -> Bool {

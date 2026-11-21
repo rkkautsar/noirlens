@@ -68,7 +68,7 @@ export function ResultCard({
 
   const notice = englishOnly
     ? result.sourceLanguage === 'und'
-      ? 'No non-English text was detected. Aim at a foreign sign or choose a source language.'
+      ? 'No supported non-English language was detected. Aim at the sign or choose a source language.'
       : 'English text detected. NoirLens translates non-English text into English. Aim at a foreign sign or choose a source language.'
     : packMissing
       ? `The ${language} offline pack is not installed. Download it once, then scan again. You can still read the source below.`

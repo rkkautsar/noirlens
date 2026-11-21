@@ -1,27 +1,33 @@
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import type { ScanError } from '@/scanner/machine';
+import type { ScanError, ScannerArmMode } from '@/scanner/machine';
 import { colors, typography } from '@/theme';
 import { TopBar } from './TopBar';
-import { MicroLabel } from './ui';
+import { MicroLabel, SolidButton } from './ui';
 
 export function AimHud({
   scanning,
+  mode,
   ecoMode,
   onEcoChange,
   remaining,
   unlimited,
   error,
+  onCapture,
+  onStop,
   onOpenLanguages,
   onOpenPaywall,
 }: {
   scanning: boolean;
+  mode: ScannerArmMode;
   ecoMode: boolean;
   onEcoChange: (eco: boolean) => void;
   remaining: number | null;
   unlimited: boolean;
   error: ScanError | null;
+  onCapture: () => void;
+  onStop: () => void;
   onOpenLanguages: () => void;
   onOpenPaywall: () => void;
 }) {
@@ -51,19 +57,36 @@ export function AimHud({
         </View>
       </View>
 
-      <View style={styles.footerWrap} pointerEvents="none">
-        <View style={[styles.footer, { paddingBottom: insets.bottom + 28 }]}>
+      <View style={styles.footerWrap}>
+        <View style={[styles.footer, { paddingBottom: insets.bottom + 24 }]}>
           {scanning ? (
-            <View style={styles.readingRow}>
-              <ActivityIndicator size="small" color={colors.accent} />
-              <Text style={styles.status}>READING ON-DEVICE</Text>
-            </View>
+            <>
+              <View style={styles.readingRow}>
+                <ActivityIndicator size="small" color={colors.accent} />
+                <Text style={styles.status}>READING ON-DEVICE</Text>
+              </View>
+              <MicroLabel tone="dim">OCR + TRANSLATION · NO UPLOAD</MicroLabel>
+            </>
           ) : (
-            <Text style={styles.status}>HOLD STEADY</Text>
+            <>
+              <Text style={styles.status}>
+                {mode === 'MANUAL' ? 'FRAME THE TEXT' : 'HOLD STEADY'}
+              </Text>
+              <MicroLabel tone="dim">
+                {mode === 'MANUAL'
+                  ? 'MANUAL · TAP CAPTURE WHEN READY'
+                  : 'AUTO · CAPTURE FIRES WHEN STILL'}
+              </MicroLabel>
+              <View style={styles.actions}>
+                <View style={styles.captureAction}>
+                  <SolidButton label="CAPTURE" onPress={onCapture} primary />
+                </View>
+                <View style={styles.stopAction}>
+                  <SolidButton label="STOP" onPress={onStop} />
+                </View>
+              </View>
+            </>
           )}
-          <MicroLabel tone="dim">
-            AF / AE LOCKING · SINGLE FRAME · NO UPLOAD
-          </MicroLabel>
           {error ? (
             <Text style={styles.errorText} numberOfLines={2}>
               {error.message}
@@ -150,11 +173,11 @@ const styles = StyleSheet.create({
     bottom: 0,
   },
   footer: {
-    paddingTop: 18,
-    paddingHorizontal: 24,
+    paddingTop: 16,
+    paddingHorizontal: 20,
     alignItems: 'center',
     gap: 8,
-    backgroundColor: 'rgba(0,0,0,0.72)',
+    backgroundColor: 'rgba(0,0,0,0.78)',
   },
   readingRow: {
     flexDirection: 'row',
@@ -165,6 +188,18 @@ const styles = StyleSheet.create({
     ...typography.label,
     color: colors.accent,
     letterSpacing: 2,
+  },
+  actions: {
+    flexDirection: 'row',
+    alignSelf: 'stretch',
+    gap: 10,
+    marginTop: 6,
+  },
+  captureAction: {
+    flex: 1,
+  },
+  stopAction: {
+    width: 110,
   },
   errorText: {
     ...typography.body,

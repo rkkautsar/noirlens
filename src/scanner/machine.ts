@@ -2,14 +2,21 @@
  * Pure, deterministic hardware lifecycle reducer for the NoirLens scanner.
  *
  * The reducer never touches native APIs. It emits effects that the controller
- * (`src/scanner/controller.ts`) executes: camera start/stop, single-frame
- * capture, screen dimming and scan persistence. This keeps every power-gating
- * decision unit-testable.
+ * (`src/scanner/useScanner.ts`) executes: camera start/stop, single-frame
+ * capture and scan persistence. This keeps every power-gating decision
+ * unit-testable.
+ *
+ * Two arm modes exist:
+ * - AUTO: the phone arms itself when it is raised into the reading band and
+ *   stays there briefly, then captures once it is still and focused.
+ * - MANUAL: the user starts the camera from the standby screen, then presses
+ *   CAPTURE. Motion never starts or stops the session in this mode.
  */
 
 export const FREE_DAILY_SCAN_LIMIT = 15;
 
 export type ScannerState = 'SLEEP' | 'PREWARM' | 'SCANNING' | 'LOCKED_READ';
+export type ScannerArmMode = 'AUTO' | 'MANUAL';
 
 export interface ScanBlock {
   text: string;
@@ -75,25 +82,32 @@ export interface ScannerTuning {
   /**
    * Minimum rotational speed while entering the arm band (deg/s). Absolute
    * value: lifting from a table and tilting down from a vertical pocket are
-   * both intentional arms.
+   * both intentional entries.
    */
   minArmRateDegSec: number;
   /** The phone must have left the arm band within this window. */
   armEntryWindowMs: number;
+  /** The band must be held this long before AUTO arming, so pass-throughs
+   * while lowering the phone do not wake the camera. */
+  armDwellMs: number;
+  /** Ignore AUTO arms this soon after sleeping, to damp drop jitter. */
+  armCooldownMs: number;
   /** Rotation slower than this counts as "held still" (rad/s). */
   stillAngularSpeedRadSec: number;
-  /** How long the phone must be still before the shutter fires. */
+  /** How long the phone must be still before the AUTO shutter fires. */
   stillHoldMs: number;
-  /** Minimum time after arming before a capture is allowed (ms). */
+  /** Minimum time after arming before an AUTO capture is allowed (ms). */
   prewarmMinMs: number;
-  /** Abort the arm if nothing settles within this time (ms). */
+  /** Abort an AUTO arm if nothing settles within this time (ms). */
   prewarmTimeoutMs: number;
+  /** Longest a MANUAL session may keep the camera on before sleeping. */
+  manualSessionTimeoutMs: number;
   /** Window used to distinguish walking from a steady hold. */
   walkingWindowMs: number;
   /** Variance of angular speed above which we treat the user as walking. */
   walkingVariance: number;
   walkingMinSamples: number;
-  /** If no motion sample arrives for this long while active, power down. */
+  /** If no motion sample arrives for this long while AUTO, power down. */
   motionStaleMs: number;
   maxCaptureAttempts: number;
   freeDailyLimit: number;
@@ -107,10 +121,13 @@ export const DEFAULT_TUNING: ScannerTuning = {
   dropPitchDeg: 15,
   minArmRateDegSec: 30,
   armEntryWindowMs: 1000,
+  armDwellMs: 300,
+  armCooldownMs: 800,
   stillAngularSpeedRadSec: 0.15,
   stillHoldMs: 250,
   prewarmMinMs: 300,
   prewarmTimeoutMs: 4000,
+  manualSessionTimeoutMs: 90_000,
   walkingWindowMs: 600,
   walkingVariance: 0.35,
   walkingMinSamples: 8,
@@ -122,6 +139,7 @@ export const DEFAULT_TUNING: ScannerTuning = {
 
 export interface ScannerContext {
   state: ScannerState;
+  armMode: ScannerArmMode;
   dayKey: string;
   scansUsedToday: number;
   unlimited: boolean;
@@ -136,6 +154,10 @@ export interface ScannerContext {
   lastMotionAtMs: number | null;
   /** Last moment the phone was outside the arm band. */
   outsideBandAtMs: number | null;
+  /** Start of an in-band dwell candidate; AUTO arms after armDwellMs. */
+  armCandidateAtMs: number | null;
+  /** When the scanner last entered SLEEP, for the arm cooldown. */
+  sleepAtMs: number | null;
   armedAtMs: number | null;
   stillSinceMs: number | null;
   cameraSettled: boolean;
@@ -148,8 +170,6 @@ export type ScannerEffect =
   | { type: 'START_CAMERA' }
   | { type: 'STOP_CAMERA' }
   | { type: 'CAPTURE_FRAME' }
-  | { type: 'DIM_SCREEN' }
-  | { type: 'RESTORE_BRIGHTNESS' }
   | { type: 'PERSIST_SCAN'; dayKey: string; scansUsedToday: number }
   | { type: 'SHOW_PAYWALL' }
   | { type: 'HAPTIC_SUCCESS' }
@@ -171,6 +191,8 @@ export type ScannerEvent =
   | { type: 'CAPTURE_FAILED'; error: ScanError; timestampMs: number }
   | { type: 'WAKE'; timestampMs: number }
   | { type: 'SCAN_AGAIN'; timestampMs: number }
+  | { type: 'CAPTURE_NOW'; timestampMs: number }
+  | { type: 'STOP'; timestampMs: number }
   | { type: 'SLEEP'; timestampMs: number }
   | { type: 'DISMISS_ERROR'; timestampMs: number }
   | { type: 'ENTITLEMENT_CHANGED'; unlimited: boolean; timestampMs: number }
@@ -195,6 +217,7 @@ export function createInitialContext(params: {
 }): ScannerContext {
   return {
     state: 'SLEEP',
+    armMode: 'AUTO',
     dayKey: params.dayKey,
     scansUsedToday: params.scansUsedToday ?? 0,
     unlimited: params.unlimited ?? false,
@@ -207,6 +230,8 @@ export function createInitialContext(params: {
     hasPitch: false,
     lastMotionAtMs: null,
     outsideBandAtMs: null,
+    armCandidateAtMs: null,
+    sleepAtMs: null,
     armedAtMs: null,
     stillSinceMs: null,
     cameraSettled: false,
@@ -269,22 +294,24 @@ function isWalking(
 function enterSleep(
   context: ScannerContext,
   effects: ScannerEffect[],
-  options: { clearResult: boolean; emitStop: boolean },
+  options: { clearResult: boolean },
+  timestampMs: number,
 ): ScannerContext {
   effects.push({ type: 'STOP_CAMERA' });
-  if (context.state !== 'SLEEP') {
-    effects.push({ type: 'DIM_SCREEN' });
-  }
   return {
     ...context,
     state: 'SLEEP',
+    armMode: 'AUTO',
     result: options.clearResult ? null : context.result,
     armedAtMs: null,
     stillSinceMs: null,
     cameraSettled: false,
     attemptsThisArm: 0,
     outsideBandAtMs: null,
+    armCandidateAtMs: null,
+    sleepAtMs: timestampMs,
     motionHistory: [],
+    nowMs: timestampMs,
   };
 }
 
@@ -292,12 +319,17 @@ function enterPrewarm(
   context: ScannerContext,
   effects: ScannerEffect[],
   timestampMs: number,
-  options: { resetAttempts: boolean; clearError: boolean },
+  options: {
+    resetAttempts: boolean;
+    clearError: boolean;
+    armMode: ScannerArmMode;
+  },
 ): ScannerContext {
-  effects.push({ type: 'RESTORE_BRIGHTNESS' }, { type: 'START_CAMERA' });
+  effects.push({ type: 'START_CAMERA' });
   return {
     ...context,
     state: 'PREWARM',
+    armMode: options.armMode,
     result: null,
     error: options.clearError ? null : context.error,
     armedAtMs: timestampMs,
@@ -306,6 +338,7 @@ function enterPrewarm(
     attemptsThisArm: options.resetAttempts ? 0 : context.attemptsThisArm,
     motionHistory: [],
     outsideBandAtMs: null,
+    armCandidateAtMs: null,
     nowMs: timestampMs,
   };
 }
@@ -317,7 +350,10 @@ function showPaywallIfDue(
   effects: ScannerEffect[],
 ): ScannerContext {
   const lastPrompt = context.paywallPromptedAtMs;
-  if (lastPrompt === null || timestampMs - lastPrompt >= tuning.paywallRetriggerMs) {
+  if (
+    lastPrompt === null ||
+    timestampMs - lastPrompt >= tuning.paywallRetriggerMs
+  ) {
     effects.push({ type: 'SHOW_PAYWALL' });
     return { ...context, paywallPromptedAtMs: timestampMs };
   }
@@ -329,6 +365,7 @@ function attemptArm(
   timestampMs: number,
   tuning: ScannerTuning,
   effects: ScannerEffect[],
+  armMode: ScannerArmMode,
 ): ScannerContext {
   // Never scan before the persisted daily counter is known, otherwise the
   // first scan could overwrite the stored count during hydration.
@@ -341,6 +378,7 @@ function attemptArm(
   return enterPrewarm(context, effects, timestampMs, {
     resetAttempts: true,
     clearError: true,
+    armMode,
   });
 }
 
@@ -354,18 +392,35 @@ function evaluateActive(
     return context;
   }
 
-  if (context.hasPitch && context.pitchDeg < tuning.dropPitchDeg) {
-    return enterSleep(context, effects, { clearResult: true, emitStop: true });
+  // MANUAL keeps the camera on until STOP or the safety timeout. AUTO follows
+  // the phone: lowering it or walking away powers the session down.
+  const manual =
+    context.armMode === 'MANUAL' && context.state !== 'LOCKED_READ';
+
+  if (
+    !manual &&
+    context.hasPitch &&
+    context.pitchDeg < tuning.dropPitchDeg
+  ) {
+    return enterSleep(context, effects, { clearResult: true }, timestampMs);
   }
 
-  if (isWalking(context.motionHistory, tuning)) {
-    return enterSleep(context, effects, { clearResult: true, emitStop: true });
+  if (!manual && isWalking(context.motionHistory, tuning)) {
+    return enterSleep(context, effects, { clearResult: true }, timestampMs);
   }
 
   if (context.state === 'PREWARM') {
     const armedAt = context.armedAtMs ?? timestampMs;
+
+    if (manual) {
+      if (timestampMs - armedAt >= tuning.manualSessionTimeoutMs) {
+        return enterSleep(context, effects, { clearResult: true }, timestampMs);
+      }
+      return { ...context, nowMs: timestampMs };
+    }
+
     if (timestampMs - armedAt >= tuning.prewarmTimeoutMs) {
-      return enterSleep(context, effects, { clearResult: true, emitStop: true });
+      return enterSleep(context, effects, { clearResult: true }, timestampMs);
     }
 
     const settled =
@@ -373,7 +428,7 @@ function evaluateActive(
       context.angularSpeedRadSec < tuning.stillAngularSpeedRadSec;
 
     if (!settled) {
-      return { ...context, stillSinceMs: null };
+      return { ...context, stillSinceMs: null, nowMs: timestampMs };
     }
 
     const stillSince = context.stillSinceMs ?? timestampMs;
@@ -388,10 +443,7 @@ function evaluateActive(
           tuning,
           effects,
         );
-        return enterSleep(prompted, effects, {
-          clearResult: true,
-          emitStop: true,
-        });
+        return enterSleep(prompted, effects, { clearResult: true }, timestampMs);
       }
       effects.push({ type: 'CAPTURE_FRAME' });
       return {
@@ -437,25 +489,47 @@ function onMotion(
         ? sample.timestampMs
         : next.outsideBandAtMs;
 
-    const enteredBand =
-      outside !== null &&
-      sample.timestampMs - outside <= tuning.armEntryWindowMs;
-
     const inBand =
       sample.pitchDeg >= tuning.minPitchDeg &&
       sample.pitchDeg <= tuning.maxPitchDeg;
 
+    if (!inBand) {
+      return { ...next, outsideBandAtMs: outside, armCandidateAtMs: null };
+    }
+
     if (
-      inBand &&
+      next.sleepAtMs !== null &&
+      sample.timestampMs - next.sleepAtMs < tuning.armCooldownMs
+    ) {
+      return { ...next, outsideBandAtMs: outside, armCandidateAtMs: null };
+    }
+
+    if (next.armCandidateAtMs !== null) {
+      if (sample.timestampMs - next.armCandidateAtMs >= tuning.armDwellMs) {
+        return attemptArm(
+          { ...next, armCandidateAtMs: null },
+          sample.timestampMs,
+          tuning,
+          effects,
+          'AUTO',
+        );
+      }
+      return next;
+    }
+
+    const enteredBand =
+      outside !== null &&
+      sample.timestampMs - outside <= tuning.armEntryWindowMs;
+
+    if (
       enteredBand &&
       Math.abs(sample.pitchRateDegSec) >= tuning.minArmRateDegSec
     ) {
-      return attemptArm(
-        { ...next, outsideBandAtMs: outside },
-        sample.timestampMs,
-        tuning,
-        effects,
-      );
+      return {
+        ...next,
+        outsideBandAtMs: outside,
+        armCandidateAtMs: sample.timestampMs,
+      };
     }
 
     return { ...next, outsideBandAtMs: outside };
@@ -464,10 +538,10 @@ function onMotion(
   if (next.state === 'LOCKED_READ') {
     // Hysteresis: micro-drift and re-aiming inside the band must not re-arm.
     if (sample.pitchDeg < tuning.dropPitchDeg) {
-      return enterSleep(next, effects, { clearResult: true, emitStop: true });
+      return enterSleep(next, effects, { clearResult: true }, sample.timestampMs);
     }
     if (isWalking(history, tuning)) {
-      return enterSleep(next, effects, { clearResult: true, emitStop: true });
+      return enterSleep(next, effects, { clearResult: true }, sample.timestampMs);
     }
     return next;
   }
@@ -510,14 +584,17 @@ export function reduceScanner(
         return { context: next, effects };
       }
       if (
+        next.armMode === 'AUTO' &&
         next.lastMotionAtMs !== null &&
         event.timestampMs - next.lastMotionAtMs > tuning.motionStaleMs
       ) {
         return {
-          context: enterSleep(next, effects, {
-            clearResult: true,
-            emitStop: true,
-          }),
+          context: enterSleep(
+            next,
+            effects,
+            { clearResult: true },
+            event.timestampMs,
+          ),
           effects,
         };
       }
@@ -545,12 +622,14 @@ export function reduceScanner(
 
     case 'CAMERA_FAILED': {
       effects.push({ type: 'HAPTIC_ERROR' });
-      const slept = enterSleep(context, effects, {
-        clearResult: false,
-        emitStop: true,
-      });
+      const slept = enterSleep(
+        { ...context, nowMs: event.timestampMs },
+        effects,
+        { clearResult: false },
+        event.timestampMs,
+      );
       return {
-        context: { ...slept, error: event.error, nowMs: event.timestampMs },
+        context: { ...slept, error: event.error },
         effects,
       };
     }
@@ -600,24 +679,28 @@ export function reduceScanner(
       }
 
       if (event.error.fatal) {
-        const slept = enterSleep(context, effects, {
-          clearResult: true,
-          emitStop: true,
-        });
+        const slept = enterSleep(
+          context,
+          effects,
+          { clearResult: true },
+          event.timestampMs,
+        );
         return {
-          context: { ...slept, error: event.error, nowMs: event.timestampMs },
+          context: { ...slept, error: event.error },
           effects,
         };
       }
 
       const attempts = context.attemptsThisArm + 1;
       if (attempts >= tuning.maxCaptureAttempts) {
-        const slept = enterSleep(context, effects, {
-          clearResult: true,
-          emitStop: true,
-        });
+        const slept = enterSleep(
+          context,
+          effects,
+          { clearResult: true },
+          event.timestampMs,
+        );
         return {
-          context: { ...slept, error: event.error, nowMs: event.timestampMs },
+          context: { ...slept, error: event.error },
           effects,
         };
       }
@@ -626,7 +709,11 @@ export function reduceScanner(
         { ...context, attemptsThisArm: attempts },
         effects,
         event.timestampMs,
-        { resetAttempts: false, clearError: false },
+        {
+          resetAttempts: false,
+          clearError: false,
+          armMode: context.armMode,
+        },
       );
       return {
         context: { ...retry, error: event.error },
@@ -637,18 +724,61 @@ export function reduceScanner(
     case 'WAKE':
     case 'SCAN_AGAIN': {
       return {
-        context: attemptArm(context, event.timestampMs, tuning, effects),
+        context: attemptArm(
+          context,
+          event.timestampMs,
+          tuning,
+          effects,
+          'MANUAL',
+        ),
         effects,
       };
     }
 
-    case 'SLEEP': {
-      const slept = enterSleep(context, effects, {
-        clearResult: true,
-        emitStop: true,
-      });
+    case 'CAPTURE_NOW': {
+      if (context.state !== 'PREWARM') {
+        return { context, effects };
+      }
+
+      if (!canScan(context, tuning)) {
+        const prompted = showPaywallIfDue(
+          context,
+          event.timestampMs,
+          tuning,
+          effects,
+        );
+        return {
+          context: enterSleep(
+            prompted,
+            effects,
+            { clearResult: false },
+            event.timestampMs,
+          ),
+          effects,
+        };
+      }
+
+      effects.push({ type: 'CAPTURE_FRAME' });
       return {
-        context: { ...slept, nowMs: event.timestampMs },
+        context: {
+          ...context,
+          state: 'SCANNING',
+          stillSinceMs: null,
+          nowMs: event.timestampMs,
+        },
+        effects,
+      };
+    }
+
+    case 'STOP':
+    case 'SLEEP': {
+      return {
+        context: enterSleep(
+          { ...context, nowMs: event.timestampMs },
+          effects,
+          { clearResult: true },
+          event.timestampMs,
+        ),
         effects,
       };
     }

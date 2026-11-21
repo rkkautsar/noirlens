@@ -1,4 +1,3 @@
-import * as Brightness from 'expo-brightness';
 import * as Haptics from 'expo-haptics';
 import { useKeepAwake } from 'expo-keep-awake';
 import { useFocusEffect, useRouter } from 'expo-router';
@@ -12,11 +11,6 @@ import {
 import { AppState } from 'react-native';
 
 import vision from '../../modules/native-vision-translator';
-import {
-  clearOriginalBrightness,
-  readOriginalBrightness,
-  writeOriginalBrightness,
-} from '@/services/brightness';
 import { localDayKey } from '@/services/day';
 import { entitlements } from '@/services/entitlements';
 import { startMotionSampler, type MotionSampler } from '@/services/motion';
@@ -29,14 +23,15 @@ import {
 import type { ScannerEffect } from './machine';
 import { ScannerStore, type ScannerSnapshot } from './store';
 
-const DIM_BRIGHTNESS = 0.03;
 const CAPTURE_TIMEOUT_MS = 12_000;
 
 export interface ScannerController {
   snapshot: ScannerSnapshot;
   motionAvailable: boolean;
-  wake: () => void;
+  startManual: () => void;
   scanAgain: () => void;
+  captureNow: () => void;
+  stop: () => void;
   dismissError: () => void;
 }
 
@@ -64,64 +59,14 @@ export function useScanner(): ScannerController {
 
   const [motionAvailable, setMotionAvailable] = useState(true);
   const focusedRef = useRef(false);
-  const savedBrightnessRef = useRef<number | null>(null);
-  const brightnessQueueRef = useRef<Promise<void>>(Promise.resolve());
 
   useKeepAwake();
 
-  const dimScreen = useCallback((): Promise<void> => {
-    brightnessQueueRef.current = brightnessQueueRef.current.then(async () => {
-      try {
-        if (savedBrightnessRef.current === null) {
-          // Recover the user's brightness if the app was force-quit while
-          // asleep; otherwise remember the current value before dimming.
-          const persisted = await readOriginalBrightness().catch(() => null);
-          if (persisted !== null) {
-            savedBrightnessRef.current = persisted;
-          } else {
-            const current = await Brightness.getBrightnessAsync();
-            savedBrightnessRef.current = current;
-            if (current > DIM_BRIGHTNESS) {
-              void writeOriginalBrightness(current).catch(() => {});
-            }
-          }
-        }
-        await Brightness.setBrightnessAsync(DIM_BRIGHTNESS);
-      } catch {
-        // Brightness is a nice-to-have; scanning must keep working.
-      }
-    });
-    return brightnessQueueRef.current;
-  }, []);
-
-  const restoreBrightness = useCallback((): Promise<void> => {
-    brightnessQueueRef.current = brightnessQueueRef.current.then(async () => {
-      try {
-        if (savedBrightnessRef.current === null) {
-          savedBrightnessRef.current = await readOriginalBrightness().catch(
-            () => null,
-          );
-        }
-        if (savedBrightnessRef.current !== null) {
-          await Brightness.setBrightnessAsync(savedBrightnessRef.current);
-          savedBrightnessRef.current = null;
-          await clearOriginalBrightness().catch(() => {});
-        }
-      } catch {
-        savedBrightnessRef.current = null;
-      }
-    });
-    return brightnessQueueRef.current;
-  }, []);
-
   // Leaving the scanner (paywall, pack sheet, incoming call) must never leave
-  // the camera armed in the background.
+  // the camera armed in the background. A frozen result is not interrupted.
   useFocusEffect(
     useCallback(() => {
       focusedRef.current = true;
-      if (storeRef.current?.getSnapshot().state === 'SLEEP') {
-        void dimScreen();
-      }
 
       return () => {
         focusedRef.current = false;
@@ -132,9 +77,8 @@ export function useScanner(): ScannerController {
             timestampMs: Date.now(),
           });
         }
-        void restoreBrightness();
       };
-    }, [dimScreen, restoreBrightness]),
+    }, []),
   );
 
   useEffect(() => {
@@ -312,12 +256,6 @@ export function useScanner(): ScannerController {
         case 'CAPTURE_FRAME':
           void captureOnce();
           break;
-        case 'DIM_SCREEN':
-          void dimScreen();
-          break;
-        case 'RESTORE_BRIGHTNESS':
-          void restoreBrightness();
-          break;
         case 'PERSIST_SCAN':
           void writeScanCount(effect.dayKey, effect.scansUsedToday).catch(
             () => {},
@@ -438,9 +376,6 @@ export function useScanner(): ScannerController {
     const appStateSubscription = AppState.addEventListener('change', (next) => {
       if (next !== 'active') {
         store.send({ type: 'SLEEP', timestampMs: Date.now() });
-        void restoreBrightness();
-      } else if (store.getSnapshot().state === 'SLEEP') {
-        void dimScreen();
       }
     });
 
@@ -454,12 +389,11 @@ export function useScanner(): ScannerController {
       clearInterval(dayTimer);
       clearInterval(statusTimer);
       sampler?.stop();
-      void restoreBrightness();
       void vision.stopCamera().catch(() => {});
     };
-  }, [dimScreen, restoreBrightness, store]);
+  }, [store]);
 
-  const wake = useCallback(() => {
+  const startManual = useCallback(() => {
     store.send({ type: 'WAKE', timestampMs: Date.now() });
   }, [store]);
 
@@ -467,9 +401,25 @@ export function useScanner(): ScannerController {
     store.send({ type: 'SCAN_AGAIN', timestampMs: Date.now() });
   }, [store]);
 
+  const captureNow = useCallback(() => {
+    store.send({ type: 'CAPTURE_NOW', timestampMs: Date.now() });
+  }, [store]);
+
+  const stop = useCallback(() => {
+    store.send({ type: 'STOP', timestampMs: Date.now() });
+  }, [store]);
+
   const dismissError = useCallback(() => {
     store.send({ type: 'DISMISS_ERROR', timestampMs: Date.now() });
   }, [store]);
 
-  return { snapshot, motionAvailable, wake, scanAgain, dismissError };
+  return {
+    snapshot,
+    motionAvailable,
+    startManual,
+    scanAgain,
+    captureNow,
+    stop,
+    dismissError,
+  };
 }

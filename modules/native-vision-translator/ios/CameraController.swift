@@ -55,6 +55,11 @@ final class CameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDele
       sessionQueue.async {
         do {
           try self.configureIfNeeded()
+          if let device = self.device {
+            // Restore continuous AF/AE after the previous capture's one-shot
+            // center focus, so the preview keeps hunting while framing.
+            self.configureDevice(device)
+          }
           self.replaceLatestSampleBuffer(nil)
           if !self.session.isRunning {
             self.session.startRunning()
@@ -109,7 +114,13 @@ final class CameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDele
   // MARK: - Capture
 
   func captureFrame() async throws -> CapturedFrame {
-    guard let sampleBuffer = await waitForSampleBuffer(timeout: 1.2) else {
+    // Re-focus and re-expose at the reticle center, then take a fresh frame.
+    // The auto arm can fire while AF is still settling; this gives every
+    // capture a dedicated, sharp frame instead of whatever was on screen.
+    await prepareForCapture()
+    replaceLatestSampleBuffer(nil)
+
+    guard let sampleBuffer = await waitForSampleBuffer(timeout: 1.5) else {
       await stop()
       throw cameraException(
         name: "NoFrame",
@@ -134,6 +145,46 @@ final class CameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDele
       sampleBuffer: sampleBuffer,
       previewJpegBase64: makePreviewJPEG(pixelBuffer: pixelBuffer)
     )
+  }
+
+  private func prepareForCapture() async {
+    sessionQueue.async {
+      guard let device = self.device else {
+        return
+      }
+      guard (try? device.lockForConfiguration()) != nil else {
+        return
+      }
+      if device.isFocusPointOfInterestSupported {
+        device.focusPointOfInterest = CGPoint(x: 0.5, y: 0.5)
+      }
+      if device.isExposurePointOfInterestSupported {
+        device.exposurePointOfInterest = CGPoint(x: 0.5, y: 0.5)
+      }
+      if device.isFocusModeSupported(.autoFocus) {
+        device.focusMode = .autoFocus
+      }
+      if device.isExposureModeSupported(.autoExpose) {
+        device.exposureMode = .autoExpose
+      }
+      device.unlockForConfiguration()
+    }
+
+    try? await Task.sleep(nanoseconds: 120_000_000)
+
+    let deadline = Date().addingTimeInterval(1.2)
+    while Date() < deadline {
+      let ready = sessionQueue.sync { () -> Bool in
+        guard self.session.isRunning, let device = self.device else {
+          return false
+        }
+        return !device.isAdjustingFocus && !device.isAdjustingExposure
+      }
+      if ready {
+        return
+      }
+      try? await Task.sleep(nanoseconds: 50_000_000)
+    }
   }
 
   // MARK: - Edge sink

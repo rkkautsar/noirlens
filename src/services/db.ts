@@ -57,7 +57,3 @@ export async function writeMeta(key: string, value: string): Promise<void> {
   );
 }
 
-export async function deleteMeta(key: string): Promise<void> {
-  const db = await getDatabase();
-  await db.runAsync('DELETE FROM meta WHERE key = ?', key);
-}

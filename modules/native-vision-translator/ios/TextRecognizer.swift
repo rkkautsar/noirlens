@@ -25,7 +25,11 @@ enum TextRecognizer {
     let box: CGRect
   }
 
-  private static let minimumConfidence: Float = 0.70
+  private static let preferredLanguageCodes = [
+    "en-US", "de-DE", "fr-FR", "es-ES", "it-IT", "pt-BR",
+    "ja-JP", "ko-KR", "zh-Hans", "zh-Hant", "th-TH",
+    "vi-VT", "vi-VN", "id-ID",
+  ]
   private static let punctuationNoise = CharacterSet(
     charactersIn: "0123456789.,:;+-*/%$€£¥₩₹()[]{}#*·•°'\"`~^_=<>|\\"
   )
@@ -34,35 +38,40 @@ enum TextRecognizer {
     pixelBuffer: CVPixelBuffer,
     previewJpegBase64: String?
   ) throws -> [String: Any] {
-    let request = VNRecognizeTextRequest()
-    request.recognitionLevel = .accurate
-    request.usesLanguageCorrection = true
-    request.automaticallyDetectsLanguage = true
-
-    let handler = VNImageRequestHandler(
-      cvPixelBuffer: pixelBuffer,
-      orientation: .right,
-      options: [:]
-    )
-
-    do {
-      try handler.perform([request])
-    } catch {
-      throw Exception(
-        name: "TextRecognitionFailed",
-        description: "On-device text recognition failed.",
-        code: "ERR_OCR_FAILED"
-      )
-    }
-
-    let observations = request.results ?? []
-    let lines = observations.compactMap(parse)
-    let rawText = lines.map(\.text).joined(separator: "\n")
-    let language = dominantLanguage(in: rawText)
-
     // The upright frame is the landscape buffer rotated 90 degrees.
     let width = CVPixelBufferGetHeight(pixelBuffer)
     let height = CVPixelBufferGetWidth(pixelBuffer)
+
+    // Prefer an explicit list covering every language pack the app can
+    // translate. Vision's auto-detection can latch onto a short English
+    // watermark on an otherwise German/Japanese sign and then apply English
+    // correction to the wrong glyphs. Fall back to auto-detection only when
+    // the explicit pass finds nothing.
+    var lines: [Line] = []
+    let preferred = supportedPreferredLanguages()
+
+    if !preferred.isEmpty {
+      do {
+        lines = try runPass(pixelBuffer, automatic: false, languages: preferred)
+      } catch {
+        NSLog("[NoirLens] OCR explicit pass failed: %@", error.localizedDescription)
+      }
+    }
+
+    if lines.isEmpty {
+      do {
+        lines = try runPass(pixelBuffer, automatic: true, languages: [])
+      } catch {
+        throw Exception(
+          name: "TextRecognitionFailed",
+          description: "On-device text recognition failed.",
+          code: "ERR_OCR_FAILED"
+        )
+      }
+    }
+
+    let rawText = lines.map(\.text).joined(separator: "\n")
+    let language = dominantLanguage(in: rawText)
 
     guard !lines.isEmpty else {
       return payload(
@@ -91,6 +100,13 @@ enum TextRecognizer {
     }
 
     let text = blocks.map(\.text).joined(separator: "\n")
+    NSLog(
+      "[NoirLens] OCR language=%@ lines=%d blocks=%d chars=%d",
+      language,
+      lines.count,
+      blocks.count,
+      text.count
+    )
 
     return payload(
       text: text,
@@ -110,8 +126,11 @@ enum TextRecognizer {
     }
 
     let text = candidate.string.trimmingCharacters(in: .whitespacesAndNewlines)
+    // Long strings are kept at a permissive confidence floor; short strings
+    // need to be convincing so signage noise does not flood the result.
+    let confidenceFloor: Float = text.count >= 4 ? 0.50 : 0.72
     guard
-      candidate.confidence >= minimumConfidence,
+      candidate.confidence >= confidenceFloor,
       text.count >= 2,
       !isNoise(text)
     else {
@@ -138,6 +157,57 @@ enum TextRecognizer {
     return text.unicodeScalars.allSatisfy { allowed.contains($0) }
   }
 
+  // MARK: - Recognition passes
+
+  private static func supportedPreferredLanguages() -> [String] {
+    let probe = VNRecognizeTextRequest()
+    guard
+      let supported = try? VNRecognizeTextRequest.supportedRecognitionLanguages(
+        for: .accurate,
+        revision: probe.revision
+      )
+    else {
+      return []
+    }
+    let supportedSet = Set(supported)
+    let filtered = preferredLanguageCodes.filter { supportedSet.contains($0) }
+    NSLog("[NoirLens] OCR preferred languages available=%d", filtered.count)
+    return filtered
+  }
+
+  private static func runPass(
+    _ pixelBuffer: CVPixelBuffer,
+    automatic: Bool,
+    languages: [String]
+  ) throws -> [Line] {
+    let request = VNRecognizeTextRequest()
+    request.recognitionLevel = .accurate
+    request.usesLanguageCorrection = true
+    request.automaticallyDetectsLanguage = automatic
+    if !automatic {
+      request.recognitionLanguages = languages
+    }
+
+    let handler = VNImageRequestHandler(
+      cvPixelBuffer: pixelBuffer,
+      orientation: .right,
+      options: [:]
+    )
+    try handler.perform([request])
+
+    let observations = request.results ?? []
+    let lines = observations.compactMap(parse)
+    let characters = lines.reduce(0) { $0 + $1.text.count }
+    NSLog(
+      "[NoirLens] OCR pass automatic=%d languages=%d lines=%d chars=%d",
+      automatic ? 1 : 0,
+      languages.count,
+      lines.count,
+      characters
+    )
+    return lines
+  }
+
   // MARK: - Language
 
   private static func dominantLanguage(in text: String) -> String {
@@ -148,13 +218,46 @@ enum TextRecognizer {
 
     let recognizer = NLLanguageRecognizer()
     recognizer.processString(trimmed)
-    guard
-      let language = recognizer.dominantLanguage,
-      language != .undetermined
-    else {
+    let detected = recognizer.dominantLanguage?.rawValue
+
+    if let hint = scriptHint(for: trimmed),
+       detected == nil || detected == "en" || detected == "und" {
+      return hint
+    }
+
+    guard let detected, detected != "und" else {
       return "und"
     }
-    return language.rawValue
+    return detected
+  }
+
+  private static func scriptHint(for text: String) -> String? {
+    var hasKana = false
+    var hasHangul = false
+    var hasThai = false
+    var hasHan = false
+
+    for scalar in text.unicodeScalars {
+      switch scalar.value {
+      case 0x3040...0x30FF:
+        hasKana = true
+      case 0xAC00...0xD7AF:
+        hasHangul = true
+      case 0x0E00...0x0E7F:
+        hasThai = true
+      case 0x4E00...0x9FFF:
+        hasHan = true
+      default:
+        break
+      }
+    }
+
+    if hasKana { return "ja" }
+    if hasHangul { return "ko" }
+    if hasThai { return "th" }
+    if hasHan { return "zh-Hans" }
+    if text.contains(where: { "äöüßÄÖÜ".contains($0) }) { return "de" }
+    return nil
   }
 
   private static func isCJK(_ language: String) -> Bool {

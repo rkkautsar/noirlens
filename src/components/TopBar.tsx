@@ -49,7 +49,7 @@ export function TopBar({
         <View style={styles.ecoRow}>
           <MicroLabel tone="dim">PREVIEW</MicroLabel>
           <ChipButton
-            label="ECO HUD"
+            label="NOIR"
             active={ecoMode}
             onPress={() => onEcoChange(true)}
           />

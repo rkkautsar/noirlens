@@ -17,7 +17,7 @@ import { EcoCameraView } from '../modules/native-vision-translator';
 export default function ScannerScreen() {
   const router = useRouter();
   const scanner = useScanner();
-  const [ecoMode, setEcoMode] = useState(true);
+  const [ecoMode, setEcoMode] = useState(false);
   const [showOriginal, setShowOriginal] = useState(false);
 
   const { snapshot } = scanner;
@@ -74,6 +74,9 @@ export default function ScannerScreen() {
           remaining={snapshot.remainingToday}
           unlimited={snapshot.unlimited}
           error={snapshot.error}
+          mode={snapshot.mode}
+          onCapture={scanner.captureNow}
+          onStop={scanner.stop}
           onOpenLanguages={openLanguages}
           onOpenPaywall={openPaywall}
         />
@@ -88,7 +91,7 @@ export default function ScannerScreen() {
           error={snapshot.error}
           ecoMode={ecoMode}
           onEcoChange={updateEcoMode}
-          onWake={scanner.wake}
+          onWake={scanner.startManual}
           onOpenLanguages={openLanguages}
           onOpenPaywall={openPaywall}
           onDismissError={scanner.dismissError}

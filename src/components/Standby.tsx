@@ -1,10 +1,10 @@
-import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Linking, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type { ScanError } from '@/scanner/machine';
 import { colors, typography } from '@/theme';
 import { TopBar } from './TopBar';
-import { ChipButton, MicroLabel } from './ui';
+import { ChipButton, MicroLabel, SolidButton } from './ui';
 
 export function Standby({
   remaining,
@@ -34,16 +34,16 @@ export function Standby({
   const insets = useSafeAreaInsets();
   const exhausted = remaining === 0;
 
-  const heading = exhausted ? 'DAILY LIMIT REACHED' : 'RAISE TO SCAN';
+  const heading = exhausted ? 'DAILY LIMIT REACHED' : 'RAISE OR TAP';
   const subheading = exhausted
     ? 'Unlock unlimited scans to keep going.'
-    : 'Camera is powered down until you lift the phone.';
+    : 'Lift the phone to arm automatically, or start the camera manually.';
 
   const counter = !hydrated
     ? 'LOADING COUNTER'
     : unlimited
-      ? 'TAP TO SCAN · PRO'
-      : `${remaining ?? 0} SCANS LEFT TODAY`;
+      ? 'PRO · UNLIMITED SCANS'
+      : `${remaining ?? 0} OF 15 FREE SCANS LEFT TODAY`;
 
   const primaryAction = exhausted ? onOpenPaywall : onWake;
 
@@ -64,15 +64,14 @@ export function Standby({
         <Text style={styles.heading}>{heading}</Text>
         <Text style={styles.subheading}>{subheading}</Text>
 
-        <Pressable
-          accessibilityRole="button"
-          onPress={primaryAction}
-          style={({ pressed }) => [styles.counterPill, pressed && styles.pressed]}
-        >
-          <Text style={styles.counterText}>
-            {exhausted ? 'VIEW OPTIONS' : counter}
-          </Text>
-        </Pressable>
+        <View style={styles.primaryAction}>
+          <SolidButton
+            label={exhausted ? 'VIEW OPTIONS' : 'START CAMERA'}
+            onPress={primaryAction}
+            primary
+          />
+        </View>
+        <Text style={styles.counterText}>{counter}</Text>
 
         {!motionAvailable ? (
           <MicroLabel tone="warning" style={styles.motionNote}>
@@ -151,21 +150,16 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     maxWidth: 280,
   },
-  counterPill: {
+  primaryAction: {
+    alignSelf: 'stretch',
+    maxWidth: 280,
+    width: '100%',
     marginTop: 20,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 999,
-    paddingHorizontal: 18,
-    paddingVertical: 12,
-    backgroundColor: colors.surface,
   },
   counterText: {
     ...typography.micro,
     color: colors.accent,
-  },
-  pressed: {
-    opacity: 0.65,
+    textAlign: 'center',
   },
   motionNote: {
     marginTop: 8,

@@ -5,6 +5,7 @@ import {
   remainingScans,
   type ScanError,
   type ScanResult,
+  type ScannerArmMode,
   type ScannerContext,
   type ScannerEffect,
   type ScannerEvent,
@@ -14,6 +15,7 @@ import {
 
 export interface ScannerSnapshot {
   state: ScannerState;
+  mode: ScannerArmMode;
   result: ScanResult | null;
   error: ScanError | null;
   scansUsedToday: number;
@@ -31,6 +33,7 @@ function buildSnapshot(
 ): ScannerSnapshot {
   return {
     state: context.state,
+    mode: context.armMode,
     result: context.result,
     error: context.error,
     scansUsedToday: context.scansUsedToday,
@@ -43,6 +46,7 @@ function buildSnapshot(
 function affectsUI(previous: ScannerContext, next: ScannerContext): boolean {
   return (
     previous.state !== next.state ||
+    previous.armMode !== next.armMode ||
     previous.result !== next.result ||
     previous.error !== next.error ||
     previous.scansUsedToday !== next.scansUsedToday ||

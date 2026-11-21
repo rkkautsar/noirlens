@@ -8,21 +8,25 @@ No accounts. No uploads. No server. Apple's `Vision` and `Translation` framework
 
 | State | Camera | Screen | Moves on |
 | --- | --- | --- | --- |
-| `SLEEP` | `stopRunning()`; sensor, AF/OIS and ISP powered down | Pure `#000000`; "Raise to scan"; screen dimmed | Enters the 20–85° band from outside within 1 s with ≥ 30°/s rotation |
-| `PREWARM` | 1280×720, 30 fps, continuous AF/AE, no HDR/multi-cam | Warm-white luma-edge HUD over black (toggle: color) | AF/AE settled + angular speed < 0.15 rad/s for 250 ms |
+| `SLEEP` | `stopRunning()`; sensor, AF/OIS and ISP powered down | Pure `#000000`; raise or tap **START CAMERA**; auto-brightness untouched | AUTO: enters the 20–85° band and holds 300 ms; or manual START |
+| `PREWARM` | 1280×720, 30 fps, continuous AF/AE, no HDR/multi-cam | Color preview by default; **NOIR** toggles the warm-white edge HUD. CAPTURE/STOP controls | AUTO: AF/AE settled + angular speed < 0.15 rad/s for 250 ms; MANUAL: CAPTURE |
 | `SCANNING` | One raw frame grabbed, then `stopRunning()` immediately | "Reading on-device" | OCR + translation finish |
-| `LOCKED_READ` | Off | Black result card; frozen-frame wireframe toggle | Lower phone (<15°) or walking, or "Scan Again" |
+| `LOCKED_READ` | Off | Black result card; frozen-frame wireframe toggle | Lower phone (<15°) or walking, or "Scan Again" (starts a MANUAL session) |
 
-The transition table is implemented as a pure reducer in `src/scanner/machine.ts`, with every threshold in `DEFAULT_TUNING`. Motion is sampled at 20 Hz; pitch comes from the gravity vector (0° = flat, 90° = upright) and walking is detected from 600 ms of angular-speed variance. The arm gesture accepts rotation in either direction: lifting from a table and tilting down from a vertical pocket both enter the band deliberately, while a phone that is already sitting inside the band does not arm.
+The transition table is implemented as a pure reducer in `src/scanner/machine.ts`, with every threshold in `DEFAULT_TUNING`. Motion is sampled at 20 Hz; pitch comes from the gravity vector (0° = flat, 90° = upright) and walking is detected from 600 ms of angular-speed variance.
+
+**Manual mode is always available:** tap **START CAMERA** on the standby screen, frame the text, then tap **CAPTURE** or **STOP**. Manual sessions ignore motion, so lowering the phone does not end them; a 90-second safety timeout does.
+
+**AUTO mode** arms only after the phone enters the 20–85° reading band and stays there for 300 ms, with an 800 ms cooldown after sleeping. The dwell is what stops a phone that is merely passing through the band on its way down from waking the camera. Either entry direction counts, so a phone carried vertically in a pocket can arm on the way down to eye level.
 
 ## Stack
 
 - Expo SDK 58, React Native 0.88, React 19, TypeScript strict, New Architecture
-- `expo-router`, `expo-sensors` (CoreMotion), `expo-brightness`, `expo-keep-awake`, `expo-sqlite`
+- `expo-router`, `expo-sensors` (CoreMotion), `expo-keep-awake`, `expo-sqlite`
 - Local Expo module `modules/native-vision-translator` (Swift, iOS 18 deployment target)
   - `AVCaptureSession` power lifecycle
   - CoreImage luma-edge HUD (`CIEdges` + `CIColorMonochrome`, 15 fps)
-  - `VNRecognizeTextRequest` (accurate, auto language detection, confidence/noise filters, paragraph and vertical-CJK grouping)
+  - `VNRecognizeTextRequest` (accurate, traveler-language list with auto-detect fallback, confidence/noise filters, paragraph and vertical-CJK grouping)
   - Apple `Translation` (`TranslationSession`, `LanguageAvailability`) with a system download prompt for packs
 - SQLite: translation cache by SHA-256 source hash, daily scan ledger, entitlement state
 
@@ -99,7 +103,7 @@ Apple's supported language pairs are the ceiling. If detection returns a script 
 - The session is stopped as soon as a frame is grabbed, before OCR or NMT starts. Reading a result costs no camera power.
 - The eco HUD runs a GPU-backed CoreImage edge pass over the 720p frame at 15 fps and renders warm-white outlines on black; the color preview layer is hidden in that mode.
 - Frame rate is capped by the 720p/30 fps session preset; HDR video, low-light boost, subject-area monitoring and multi-camera devices are deliberately not used.
-- Screen brightness is lowered in `SLEEP` and restored on wake. The scanner keeps the screen awake while the scanner screen is mounted.
+- Screen brightness is never touched; the OLED black standby plus auto-brightness handle idle power. The scanner keeps the screen awake while mounted.
 - App backgrounding or a 2.5 s motion-sample gap forces `SLEEP` and stops the session.
 
 ## Verify
@@ -117,7 +121,8 @@ npx expo export --platform ios --output-dir dist
 
 - iOS-only, iPhone-only, portrait-locked. No Android or web build.
 - The simulator has no camera and no motion sensors; use a device.
-- OCR is tuned for signage: strings shorter than 2 characters, confidence below 0.70, and pure numbers/currency are discarded.
+- OCR is tuned for signage: strings shorter than 2 characters and pure numbers/currency are discarded. Long strings use a permissive 0.50 confidence floor; 2–3 character strings require 0.72.
+- OCR prefers the traveler language list (German, Japanese, Chinese, etc.) so a short English watermark cannot skew language correction. Auto-detection is the fallback when that list finds nothing.
 - Unsigned builds cannot be submitted to the App Store and expire weekly with a free Apple ID.
 - Language packs are installed by iOS, not by the app; deleting one in Settings requires re-downloading it.
 

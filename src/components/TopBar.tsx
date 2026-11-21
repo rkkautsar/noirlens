@@ -7,7 +7,6 @@ import { colors, typography } from '@/theme';
 import { ChipButton, MicroLabel } from './ui';
 
 export function TopBar({
-  active,
   ecoMode,
   onEcoChange,
   remaining,
@@ -16,7 +15,6 @@ export function TopBar({
   onOpenPaywall,
   showNavigation = true,
 }: {
-  active: boolean;
   ecoMode: boolean;
   onEcoChange: (eco: boolean) => void;
   remaining: number | null;
@@ -50,21 +48,19 @@ export function TopBar({
         ) : null}
       </View>
 
-      {active ? (
-        <View style={styles.ecoRow}>
-          <MicroLabel tone="dim">PREVIEW</MicroLabel>
-          <ChipButton
-            label="NOIR"
-            active={ecoMode}
-            onPress={() => onEcoChange(true)}
-          />
-          <ChipButton
-            label="COLOR"
-            active={!ecoMode}
-            onPress={() => onEcoChange(false)}
-          />
-        </View>
-      ) : null}
+      <View style={styles.ecoRow}>
+        <MicroLabel tone="dim">PREVIEW</MicroLabel>
+        <ChipButton
+          label="NOIR"
+          active={ecoMode}
+          onPress={() => onEcoChange(true)}
+        />
+        <ChipButton
+          label="COLOR"
+          active={!ecoMode}
+          onPress={() => onEcoChange(false)}
+        />
+      </View>
     </View>
   );
 }

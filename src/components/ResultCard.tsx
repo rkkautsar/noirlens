@@ -84,7 +84,6 @@ export function ResultCard({
   return (
     <View style={styles.container}>
       <TopBar
-        active={false}
         ecoMode={ecoMode}
         onEcoChange={onEcoChange}
         remaining={remaining}

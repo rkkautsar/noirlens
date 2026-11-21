@@ -32,7 +32,6 @@ export function AimHud({
   return (
     <View style={styles.container} pointerEvents="box-none">
       <TopBar
-        active
         ecoMode={ecoMode}
         onEcoChange={onEcoChange}
         remaining={remaining}

@@ -7,6 +7,7 @@ import { TopBar } from './TopBar';
 import { ChipButton, MicroLabel, SolidButton } from './ui';
 
 export function Standby({
+  hidden = false,
   remaining,
   unlimited,
   hydrated,
@@ -17,6 +18,7 @@ export function Standby({
   onOpenPaywall,
   onDismissError,
 }: {
+  hidden?: boolean;
   remaining: number | null;
   unlimited: boolean;
   hydrated: boolean;
@@ -44,7 +46,10 @@ export function Standby({
   const primaryAction = exhausted ? onOpenPaywall : null;
 
   return (
-    <View style={styles.container}>
+    <View
+      style={[styles.container, hidden && styles.hidden]}
+      pointerEvents={hidden ? 'none' : 'auto'}
+    >
       <TopBar
         ecoMode={ecoMode}
         onEcoChange={onEcoChange}
@@ -116,6 +121,9 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     backgroundColor: colors.background,
+  },
+  hidden: {
+    opacity: 0,
   },
   center: {
     flex: 1,

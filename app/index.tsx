@@ -25,7 +25,6 @@ export default function ScannerScreen() {
   const { state, result } = snapshot;
   const active = state === 'PREWARM' || state === 'SCANNING';
   const locked = state === 'LOCKED_READ' && result !== null;
-  const standby = state === 'SLEEP' || (state === 'LOCKED_READ' && result === null);
   const exhausted = snapshot.remainingToday === 0;
 
   useEffect(() => {
@@ -79,6 +78,9 @@ export default function ScannerScreen() {
       onResponderRelease={() => {
         scanner.captureNow();
       }}
+      onResponderTerminate={() => {
+        scanner.captureNow();
+      }}
       onResponderTerminationRequest={() => false}
     >
       <EcoCameraView style={StyleSheet.absoluteFill} ecoMode={ecoMode} />
@@ -115,6 +117,18 @@ export default function ScannerScreen() {
         )
       ) : (
         <>
+          <Standby
+            hidden={active}
+            remaining={snapshot.remainingToday}
+            unlimited={snapshot.unlimited}
+            hydrated={snapshot.hydrated}
+            error={snapshot.error}
+            ecoMode={ecoMode}
+            onEcoChange={updateEcoMode}
+            onOpenLanguages={openLanguages}
+            onOpenPaywall={openPaywall}
+            onDismissError={scanner.dismissError}
+          />
           {active ? (
             <AimHud
               scanning={state === 'SCANNING'}
@@ -127,19 +141,6 @@ export default function ScannerScreen() {
               onStop={scanner.stop}
               onOpenLanguages={openLanguages}
               onOpenPaywall={openPaywall}
-            />
-          ) : null}
-          {standby ? (
-            <Standby
-              remaining={snapshot.remainingToday}
-              unlimited={snapshot.unlimited}
-              hydrated={snapshot.hydrated}
-              error={snapshot.error}
-              ecoMode={ecoMode}
-              onEcoChange={updateEcoMode}
-              onOpenLanguages={openLanguages}
-              onOpenPaywall={openPaywall}
-              onDismissError={scanner.dismissError}
             />
           ) : null}
         </>

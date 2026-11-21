@@ -58,7 +58,7 @@ public final class NativeVisionTranslatorModule: Module {
     }
 
     AsyncFunction("getSupportedLanguages") { () async -> [String] in
-      TranslationBridge.supportedLanguages()
+      await TranslationBridge.supportedLanguages()
     }
   }
 }

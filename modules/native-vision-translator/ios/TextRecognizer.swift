@@ -1,4 +1,5 @@
 import CryptoKit
+import ExpoModulesCore
 import Foundation
 import NaturalLanguage
 import Vision
@@ -54,7 +55,7 @@ enum TextRecognizer {
       )
     }
 
-    let observations = request.results as? [VNRecognizedTextObservation] ?? []
+    let observations = request.results ?? []
     let lines = observations.compactMap(parse)
     let rawText = lines.map(\.text).joined(separator: "\n")
     let language = dominantLanguage(in: rawText)

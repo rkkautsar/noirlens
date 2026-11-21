@@ -21,7 +21,7 @@ struct CapturedFrame {
  on a background queue. The low-power edge HUD is derived on the GPU at 15 fps,
  while the untouched pixel buffer is handed to Vision on capture.
  */
-final class CameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate {
+final class CameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, @unchecked Sendable {
   static let shared = CameraController()
 
   let session = AVCaptureSession()
@@ -295,9 +295,6 @@ final class CameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDele
     // Scene-change monitoring and low-light boost keep the ISP awake between
     // frames; neither is useful for a single-frame read.
     device.isSubjectAreaChangeMonitoringEnabled = false
-    if device.isLowLightBoostSupported {
-      device.isLowLightBoostEnabled = false
-    }
 
     if device.activeFormat.isVideoHDRSupported {
       device.automaticallyAdjustsVideoHDREnabled = false

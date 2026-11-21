@@ -6,11 +6,11 @@ import UIKit
 /**
  Bridges Apple's on-device Translation framework (iOS 18+).
 
- Translation itself runs through a programmatic `TranslationSession` that
- requires the language pair to be installed. Downloads can only be requested
- from a session created by SwiftUI's `.translationTask`, so
- `prepareLanguagePack` presents a 1x1 transparent host that asks the system to
- fetch the pack. No network calls are made by this app.
+ A `TranslationSession` is only available inside a SwiftUI `translationTask`
+ view in this deployment range, so both pack downloads and translations are
+ performed by a 1x1 transparent host. The host is presented for the duration
+ of the work and dismissed before the awaiting promise resolves. No network
+ calls are made by this app.
  */
 enum TranslationBridge {
   private static let target = Locale.Language(identifier: "en")
@@ -26,8 +26,10 @@ enum TranslationBridge {
     ]
   }
 
-  static func supportedLanguages() -> [String] {
-    LanguageAvailability().supportedLanguages.map(\.minimalIdentifier)
+  static func supportedLanguages() async -> [String] {
+    let availability = LanguageAvailability()
+    let languages = await availability.supportedLanguages
+    return languages.map(\.minimalIdentifier)
   }
 
   static func translate(
@@ -72,14 +74,27 @@ enum TranslationBridge {
     }
 
     do {
-      let session = try TranslationSession(installedSource: source, target: target)
-      let response = try await session.translate(trimmed)
+      guard
+        let translated = try await presentHost(
+          text: trimmed,
+          source: source,
+          target: target
+        )
+      else {
+        throw Exception(
+          name: "TranslationFailed",
+          description: "The translation returned no text.",
+          code: "ERR_TRANSLATION_FAILED"
+        )
+      }
       return [
-        "translatedText": response.targetText,
+        "translatedText": translated,
         "sourceLanguage": code,
         "targetLanguage": "en",
         "cached": false
       ]
+    } catch let error as Exception {
+      throw error
     } catch {
       throw Exception(
         name: "TranslationFailed",
@@ -119,7 +134,7 @@ enum TranslationBridge {
       )
     }
 
-    try await presentDownloadPrompt(source: source)
+    _ = try await presentHost(text: nil, source: source, target: target)
 
     let after = await availability.status(from: source, to: target)
     return [
@@ -166,18 +181,28 @@ enum TranslationBridge {
     }
   }
 
+  /// `text == nil` requests the pack download prompt instead of a translation.
   @MainActor
-  private static func presentDownloadPrompt(source: Locale.Language) async throws {
+  private static func presentHost(
+    text: String?,
+    source: Locale.Language,
+    target: Locale.Language
+  ) async throws -> String? {
     guard let root = topViewController() else {
       throw Exception(
         name: "NoPresentationContext",
-        description: "The language pack prompt could not be presented.",
+        description: "The translation host could not be presented.",
         code: "ERR_NO_PRESENTATION_CONTEXT"
       )
     }
 
-    let coordinator = PackDownloadCoordinator()
-    try await coordinator.start(source: source, target: target, from: root)
+    let coordinator = TranslationHostCoordinator()
+    return try await coordinator.run(
+      text: text,
+      source: source,
+      target: target,
+      from: root
+    )
   }
 
   @MainActor
@@ -186,7 +211,7 @@ enum TranslationBridge {
       .compactMap { $0 as? UIWindowScene }
       .first { $0.activationState == .foregroundActive }
 
-    var controller = scene?.windows.first(where: \.isKeyWindow)?.rootViewController
+    var controller = scene?.windows.first(where: { $0.isKeyWindow })?.rootViewController
       ?? scene?.windows.first?.rootViewController
 
     while let presented = controller?.presentedViewController {
@@ -197,23 +222,27 @@ enum TranslationBridge {
 }
 
 @MainActor
-private final class PackDownloadCoordinator {
-  private var host: UIHostingController<PackDownloadView>?
-  private var continuation: CheckedContinuation<Void, Error>?
-  private var selfReference: PackDownloadCoordinator?
+private final class TranslationHostCoordinator {
+  private var host: UIHostingController<TranslationHostView>?
+  private var continuation: CheckedContinuation<String?, Error>?
+  private var selfReference: TranslationHostCoordinator?
 
-  func start(
+  func run(
+    text: String?,
     source: Locale.Language,
     target: Locale.Language,
     from root: UIViewController
-  ) async throws {
+  ) async throws -> String? {
     try await withCheckedThrowingContinuation {
-      (continuation: CheckedContinuation<Void, Error>) in
+      (continuation: CheckedContinuation<String?, Error>) in
       self.selfReference = self
       self.continuation = continuation
 
-      let view = PackDownloadView(source: source, target: target) {
-        @MainActor [weak self] result in
+      let view = TranslationHostView(
+        source: source,
+        target: target,
+        text: text
+      ) { @MainActor [weak self] result in
         self?.finish(result)
       }
       let host = UIHostingController(rootView: view)
@@ -224,7 +253,7 @@ private final class PackDownloadCoordinator {
     }
   }
 
-  private func finish(_ result: Result<Void, Error>) {
+  private func finish(_ result: Result<String?, Error>) {
     host?.dismiss(animated: false)
     host = nil
     selfReference = nil
@@ -235,10 +264,12 @@ private final class PackDownloadCoordinator {
   }
 }
 
-private struct PackDownloadView: View {
+private struct TranslationHostView: View {
   let source: Locale.Language
   let target: Locale.Language
-  let completion: @MainActor (Result<Void, Error>) -> Void
+  /// nil requests the pack download prompt without translating.
+  let text: String?
+  let completion: @MainActor (Result<String?, Error>) -> Void
 
   @State private var configuration: TranslationSession.Configuration?
 
@@ -247,9 +278,16 @@ private struct PackDownloadView: View {
       .frame(width: 1, height: 1)
       .translationTask(configuration) { session in
         do {
-          try await session.prepareTranslation()
-          await MainActor.run {
-            completion(.success(Void()))
+          if let text {
+            let response = try await session.translate(text)
+            await MainActor.run {
+              completion(.success(response.targetText))
+            }
+          } else {
+            try await session.prepareTranslation()
+            await MainActor.run {
+              completion(.success(nil))
+            }
           }
         } catch {
           await MainActor.run {
@@ -258,7 +296,10 @@ private struct PackDownloadView: View {
         }
       }
       .onAppear {
-        configuration = TranslationSession.Configuration(source: source, target: target)
+        configuration = TranslationSession.Configuration(
+          source: source,
+          target: target
+        )
       }
   }
 }

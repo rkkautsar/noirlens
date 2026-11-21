@@ -108,12 +108,19 @@ export function OriginalView({
           </Text>
         </ScrollView>
         <View style={styles.actions}>
-          <View style={styles.action}>
-            <SolidButton label="BACK" onPress={onClose} />
-          </View>
-          <View style={styles.action}>
-            <SolidButton label="SCAN AGAIN" onPress={onScanAgain} primary />
-          </View>
+          <SolidButton
+            label="BACK"
+            icon="chevron-back"
+            iconOnly
+            onPress={onClose}
+          />
+          <SolidButton
+            label="SCAN AGAIN"
+            icon="refresh"
+            iconOnly
+            onPress={onScanAgain}
+            primary
+          />
         </View>
       </View>
     </View>
@@ -156,9 +163,7 @@ const styles = StyleSheet.create({
   },
   actions: {
     flexDirection: 'row',
+    justifyContent: 'flex-end',
     gap: 10,
-  },
-  action: {
-    flex: 1,
   },
 });

@@ -8,7 +8,11 @@ import {
   type TextStyle,
 } from 'react-native';
 
+import Ionicons from '@expo/vector-icons/Ionicons';
+
 import { colors, typography } from '@/theme';
+
+export type IconName = React.ComponentProps<typeof Ionicons>['name'];
 
 type Tone =
   | 'muted'
@@ -37,42 +41,58 @@ export function MicroLabel({
 
 export function ChipButton({
   label,
+  icon,
+  iconOnly = false,
   onPress,
   active = false,
   disabled = false,
 }: {
   label: string;
+  icon?: IconName;
+  iconOnly?: boolean;
   onPress: () => void;
   active?: boolean;
   disabled?: boolean;
 }) {
+  const tint = active ? colors.background : colors.foreground;
   return (
     <Pressable
       accessibilityRole="button"
+      accessibilityLabel={label}
       disabled={disabled}
       onPress={onPress}
       style={({ pressed }) => [
         styles.chip,
+        iconOnly && styles.chipIconOnly,
         active && styles.chipActive,
         pressed && styles.pressed,
         disabled && styles.disabled,
       ]}
     >
-      <Text style={[styles.chipText, active && styles.chipTextActive]}>
-        {label}
-      </Text>
+      {icon ? (
+        <Ionicons name={icon} size={iconOnly ? 18 : 14} color={tint} />
+      ) : null}
+      {iconOnly ? null : (
+        <Text style={[styles.chipText, active && styles.chipTextActive]}>
+          {label}
+        </Text>
+      )}
     </Pressable>
   );
 }
 
 export function SolidButton({
   label,
+  icon,
+  iconOnly = false,
   onPress,
   primary = false,
   disabled = false,
   loading = false,
 }: {
   label: string;
+  icon?: IconName;
+  iconOnly?: boolean;
   onPress: () => void;
   primary?: boolean;
   disabled?: boolean;
@@ -81,11 +101,13 @@ export function SolidButton({
   return (
     <Pressable
       accessibilityRole="button"
+      accessibilityLabel={label}
       disabled={disabled || loading}
       onPress={onPress}
       style={({ pressed }) => [
         styles.solid,
         primary ? styles.solidPrimary : styles.solidGhost,
+        iconOnly && styles.solidIconOnly,
         pressed && styles.pressed,
         (disabled || loading) && styles.disabled,
       ]}
@@ -96,14 +118,25 @@ export function SolidButton({
           color={primary ? colors.background : colors.accent}
         />
       ) : (
-        <Text
-          style={[
-            styles.solidText,
-            primary ? styles.solidPrimaryText : styles.solidGhostText,
-          ]}
-        >
-          {label}
-        </Text>
+        <>
+          {icon ? (
+            <Ionicons
+              name={icon}
+              size={iconOnly ? 20 : 15}
+              color={primary ? colors.background : colors.accent}
+            />
+          ) : null}
+          {iconOnly ? null : (
+            <Text
+              style={[
+                styles.solidText,
+                primary ? styles.solidPrimaryText : styles.solidGhostText,
+              ]}
+            >
+              {label}
+            </Text>
+          )}
+        </>
       )}
     </Pressable>
   );
@@ -133,12 +166,25 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   chip: {
+    minHeight: 38,
     paddingHorizontal: 12,
     paddingVertical: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: 999,
     backgroundColor: 'rgba(0,0,0,0.55)',
+  },
+  chipIconOnly: {
+    width: 46,
+    height: 46,
+    minHeight: 46,
+    paddingHorizontal: 0,
+    paddingVertical: 0,
+    borderRadius: 16,
   },
   chipActive: {
     borderColor: colors.accent,
@@ -162,8 +208,15 @@ const styles = StyleSheet.create({
     minHeight: 48,
     borderRadius: 12,
     paddingHorizontal: 16,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 8,
+  },
+  solidIconOnly: {
+    width: 52,
+    paddingHorizontal: 0,
+    borderRadius: 16,
   },
   solidPrimary: {
     backgroundColor: colors.accent,

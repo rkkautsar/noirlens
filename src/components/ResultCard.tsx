@@ -94,6 +94,11 @@ export function ResultCard({
     : packMissing
       ? `GET ${shortLanguage} PACK`
       : 'CHOOSE LANGUAGE';
+  const primaryIcon = translated
+    ? 'refresh'
+    : packMissing
+      ? 'cloud-download-outline'
+      : 'language-outline';
   const primaryAction = translated ? onScanAgain : onOpenLanguages;
 
   return (
@@ -156,19 +161,36 @@ export function ResultCard({
         </View>
 
         <View style={styles.actions}>
-          <View style={styles.primaryAction}>
-            <SolidButton label={primaryLabel} onPress={primaryAction} primary />
-          </View>
+          <SolidButton
+            label={primaryLabel}
+            icon={primaryIcon}
+            iconOnly
+            onPress={primaryAction}
+            primary
+          />
           <ChipButton
             label={copied ? 'COPIED' : 'COPY'}
+            icon={copied ? 'checkmark' : 'copy-outline'}
+            iconOnly
+            active={copied}
             onPress={() => {
               void copy();
             }}
           />
           {translated ? null : (
-            <ChipButton label="SCAN AGAIN" onPress={onScanAgain} />
+            <ChipButton
+              label="SCAN AGAIN"
+              icon="refresh"
+              iconOnly
+              onPress={onScanAgain}
+            />
           )}
-          <ChipButton label="ORIGINAL" onPress={onShowOriginal} />
+          <ChipButton
+            label="ORIGINAL"
+            icon="image-outline"
+            iconOnly
+            onPress={onShowOriginal}
+          />
         </View>
 
         <MicroLabel tone="dim" style={styles.footer}>
@@ -234,9 +256,6 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 10,
     marginTop: 4,
-  },
-  primaryAction: {
-    flex: 1,
   },
   footer: {
     marginTop: 8,

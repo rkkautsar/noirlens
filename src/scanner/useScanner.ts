@@ -149,7 +149,7 @@ export function useScanner(): ScannerController {
             error: {
               code: 'no_text',
               message: 'No readable text. Fill the frame with the sign.',
-              fatal: false,
+              fatal: true,
             },
             timestampMs: Date.now(),
           });
@@ -285,6 +285,22 @@ export function useScanner(): ScannerController {
             return;
           }
           if (isLanguagePackFailure(error)) {
+            // The native bridge can report a pack error even when the pack is
+            // installed (for example, when the forced source does not match
+            // the text). Trust the availability check over the error code.
+            if (sourceStatus?.status === 'installed') {
+              store.send({
+                type: 'CAPTURE_FAILED',
+                error: {
+                  code: 'translation_failed',
+                  message:
+                    'This text could not be translated from the selected source. Try another sign.',
+                  fatal: true,
+                },
+                timestampMs: Date.now(),
+              });
+              return;
+            }
             // Still surface the source text and a download prompt; this is a
             // notice, not a fatal scan failure, and it does not use a scan.
             sendResult('pack_missing', '', false);

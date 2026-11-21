@@ -66,7 +66,12 @@ export function Standby({
 
         {primaryAction ? (
           <View style={styles.primaryAction}>
-            <SolidButton label="VIEW OPTIONS" onPress={primaryAction} primary />
+            <SolidButton
+              label="VIEW OPTIONS"
+              icon="options-outline"
+              onPress={primaryAction}
+              primary
+            />
           </View>
         ) : null}
         <Text style={styles.counterText}>{counter}</Text>
@@ -88,17 +93,22 @@ export function Standby({
           <Text style={styles.errorMessage}>{error.message}</Text>
           <View style={styles.errorActions}>
             {error.code === 'language_pack_missing' ? (
-              <ChipButton label="LANGUAGE PACKS" onPress={onOpenLanguages} />
+              <ChipButton
+                label="LANGUAGE PACKS"
+                icon="download-outline"
+                onPress={onOpenLanguages}
+              />
             ) : null}
             {error.code === 'permission_denied' ? (
               <ChipButton
                 label="OPEN SETTINGS"
+                icon="settings-outline"
                 onPress={() => {
                   void Linking.openSettings().catch(() => {});
                 }}
               />
             ) : null}
-            <ChipButton label="DISMISS" onPress={onDismissError} />
+            <ChipButton label="DISMISS" icon="close" onPress={onDismissError} />
           </View>
         </View>
       ) : (

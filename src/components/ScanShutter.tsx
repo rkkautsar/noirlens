@@ -1,8 +1,8 @@
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { colors, typography } from '@/theme';
-import { MicroLabel } from './ui';
 
 /**
  * Always-mounted hold shutter. It lives outside the standby/aim HUD switch so
@@ -24,9 +24,20 @@ export function ScanShutter({
 }) {
   const insets = useSafeAreaInsets();
 
-  const idleLabel = next ? 'HOLD FOR NEXT SCAN' : 'HOLD TO SCAN';
-  const idleMicro = next ? 'NEXT' : 'HOLD';
-  const idleHint = next ? 'NEW SCAN ON RELEASE' : 'HOLD ANYWHERE';
+  const label = scanning
+    ? 'READING ON-DEVICE'
+    : active
+      ? 'RELEASE TO CAPTURE'
+      : next
+        ? 'NEXT SCAN'
+        : 'HOLD TO SCAN';
+  const icon: React.ComponentProps<typeof Ionicons>['name'] = scanning
+    ? 'hourglass-outline'
+    : active
+      ? 'radio-button-on'
+      : next
+        ? 'refresh'
+        : 'hand-left-outline';
 
   return (
     <View
@@ -53,25 +64,19 @@ export function ScanShutter({
           scanning && styles.barBusy,
         ]}
       >
-        <View style={styles.copy}>
-          <MicroLabel tone={active ? 'accent' : 'dim'}>
-            {scanning ? 'READING' : active ? 'RELEASE' : idleMicro}
-          </MicroLabel>
-          <Text style={styles.label}>
-            {scanning
-              ? 'READING ON-DEVICE'
-              : active
-                ? 'RELEASE TO CAPTURE'
-                : idleLabel}
-          </Text>
-        </View>
-        <MicroLabel tone="dim" style={styles.hint}>
-          {scanning
-            ? 'OCR + TRANSLATION'
-            : active
-              ? 'CAPTURE ON RELEASE'
-              : idleHint}
-        </MicroLabel>
+        <Ionicons
+          name={icon}
+          size={18}
+          color={active ? colors.accent : colors.muted}
+        />
+        <Text
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          minimumFontScale={0.8}
+          style={[styles.label, active && styles.labelActive]}
+        >
+          {label}
+        </Text>
       </Pressable>
     </View>
   );
@@ -87,7 +92,7 @@ const styles = StyleSheet.create({
     paddingTop: 8,
   },
   bar: {
-    minHeight: 68,
+    minHeight: 64,
     borderRadius: 18,
     borderWidth: 1,
     borderColor: colors.border,
@@ -96,8 +101,8 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
+    justifyContent: 'center',
+    gap: 10,
   },
   barActive: {
     borderColor: colors.accent,
@@ -105,19 +110,14 @@ const styles = StyleSheet.create({
   barBusy: {
     opacity: 0.8,
   },
-  copy: {
-    gap: 3,
-    flexShrink: 1,
-  },
   label: {
     ...typography.label,
     color: colors.foreground,
     letterSpacing: 1.6,
     fontSize: 16,
-  },
-  hint: {
-    textAlign: 'right',
     flexShrink: 1,
-    maxWidth: 130,
+  },
+  labelActive: {
+    color: colors.accent,
   },
 });

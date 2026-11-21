@@ -39,7 +39,7 @@ export function describeNativeError(
       return {
         code: 'no_text',
         message: 'Text recognition failed. Reframe the sign and try again.',
-        fatal: false,
+        fatal: true,
       };
     case 'ERR_LANGUAGE_PACK_MISSING':
       return {
@@ -59,7 +59,7 @@ export function describeNativeError(
       return {
         code: 'translation_failed',
         message: 'On-device translation failed. Hold steady and try again.',
-        fatal: false,
+        fatal: true,
       };
     default:
       return {

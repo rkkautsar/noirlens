@@ -101,7 +101,12 @@ export function AimHud({
                 HOLD ANYWHERE · AIM · RELEASE
               </MicroLabel>
               <View style={styles.actions}>
-                <SolidButton label="STOP" onPress={onStop} />
+                <SolidButton
+                  label="STOP"
+                  icon="close"
+                  iconOnly
+                  onPress={onStop}
+                />
               </View>
             </>
           )}

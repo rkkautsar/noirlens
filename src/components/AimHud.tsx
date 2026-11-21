@@ -66,7 +66,7 @@ export function AimHud({
             <>
               <Text style={styles.status}>FRAME THE TEXT</Text>
               <MicroLabel tone="dim">
-                HOLD · AIM · RELEASE TO CAPTURE
+                HOLD ANYWHERE · AIM · RELEASE
               </MicroLabel>
               <View style={styles.actions}>
                 <SolidButton label="STOP" onPress={onStop} />

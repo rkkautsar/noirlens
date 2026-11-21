@@ -5,7 +5,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { languageLabel, languageShortLabel } from '@/constants/languages';
 import type { ScanResult } from '@/scanner/machine';
+import {
+  formatCurrency,
+  priceConversions,
+} from '@/services/currency';
+import { preferredCurrency } from '@/services/localeCurrency';
 import { colors, typography } from '@/theme';
+import { PriceEstimate } from './PriceEstimate';
 import { TopBar } from './TopBar';
 import { ChipButton, Hairline, MicroLabel, SolidButton } from './ui';
 
@@ -39,6 +45,17 @@ export function ResultCard({
   const packMissing = result.kind === 'pack_missing';
   const language = languageLabel(result.sourceLanguage);
   const shortLanguage = languageShortLabel(result.sourceLanguage);
+  const preferred = preferredCurrency();
+  const prices = priceConversions(
+    result.sourceText,
+    result.sourceLanguage,
+    preferred.code,
+  );
+  const copyText = translated ? result.translatedText : result.sourceText;
+  const priceLines = prices.map(
+    (price) =>
+      `${price.raw} ≈ ${formatCurrency(price.converted, price.target, preferred.locale)}`,
+  );
 
   useEffect(() => {
     return () => {
@@ -47,10 +64,8 @@ export function ResultCard({
   }, []);
 
   const copy = async () => {
-    if (!translated) {
-      return;
-    }
-    await Clipboard.setStringAsync(result.translatedText);
+    const parts = [copyText, ...priceLines].filter(Boolean);
+    await Clipboard.setStringAsync(parts.join('\n\n'));
     setCopied(true);
     clearTimeout(copyTimer.current ?? undefined);
     copyTimer.current = setTimeout(() => {
@@ -96,7 +111,7 @@ export function ResultCard({
         style={styles.scroll}
         contentContainerStyle={[
           styles.content,
-          { paddingBottom: insets.bottom + 28 },
+          { paddingBottom: insets.bottom + 124 },
         ]}
       >
         <View style={styles.kickerRow}>
@@ -121,6 +136,12 @@ export function ResultCard({
           </View>
         )}
 
+        <PriceEstimate
+          rows={prices}
+          target={preferred.code}
+          locale={preferred.locale}
+        />
+
         <Hairline />
 
         <View style={styles.sourceBlock}>
@@ -138,14 +159,13 @@ export function ResultCard({
           <View style={styles.primaryAction}>
             <SolidButton label={primaryLabel} onPress={primaryAction} primary />
           </View>
-          {translated ? (
-            <ChipButton
-              label={copied ? 'COPIED' : 'COPY'}
-              onPress={() => {
-                void copy();
-              }}
-            />
-          ) : (
+          <ChipButton
+            label={copied ? 'COPIED' : 'COPY'}
+            onPress={() => {
+              void copy();
+            }}
+          />
+          {translated ? null : (
             <ChipButton label="SCAN AGAIN" onPress={onScanAgain} />
           )}
           <ChipButton label="ORIGINAL" onPress={onShowOriginal} />
@@ -211,6 +231,7 @@ const styles = StyleSheet.create({
   actions: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexWrap: 'wrap',
     gap: 10,
     marginTop: 4,
   },

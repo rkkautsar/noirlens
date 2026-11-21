@@ -98,7 +98,7 @@ export function OriginalView({
           : null}
       </View>
 
-      <View style={[styles.panel, { paddingBottom: insets.bottom + 16 }]}>
+      <View style={[styles.panel, { paddingBottom: insets.bottom + 112 }]}>
         <MicroLabel tone="accent">
           SOURCE · {languageLabel(result.sourceLanguage)}
         </MicroLabel>

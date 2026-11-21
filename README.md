@@ -8,22 +8,24 @@ No accounts. No uploads. No server. Apple's `Vision` and `Translation` framework
 
 | State | Camera | Screen | Moves on |
 | --- | --- | --- | --- |
-| `SLEEP` | `stopRunning()`; sensor, AF/OIS and ISP powered down | Pure `#000000`; hold the bottom shutter; auto-brightness untouched | Press and hold the shutter |
+| `SLEEP` | `stopRunning()`; sensor, AF/OIS and ISP powered down | Pure `#000000`; hold anywhere on the screen; auto-brightness untouched | Press and hold anywhere |
 | `PREWARM` | 1280×720, 30 fps, continuous AF/AE, no HDR/multi-cam | Color preview by default; **NOIR** toggles the warm-white edge HUD. Release-to-capture shutter; STOP | Release the shutter |
 | `SCANNING` | One raw frame grabbed, then `stopRunning()` immediately | "Reading on-device" | OCR + translation finish |
-| `LOCKED_READ` | Off | Black result card; frozen-frame wireframe toggle | **SCAN AGAIN** (returns to standby); lowering or walking never clears it |
+| `LOCKED_READ` | Off | Black result card; selectable text and COPY; frozen-frame toggle; bottom **HOLD FOR NEXT SCAN** bar | Hold the bottom bar (or tap SCAN AGAIN); lowering or walking never clears it |
 
 The transition table is implemented as a pure reducer in `src/scanner/machine.ts`. There is no motion gesture: the hold shutter is the only camera trigger.
 
-**Hold to scan:** press and hold the shutter at the bottom of the standby screen. The camera opens while your finger is down; aim at the sign, then release to capture. A normal hold is under a second. The result stays on screen when you lower the phone to read it; **SCAN AGAIN** returns to standby for the next hold.
+**Hold to scan:** press and hold almost anywhere on the standby or aiming screen (top-bar chips and buttons still take their own taps). The camera opens while your finger is down; aim at the sign, then release to capture. A normal hold is under a second. The result stays on screen when you lower the phone to read it. On the result, the bottom bar is **HOLD FOR NEXT SCAN**; the translated/source text is selectable and **COPY** copies the shown text plus any price estimates. Tapping **SCAN AGAIN** returns to standby if you prefer tapping over holding.
 
 
 **Source language** is selectable from the top-bar language chip. The default is **AUTO**, which never claims English: an English-only scene shows a short notice instead of a fake translation, and mixed text prefers the non-English language. AUTO picks the best of the nine supported source languages, plus script and German function-word hints, so a short umlaut-free German sign is not misread as Romanian or Polish; unsupported detections are reported as unknown rather than offering a pack this app cannot install. Choosing a specific language forces that source. If the needed offline pack is missing, the result still shows the captured source text with a one-tap pack prompt — it is not treated as a failed scan and does not consume a free scan. Only a completed translation counts against the daily limit.
 
+**Prices** are detected from the source text when a currency symbol or ISO code is present and converted to the phone locale's currency (falling back to USD). The bundled table is USD-based, so any pair converts through USD; every conversion is labelled **EST. FX · Nov 2026** and should be treated as approximate, not a live quote.
+
 ## Stack
 
 - Expo SDK 58, React Native 0.88, React 19, TypeScript strict, New Architecture
-- `expo-router`, `expo-keep-awake`, `expo-sqlite`
+- `expo-router`, `expo-localization`, `expo-keep-awake`, `expo-sqlite`
 - Local Expo module `modules/native-vision-translator` (Swift, iOS 18 deployment target)
   - `AVCaptureSession` power lifecycle
   - CoreImage luma-edge HUD (`CIEdges` + `CIColorMonochrome`, 15 fps)
@@ -126,6 +128,7 @@ npx expo export --platform ios --output-dir dist
 - OCR prefers the traveler language list (German, Japanese, Chinese, etc.) so a short English watermark cannot skew language correction. Auto-detection is the fallback when that list finds nothing. AUTO source selection weighs language hypotheses toward non-English and falls back to the script hint for umlauts, kana, Hangul, Thai and Han characters.
 - Unsigned builds cannot be submitted to the App Store and expire weekly with a free Apple ID.
 - Language packs are installed by iOS, not by the app; deleting one in Settings requires re-downloading it.
+- Price detection requires an explicit currency symbol or ISO code; bare numbers, times and dates are ignored. Rates are bundled estimates, not live market data, and no network request is made.
 
 ## Layout
 
@@ -137,7 +140,7 @@ app/                         Expo Router screens
 modules/native-vision-translator/
   ios/                       Swift camera, OCR, Translation bridge
 src/scanner/                 pure reducer, store, controller, geometry
-src/services/                SQLite, cache, ledger, entitlements, source language
+src/services/                SQLite, cache, ledger, entitlements, source language, currency
 src/components/              OLED UI primitives and views
 assets/icon.png              black + warm-white reticle app icon
 .github/workflows/           unsigned IPA CI

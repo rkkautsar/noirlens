@@ -33,7 +33,7 @@ export function Standby({
   const heading = exhausted ? 'DAILY LIMIT REACHED' : 'HOLD TO SCAN';
   const subheading = exhausted
     ? 'Unlock unlimited scans to keep going.'
-    : 'Press and hold the shutter. Aim while it is held, then release to capture.';
+    : 'Press and hold anywhere on the screen. Aim while it is held, then release to capture.';
 
   const counter = !hydrated
     ? 'LOADING COUNTER'

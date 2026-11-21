@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
 import { AimHud } from '@/components/AimHud';
 import { OriginalView } from '@/components/OriginalView';
@@ -64,75 +64,86 @@ export default function ScannerScreen() {
     router.push('/paywall');
   };
 
+  const beginNext = () => {
+    scanner.scanAgain();
+    scanner.beginHold();
+  };
+
   return (
     <View style={styles.root}>
       <EcoCameraView style={StyleSheet.absoluteFill} ecoMode={ecoMode} />
 
-      {active ? (
-        <AimHud
-          scanning={state === 'SCANNING'}
-          ecoMode={ecoMode}
-          onEcoChange={updateEcoMode}
-          remaining={snapshot.remainingToday}
-          unlimited={snapshot.unlimited}
-          error={snapshot.error}
-          onStop={scanner.stop}
-          onOpenLanguages={openLanguages}
-          onOpenPaywall={openPaywall}
-        />
-      ) : null}
+      {locked ? (
+        showOriginal ? (
+          <OriginalView
+            result={result}
+            remaining={snapshot.remainingToday}
+            unlimited={snapshot.unlimited}
+            ecoMode={ecoMode}
+            onEcoChange={updateEcoMode}
+            onClose={() => {
+              setShowOriginal(false);
+            }}
+            onScanAgain={scanner.scanAgain}
+            onOpenLanguages={openLanguages}
+            onOpenPaywall={openPaywall}
+          />
+        ) : (
+          <ResultCard
+            result={result}
+            remaining={snapshot.remainingToday}
+            unlimited={snapshot.unlimited}
+            ecoMode={ecoMode}
+            onEcoChange={updateEcoMode}
+            onScanAgain={scanner.scanAgain}
+            onShowOriginal={() => {
+              setShowOriginal(true);
+            }}
+            onOpenLanguages={openLanguages}
+            onOpenPaywall={openPaywall}
+          />
+        )
+      ) : (
+        <Pressable
+          style={StyleSheet.absoluteFill}
+          onPressIn={scanner.beginHold}
+          onPressOut={scanner.captureNow}
+        >
+          {active ? (
+            <AimHud
+              scanning={state === 'SCANNING'}
+              ecoMode={ecoMode}
+              onEcoChange={updateEcoMode}
+              remaining={snapshot.remainingToday}
+              unlimited={snapshot.unlimited}
+              error={snapshot.error}
+              onStop={scanner.stop}
+              onOpenLanguages={openLanguages}
+              onOpenPaywall={openPaywall}
+            />
+          ) : null}
+          {standby ? (
+            <Standby
+              remaining={snapshot.remainingToday}
+              unlimited={snapshot.unlimited}
+              hydrated={snapshot.hydrated}
+              error={snapshot.error}
+              ecoMode={ecoMode}
+              onEcoChange={updateEcoMode}
+              onOpenLanguages={openLanguages}
+              onOpenPaywall={openPaywall}
+              onDismissError={scanner.dismissError}
+            />
+          ) : null}
+        </Pressable>
+      )}
 
-      {standby ? (
-        <Standby
-          remaining={snapshot.remainingToday}
-          unlimited={snapshot.unlimited}
-          hydrated={snapshot.hydrated}
-          error={snapshot.error}
-          ecoMode={ecoMode}
-          onEcoChange={updateEcoMode}
-          onOpenLanguages={openLanguages}
-          onOpenPaywall={openPaywall}
-          onDismissError={scanner.dismissError}
-        />
-      ) : null}
-
-      {locked && showOriginal ? (
-        <OriginalView
-          result={result}
-          remaining={snapshot.remainingToday}
-          unlimited={snapshot.unlimited}
-          ecoMode={ecoMode}
-          onEcoChange={updateEcoMode}
-          onClose={() => {
-            setShowOriginal(false);
-          }}
-          onScanAgain={scanner.scanAgain}
-          onOpenLanguages={openLanguages}
-          onOpenPaywall={openPaywall}
-        />
-      ) : null}
-
-      {locked && !showOriginal ? (
-        <ResultCard
-          result={result}
-          remaining={snapshot.remainingToday}
-          unlimited={snapshot.unlimited}
-          ecoMode={ecoMode}
-          onEcoChange={updateEcoMode}
-          onScanAgain={scanner.scanAgain}
-          onShowOriginal={() => {
-            setShowOriginal(true);
-          }}
-          onOpenLanguages={openLanguages}
-          onOpenPaywall={openPaywall}
-        />
-      ) : null}
-
-      {!locked && !exhausted ? (
+      {!exhausted ? (
         <ScanShutter
+          next={locked}
           active={state === 'PREWARM'}
           scanning={state === 'SCANNING'}
-          onStart={scanner.beginHold}
+          onStart={locked ? beginNext : scanner.beginHold}
           onCapture={scanner.captureNow}
         />
       ) : null}

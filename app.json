@@ -34,7 +34,8 @@
             "deploymentTarget": "18.0"
           }
         }
-      ]
+      ],
+      "expo-localization"
     ],
     "icon": "./assets/icon.png"
   }

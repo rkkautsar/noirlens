@@ -12,15 +12,21 @@ import { MicroLabel } from './ui';
 export function ScanShutter({
   active,
   scanning,
+  next = false,
   onStart,
   onCapture,
 }: {
   active: boolean;
   scanning: boolean;
+  next?: boolean;
   onStart: () => void;
   onCapture: () => void;
 }) {
   const insets = useSafeAreaInsets();
+
+  const idleLabel = next ? 'HOLD FOR NEXT SCAN' : 'HOLD TO SCAN';
+  const idleMicro = next ? 'NEXT' : 'HOLD';
+  const idleHint = next ? 'NEW SCAN ON RELEASE' : 'HOLD ANYWHERE';
 
   return (
     <View
@@ -34,7 +40,9 @@ export function ScanShutter({
             ? 'Reading the sign'
             : active
               ? 'Release to capture'
-              : 'Hold to scan. Release to capture.'
+              : next
+                ? 'Hold for the next scan. Release to capture.'
+                : 'Hold to scan. Release to capture.'
         }
         disabled={scanning}
         onPressIn={onStart}
@@ -47,14 +55,14 @@ export function ScanShutter({
       >
         <View style={styles.copy}>
           <MicroLabel tone={active ? 'accent' : 'dim'}>
-            {scanning ? 'READING' : active ? 'RELEASE' : 'HOLD'}
+            {scanning ? 'READING' : active ? 'RELEASE' : idleMicro}
           </MicroLabel>
           <Text style={styles.label}>
             {scanning
               ? 'READING ON-DEVICE'
               : active
                 ? 'RELEASE TO CAPTURE'
-                : 'HOLD TO SCAN'}
+                : idleLabel}
           </Text>
         </View>
         <MicroLabel tone="dim" style={styles.hint}>
@@ -62,7 +70,7 @@ export function ScanShutter({
             ? 'OCR + TRANSLATION'
             : active
               ? 'CAPTURE ON RELEASE'
-              : 'CAMERA OPENS WHILE HELD'}
+              : idleHint}
         </MicroLabel>
       </Pressable>
     </View>

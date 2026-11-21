@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
 import { AimHud } from '@/components/AimHud';
 import { OriginalView } from '@/components/OriginalView';
@@ -70,7 +70,17 @@ export default function ScannerScreen() {
   };
 
   return (
-    <View style={styles.root}>
+    <View
+      style={styles.root}
+      onStartShouldSetResponder={() => !locked}
+      onResponderGrant={() => {
+        scanner.beginHold();
+      }}
+      onResponderRelease={() => {
+        scanner.captureNow();
+      }}
+      onResponderTerminationRequest={() => false}
+    >
       <EcoCameraView style={StyleSheet.absoluteFill} ecoMode={ecoMode} />
 
       {locked ? (
@@ -104,11 +114,7 @@ export default function ScannerScreen() {
           />
         )
       ) : (
-        <Pressable
-          style={StyleSheet.absoluteFill}
-          onPressIn={scanner.beginHold}
-          onPressOut={scanner.captureNow}
-        >
+        <>
           {active ? (
             <AimHud
               scanning={state === 'SCANNING'}
@@ -135,7 +141,7 @@ export default function ScannerScreen() {
               onDismissError={scanner.dismissError}
             />
           ) : null}
-        </Pressable>
+        </>
       )}
 
       {!exhausted ? (

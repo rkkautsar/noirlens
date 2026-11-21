@@ -71,6 +71,10 @@ enum TextRecognizer {
       }
     }
 
+    // Google Maps screenshots and screen captures carry URL/query metadata
+    // that Vision happily OCRs. It is page chrome, not sign text.
+    lines = lines.filter { !isUrlNoise($0.text) }
+
     let rawText = lines.map(\.text).joined(separator: "\n")
     let hint = languageHint.trimmingCharacters(in: .whitespacesAndNewlines)
     let language = hint.isEmpty ? dominantLanguage(in: rawText) : hint
@@ -150,6 +154,24 @@ enum TextRecognizer {
         height: box.height
       )
     )
+  }
+
+  private static func isUrlNoise(_ text: String) -> Bool {
+    let lower = text.lowercased()
+    if lower.contains("http://") || lower.contains("https://") || lower.contains("www.") {
+      return true
+    }
+    if lower.contains("google.com/maps") || lower.contains("maps_sv") || lower.contains("cb_client") {
+      return true
+    }
+    let percentEncoded = lower.range(of: "%[0-9a-f]{2}", options: .regularExpression) != nil
+    if percentEncoded && (lower.contains("=") || lower.contains("&") || lower.contains("?")) {
+      return true
+    }
+    if lower.contains("%3f") || lower.contains("%3d") || lower.contains("%26") || lower.contains("%2f") {
+      return true
+    }
+    return false
   }
 
   private static func isNoise(_ text: String) -> Bool {

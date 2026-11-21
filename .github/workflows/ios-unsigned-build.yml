@@ -22,6 +22,10 @@ jobs:
   build:
     runs-on: macos-latest
     timeout-minutes: 60
+    env:
+      # Test artifact: unlock scans so a sideload can be exercised without
+      # StoreKit. Do not set this in a production/App Store build.
+      EXPO_PUBLIC_DEV_UNLIMITED: '1'
 
     steps:
       - name: Check out

@@ -129,6 +129,7 @@ npx expo export --platform ios --output-dir dist
 - OCR is tuned for signage: strings shorter than 2 characters and pure numbers/currency are discarded. Long strings use a permissive 0.50 confidence floor; 2–3 character strings require 0.72.
 - OCR prefers the traveler language list (German, Japanese, Chinese, etc.) so a short English watermark cannot skew language correction. Auto-detection is the fallback when that list finds nothing. AUTO source selection weighs language hypotheses toward non-English and falls back to the script hint for umlauts, kana, Hangul, Thai and Han characters.
 - Unsigned builds cannot be submitted to the App Store and expire weekly with a free Apple ID.
+- Unsigned CI builds set `EXPO_PUBLIC_DEV_UNLIMITED=1` and run with unlimited scans for testing without StoreKit. A production build must not set that variable.
 - Language packs are installed by iOS, not by the app; deleting one in Settings requires re-downloading it.
 - Price detection requires an explicit currency symbol or ISO code; bare numbers, times and dates are ignored. Rates are bundled estimates, not live market data, and no network request is made.
 - OCR is limited to the reticle square. Text outside it is intentionally ignored; step back to fit a wide sign.

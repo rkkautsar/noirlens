@@ -15,6 +15,9 @@ export interface EntitlementSnapshot extends EntitlementGrant {
 }
 
 const META_KEY = 'entitlement';
+// Set only on the unsigned CI test artifact. A production build must not
+// define EXPO_PUBLIC_DEV_UNLIMITED, so this is inlined as false there.
+const DEV_UNLIMITED = process.env.EXPO_PUBLIC_DEV_UNLIMITED === '1';
 const INITIAL: EntitlementSnapshot = { ...FREE_ENTITLEMENT, loaded: false };
 
 function parseStored(raw: string | null): EntitlementGrant | null {
@@ -111,7 +114,7 @@ class EntitlementManager {
   }
 
   isUnlimited(now: number = Date.now()): boolean {
-    return hasUnlimitedScans(this.snapshot, now);
+    return DEV_UNLIMITED || hasUnlimitedScans(this.snapshot, now);
   }
 }
 

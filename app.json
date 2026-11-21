@@ -1,0 +1,41 @@
+{
+  "expo": {
+    "name": "NoirLens",
+    "slug": "noirlens",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "scheme": "noirlens",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#000000",
+    "ios": {
+      "bundleIdentifier": "com.noirlens.app",
+      "supportsTablet": false,
+      "infoPlist": {
+        "NSCameraUsageDescription": "NoirLens uses the camera only when you raise the phone, to read text from the scene. Frames never leave your device.",
+        "NSMotionUsageDescription": "NoirLens uses motion sensors to arm the camera when you raise the phone and to power it down when you lower it.",
+        "ITSAppUsesNonExemptEncryption": false,
+        "UISupportedInterfaceOrientations": [
+          "UIInterfaceOrientationPortrait"
+        ]
+      }
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#000000"
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "deploymentTarget": "18.0"
+          }
+        }
+      ]
+    ],
+    "icon": "./assets/icon.png"
+  }
+}

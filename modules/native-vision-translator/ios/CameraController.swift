@@ -527,6 +527,14 @@ final class CameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDele
     self.device = device
     self.videoOutput = output
     self.configured = true
+    if session.isMultitaskingCameraAccessSupported {
+      session.isMultitaskingCameraAccessEnabled = true
+    }
+    NSLog(
+      "[NoirLens] multitasking camera: supported=%d enabled=%d",
+      session.isMultitaskingCameraAccessSupported ? 1 : 0,
+      session.isMultitaskingCameraAccessEnabled ? 1 : 0
+    )
     self.observeSession(session)
     self.notifyPreviewRotation()
   }

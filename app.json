@@ -17,7 +17,8 @@
         "UISupportedInterfaceOrientations": [
           "UIInterfaceOrientationPortrait"
         ]
-      }
+      },
+      "requireFullScreen": true
     },
     "plugins": [
       "expo-router",

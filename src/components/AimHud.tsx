@@ -11,31 +11,16 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { OcrCrop } from '../../modules/native-vision-translator';
 import type { ScanError } from '@/scanner/machine';
 import { colors, typography } from '@/theme';
-import { TopBar } from './TopBar';
-import { MicroLabel, SolidButton } from './ui';
+import { MicroLabel } from './ui';
 
 export function AimHud({
   scanning,
-  ecoMode,
-  onEcoChange,
-  remaining,
-  unlimited,
   error,
   onReticleFrame,
-  onStop,
-  onOpenLanguages,
-  onOpenPaywall,
 }: {
   scanning: boolean;
-  ecoMode: boolean;
-  onEcoChange: (eco: boolean) => void;
-  remaining: number | null;
-  unlimited: boolean;
   error: ScanError | null;
   onReticleFrame?: (crop: OcrCrop) => void;
-  onStop: () => void;
-  onOpenLanguages: () => void;
-  onOpenPaywall: () => void;
 }) {
   const insets = useSafeAreaInsets();
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
@@ -59,15 +44,6 @@ export function AimHud({
 
   return (
     <View style={styles.container} pointerEvents="box-none">
-      <TopBar
-        ecoMode={ecoMode}
-        onEcoChange={onEcoChange}
-        remaining={remaining}
-        unlimited={unlimited}
-        onOpenPaywall={onOpenPaywall}
-        showNavigation={false}
-      />
-
       <View
         style={styles.reticleArea}
         pointerEvents="none"
@@ -84,7 +60,7 @@ export function AimHud({
       </View>
 
       <View style={styles.footerWrap}>
-        <View style={[styles.footer, { paddingBottom: insets.bottom + 104 }]}>
+        <View style={[styles.footer, { paddingBottom: insets.bottom + 152 }]}>
           {scanning ? (
             <>
               <View style={styles.readingRow}>
@@ -99,14 +75,6 @@ export function AimHud({
               <MicroLabel tone="dim">
                 HOLD ANYWHERE · AIM · RELEASE
               </MicroLabel>
-              <View style={styles.actions}>
-                <SolidButton
-                  label="STOP"
-                  icon="close"
-                  iconOnly
-                  onPress={onStop}
-                />
-              </View>
             </>
           )}
           {error ? (
@@ -211,12 +179,6 @@ const styles = StyleSheet.create({
     ...typography.label,
     color: colors.accent,
     letterSpacing: 2,
-  },
-  actions: {
-    flexDirection: 'row',
-    alignSelf: 'stretch',
-    justifyContent: 'flex-end',
-    marginTop: 6,
   },
   errorText: {
     ...typography.body,

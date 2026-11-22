@@ -1,43 +1,32 @@
 import { useState } from 'react';
 import {
   Image,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
   View,
+  type GestureResponderEvent,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { languageLabel } from '@/constants/languages';
 import { imageFitRect, mapBlockRect } from '@/scanner/geometry';
 import type { ScanResult } from '@/scanner/machine';
 import { colors, typography } from '@/theme';
-import { TopBar } from './TopBar';
 import { MicroLabel, SolidButton } from './ui';
 
 export function OriginalView({
   result,
-  remaining,
-  unlimited,
-  ecoMode,
   onClose,
   onScanAgain,
-  onOpenLanguages,
-  onOpenPaywall,
-  onEcoChange,
 }: {
   result: ScanResult;
-  remaining: number | null;
-  unlimited: boolean;
-  ecoMode: boolean;
   onClose: () => void;
   onScanAgain: () => void;
-  onOpenLanguages: () => void;
-  onOpenPaywall: () => void;
-  onEcoChange: (eco: boolean) => void;
 }) {
   const insets = useSafeAreaInsets();
   const [stage, setStage] = useState({ width: 0, height: 0 });
+  const [selected, setSelected] = useState<number | null>(null);
 
   const imageRect = imageFitRect(
     { width: result.imageWidth, height: result.imageHeight },
@@ -48,16 +37,31 @@ export function OriginalView({
     ? `data:image/jpeg;base64,${result.previewJpegBase64}`
     : null;
 
+  const inspect = (event: GestureResponderEvent) => {
+    if (!uri || stage.width <= 0) {
+      return;
+    }
+    const { locationX, locationY } = event.nativeEvent;
+    let best = -1;
+    let bestDistance = Number.POSITIVE_INFINITY;
+    result.blocks.forEach((block, index) => {
+      const rect = mapBlockRect(block, imageRect);
+      const distance = Math.hypot(
+        rect.x + rect.width / 2 - locationX,
+        rect.y + rect.height / 2 - locationY,
+      );
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        best = index;
+      }
+    });
+    setSelected(best >= 0 ? best : null);
+  };
+
+  const picked = selected !== null ? result.blocks[selected] : null;
+
   return (
     <View style={styles.container}>
-      <TopBar
-        ecoMode={ecoMode}
-        onEcoChange={onEcoChange}
-        remaining={remaining}
-        unlimited={unlimited}
-        onOpenPaywall={onOpenPaywall}
-      />
-
       <View
         style={styles.stage}
         onLayout={(event) => {
@@ -65,47 +69,54 @@ export function OriginalView({
           setStage({ width, height });
         }}
       >
-        {uri ? (
-          <Image
-            source={{ uri }}
-            style={StyleSheet.absoluteFill}
-            resizeMode="contain"
-          />
-        ) : (
-          <MicroLabel tone="dim">FROZEN FRAME UNAVAILABLE</MicroLabel>
-        )}
+        <Pressable style={StyleSheet.absoluteFill} onPress={inspect}>
+          {uri ? (
+            <Image
+              source={{ uri }}
+              style={StyleSheet.absoluteFill}
+              resizeMode="contain"
+            />
+          ) : (
+            <MicroLabel tone="dim">FROZEN FRAME UNAVAILABLE</MicroLabel>
+          )}
 
-        {uri && stage.width > 0
-          ? result.blocks.map((block, index) => {
-              const rect = mapBlockRect(block, imageRect);
-              return (
-                <View
-                  key={`${block.text}-${index}`}
-                  pointerEvents="none"
-                  style={[
-                    styles.box,
-                    {
-                      left: rect.x,
-                      top: rect.y,
-                      width: rect.width,
-                      height: rect.height,
-                    },
-                  ]}
-                />
-              );
-            })
-          : null}
+          {uri && stage.width > 0
+            ? result.blocks.map((block, index) => {
+                const rect = mapBlockRect(block, imageRect);
+                return (
+                  <View
+                    key={`${block.text}-${index}`}
+                    pointerEvents="none"
+                    style={[
+                      styles.box,
+                      selected === index && styles.boxSelected,
+                      {
+                        left: rect.x,
+                        top: rect.y,
+                        width: rect.width,
+                        height: rect.height,
+                      },
+                    ]}
+                  />
+                );
+              })
+            : null}
+        </Pressable>
       </View>
 
       <View style={[styles.panel, { paddingBottom: insets.bottom + 112 }]}>
-        <MicroLabel tone="accent">
-          SOURCE · {languageLabel(result.sourceLanguage)}
-        </MicroLabel>
-        <ScrollView style={styles.sourceScroll}>
-          <Text style={styles.sourceText} selectable>
-            {result.sourceText}
+        <MicroLabel tone="accent">INSPECT · TAP THE TEXT</MicroLabel>
+        {picked ? (
+          <ScrollView style={styles.pickedScroll}>
+            <Text style={styles.pickedText} selectable>
+              {picked.text}
+            </Text>
+          </ScrollView>
+        ) : (
+          <Text style={styles.hint}>
+            Tap anywhere on the frame to read the text nearest that point.
           </Text>
-        </ScrollView>
+        )}
         <View style={styles.actions}>
           <SolidButton
             label="BACK"
@@ -143,6 +154,10 @@ const styles = StyleSheet.create({
   box: {
     position: 'absolute',
     borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.25)',
+  },
+  boxSelected: {
+    borderWidth: 2,
     borderColor: colors.accent,
   },
   panel: {
@@ -153,10 +168,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     gap: 10,
   },
-  sourceScroll: {
-    maxHeight: 148,
+  pickedScroll: {
+    maxHeight: 120,
   },
-  sourceText: {
+  pickedText: {
+    ...typography.result,
+    fontSize: 18,
+    lineHeight: 24,
+    color: colors.foreground,
+  },
+  hint: {
     ...typography.body,
     color: colors.muted,
   },

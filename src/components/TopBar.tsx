@@ -2,18 +2,14 @@ import { StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { colors, typography } from '@/theme';
-import { ChipButton, FilterToggle } from './ui';
+import { ChipButton } from './ui';
 
 export function TopBar({
-  ecoMode,
-  onEcoChange,
   remaining,
   unlimited,
   onOpenPaywall,
   showNavigation = true,
 }: {
-  ecoMode: boolean;
-  onEcoChange: (eco: boolean) => void;
   remaining: number | null;
   unlimited: boolean;
   onOpenPaywall: () => void;
@@ -35,8 +31,6 @@ export function TopBar({
           </View>
         ) : null}
       </View>
-
-      <FilterToggle ecoMode={ecoMode} onChange={onEcoChange} />
     </View>
   );
 }

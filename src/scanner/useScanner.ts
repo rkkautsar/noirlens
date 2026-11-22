@@ -23,10 +23,6 @@ import {
 import { readScanCount, writeScanCount } from '@/services/scanLedger';
 import { addScanHistory } from '@/services/scanHistory';
 import { sourceLanguage } from '@/services/sourceLanguage';
-import {
-  readCachedTranslation,
-  writeCachedTranslation,
-} from '@/services/translationCache';
 import type { ScannerEffect } from './machine';
 import { ScannerStore, type ScannerSnapshot } from './store';
 
@@ -206,18 +202,6 @@ export function useScanner(): ScannerController {
           return;
         }
 
-        const cachedText = await readCachedTranslation(ocr.sourceHash).catch(
-          () => null,
-        );
-        if (token !== captureToken) {
-          return;
-        }
-
-        if (cachedText !== null) {
-          sendResult('translated', cachedText, true);
-          return;
-        }
-
         // If AUTO's detected pack is missing and the OCR was unsure, try
         // already-installed source packs before prompting for a download.
         const sourceStatus = await vision
@@ -255,12 +239,6 @@ export function useScanner(): ScannerController {
               if (token !== captureToken) {
                 return;
               }
-              void writeCachedTranslation({
-                sourceHash: ocr.sourceHash,
-                sourceText: ocr.text,
-                sourceLanguage: candidate,
-                targetText: translation.translatedText,
-              }).catch(() => {});
               sendResult(
                 'translated',
                 translation.translatedText,
@@ -282,12 +260,6 @@ export function useScanner(): ScannerController {
           if (token !== captureToken) {
             return;
           }
-          void writeCachedTranslation({
-            sourceHash: ocr.sourceHash,
-            sourceText: ocr.text,
-            sourceLanguage: language,
-            targetText: translation.translatedText,
-          }).catch(() => {});
           sendResult('translated', translation.translatedText, false);
         } catch (error) {
           if (token !== captureToken) {

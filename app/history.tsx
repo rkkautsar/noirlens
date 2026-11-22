@@ -2,9 +2,17 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Clipboard from 'expo-clipboard';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { ResultSheet } from '@/components/ResultSheet';
 import { SheetHeader } from '@/components/SheetHeader';
 import { ChipButton, MicroLabel } from '@/components/ui';
 import { languageLabel } from '@/constants/languages';
@@ -14,6 +22,34 @@ import {
   type ScanHistoryEntry,
 } from '@/services/scanHistory';
 import { colors, typography } from '@/theme';
+
+const MOCK_HISTORY: ScanHistoryEntry[] = [
+  {
+    id: 'mock-1',
+    at: Date.now() - 1000 * 60 * 8,
+    sourceLanguage: 'ko',
+    sourceText: '금연 · 담배는 건강에 해롭습니다',
+    translatedText:
+      'No smoking. Cigarettes are harmful to your health and the people around you.',
+    kind: 'translated',
+  },
+  {
+    id: 'mock-2',
+    at: Date.now() - 1000 * 60 * 46,
+    sourceLanguage: 'ja',
+    sourceText: '営業時間 10:00 - 20:00',
+    translatedText: 'Business hours 10:00 - 20:00',
+    kind: 'translated',
+  },
+  {
+    id: 'mock-3',
+    at: Date.now() - 1000 * 60 * 60 * 3,
+    sourceLanguage: 'th',
+    sourceText: 'ราคา 120 บาท',
+    translatedText: 'Price 120 baht',
+    kind: 'translated',
+  },
+];
 
 function formatTime(at: number): string {
   return new Date(at).toLocaleString(undefined, {
@@ -33,10 +69,17 @@ export default function HistoryScreen() {
 
   useEffect(() => {
     let active = true;
-    void readScanHistory()
+    const timeout = new Promise<ScanHistoryEntry[]>((resolve) => {
+      setTimeout(() => {
+        resolve([]);
+      }, 700);
+    });
+    void Promise.race([readScanHistory(), timeout])
       .then((rows) => {
         if (active) {
-          setEntries(rows);
+          setEntries(
+            rows.length === 0 && Platform.OS === 'web' ? MOCK_HISTORY : rows,
+          );
         }
       })
       .finally(() => {
@@ -63,7 +106,13 @@ export default function HistoryScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <View style={styles.overlay}>
+      <ResultSheet
+        style={styles.sheet}
+        onDismiss={() => {
+          router.back();
+        }}
+      >
       <SheetHeader
         title="RECENT SCANS"
         subtitle="LAST 50 · ON-DEVICE"
@@ -149,14 +198,18 @@ export default function HistoryScreen() {
           </>
         )}
       </ScrollView>
+      </ResultSheet>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  overlay: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+  },
+  sheet: {
+    top: '38%',
   },
   content: {
     paddingHorizontal: 20,

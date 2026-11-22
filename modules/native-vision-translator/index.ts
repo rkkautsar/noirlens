@@ -1,6 +1,6 @@
 import { requireNativeModule, requireNativeView, type NativeModule } from 'expo';
 import type { ComponentType } from 'react';
-import type { ViewProps } from 'react-native';
+import { Platform, View, type ViewProps } from 'react-native';
 
 export type LanguagePackStatus = 'installed' | 'supported' | 'unsupported';
 
@@ -72,11 +72,54 @@ export interface NativeVisionTranslatorModule extends NativeModule {
   getSupportedLanguages(): Promise<string[]>;
 }
 
+const webMock = {
+  startCamera: async () => {},
+  stopCamera: async () => {},
+  getCameraStatus: async () => ({
+    authorized: false,
+    running: false,
+    hasDevice: false,
+    adjustingFocus: false,
+    adjustingExposure: false,
+    settled: false,
+  }),
+  captureFrame: async () => {
+    throw new Error('Camera is not available in the web preview.');
+  },
+  translate: async ({
+    sourceLanguage,
+  }: {
+    text: string;
+    sourceLanguage: string;
+  }) => ({
+    translatedText: '',
+    sourceLanguage,
+    targetLanguage: 'en',
+    cached: false,
+  }),
+  checkLanguagePackStatus: async (language: string) => ({
+    language,
+    targetLanguage: 'en',
+    status: 'supported' as const,
+  }),
+  prepareLanguagePack: async (language: string) => ({
+    language,
+    targetLanguage: 'en',
+    status: 'supported' as const,
+  }),
+  getSupportedLanguages: async () => [],
+} as unknown as NativeVisionTranslatorModule;
+
 const NativeVisionTranslator =
-  requireNativeModule<NativeVisionTranslatorModule>('NativeVisionTranslator');
+  Platform.OS === 'web'
+    ? webMock
+    : requireNativeModule<NativeVisionTranslatorModule>(
+        'NativeVisionTranslator',
+      );
 
 export default NativeVisionTranslator;
 
-export const EcoCameraView: ComponentType<EcoCameraViewProps> = requireNativeView(
-  'NativeVisionTranslator',
-);
+export const EcoCameraView: ComponentType<EcoCameraViewProps> =
+  Platform.OS === 'web'
+    ? (View as unknown as ComponentType<EcoCameraViewProps>)
+    : requireNativeView('NativeVisionTranslator');

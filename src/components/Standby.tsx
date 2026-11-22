@@ -3,28 +3,19 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type { ScanError } from '@/scanner/machine';
 import { colors, typography } from '@/theme';
-import { TopBar } from './TopBar';
 import { ChipButton, MicroLabel, SolidButton } from './ui';
 
 export function Standby({
   hidden = false,
   remaining,
-  unlimited,
-  hydrated,
   error,
-  ecoMode,
-  onEcoChange,
   onOpenLanguages,
   onOpenPaywall,
   onDismissError,
 }: {
   hidden?: boolean;
   remaining: number | null;
-  unlimited: boolean;
-  hydrated: boolean;
   error: ScanError | null;
-  ecoMode: boolean;
-  onEcoChange: (eco: boolean) => void;
   onOpenLanguages: () => void;
   onOpenPaywall: () => void;
   onDismissError: () => void;
@@ -37,12 +28,6 @@ export function Standby({
     ? 'Unlock unlimited scans to keep going.'
     : 'Press and hold anywhere on the screen. Aim while it is held, then release to capture.';
 
-  const counter = !hydrated
-    ? 'LOADING COUNTER'
-    : unlimited
-      ? 'PRO · UNLIMITED SCANS'
-      : `${remaining ?? 0} OF 15 FREE SCANS LEFT TODAY`;
-
   const primaryAction = exhausted ? onOpenPaywall : null;
 
   return (
@@ -50,14 +35,6 @@ export function Standby({
       style={[styles.container, hidden && styles.hidden]}
       pointerEvents={hidden ? 'none' : 'auto'}
     >
-      <TopBar
-        ecoMode={ecoMode}
-        onEcoChange={onEcoChange}
-        remaining={remaining}
-        unlimited={unlimited}
-        onOpenPaywall={onOpenPaywall}
-      />
-
       <View style={styles.center}>
         <MicroLabel tone="dim">CAMERA OFF</MicroLabel>
         <Text style={styles.heading}>{heading}</Text>
@@ -73,7 +50,6 @@ export function Standby({
             />
           </View>
         ) : null}
-        <Text style={styles.counterText}>{counter}</Text>
       </View>
 
       {error ? (
@@ -152,11 +128,6 @@ const styles = StyleSheet.create({
     maxWidth: 280,
     width: '100%',
     marginTop: 20,
-  },
-  counterText: {
-    ...typography.micro,
-    color: colors.accent,
-    textAlign: 'center',
   },
   errorCard: {
     marginHorizontal: 16,

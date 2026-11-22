@@ -7,8 +7,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AimHud } from '@/components/AimHud';
 import { OriginalView } from '@/components/OriginalView';
 import { ResultCard } from '@/components/ResultCard';
+import { ResultSheet } from '@/components/ResultSheet';
 import { ScanShutter } from '@/components/ScanShutter';
 import { Standby } from '@/components/Standby';
+import { TopBar } from '@/components/TopBar';
 import { languageShortLabel } from '@/constants/languages';
 import { useScanner } from '@/scanner/useScanner';
 import {
@@ -92,45 +94,34 @@ export default function ScannerScreen() {
       <EcoCameraView style={StyleSheet.absoluteFill} ecoMode={ecoMode} />
 
       {locked ? (
-        showOriginal ? (
-          <OriginalView
-            result={result}
-            remaining={snapshot.remainingToday}
-            unlimited={snapshot.unlimited}
-            ecoMode={ecoMode}
-            onEcoChange={updateEcoMode}
-            onClose={() => {
-              setShowOriginal(false);
-            }}
-            onScanAgain={scanner.scanAgain}
-            onOpenLanguages={openLanguages}
-            onOpenPaywall={openPaywall}
-          />
-        ) : (
-          <ResultCard
-            result={result}
-            remaining={snapshot.remainingToday}
-            unlimited={snapshot.unlimited}
-            ecoMode={ecoMode}
-            onEcoChange={updateEcoMode}
-            onScanAgain={scanner.scanAgain}
-            onShowOriginal={() => {
-              setShowOriginal(true);
-            }}
-            onOpenLanguages={openLanguages}
-            onOpenPaywall={openPaywall}
-          />
-        )
+        <ResultSheet onDismiss={scanner.scanAgain}>
+            {showOriginal ? (
+              <OriginalView
+                result={result}
+                onClose={() => {
+                  setShowOriginal(false);
+                }}
+                onScanAgain={scanner.scanAgain}
+              />
+            ) : (
+              <ResultCard
+                result={result}
+                remaining={snapshot.remainingToday}
+                unlimited={snapshot.unlimited}
+                onScanAgain={scanner.scanAgain}
+                onShowOriginal={() => {
+                  setShowOriginal(true);
+                }}
+                onOpenLanguages={openLanguages}
+              />
+            )}
+          </ResultSheet>
       ) : (
         <>
           <Standby
             hidden={active}
             remaining={snapshot.remainingToday}
-            unlimited={snapshot.unlimited}
-            hydrated={snapshot.hydrated}
             error={snapshot.error}
-            ecoMode={ecoMode}
-            onEcoChange={updateEcoMode}
             onOpenLanguages={openLanguages}
             onOpenPaywall={openPaywall}
             onDismissError={scanner.dismissError}
@@ -138,15 +129,8 @@ export default function ScannerScreen() {
           {active ? (
             <AimHud
               scanning={state === 'SCANNING'}
-              ecoMode={ecoMode}
-              onEcoChange={updateEcoMode}
-              remaining={snapshot.remainingToday}
-              unlimited={snapshot.unlimited}
               error={snapshot.error}
               onReticleFrame={scanner.setReticleFrame}
-              onStop={scanner.stop}
-              onOpenLanguages={openLanguages}
-              onOpenPaywall={openPaywall}
             />
           ) : null}
         </>
@@ -159,6 +143,8 @@ export default function ScannerScreen() {
           scanning={state === 'SCANNING'}
           onStart={locked ? beginNext : scanner.beginHold}
           onCapture={scanner.captureNow}
+          onCancel={locked ? scanner.scanAgain : scanner.stop}
+          onLanguages={openLanguages}
         />
       ) : null}
 
@@ -212,6 +198,37 @@ export default function ScannerScreen() {
           </Pressable>
         </View>
       ) : null}
+
+      {!exhausted && !locked ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={
+            ecoMode ? 'Switch to light filter' : 'Switch to dark filter'
+          }
+          onPress={() => {
+            updateEcoMode(!ecoMode);
+          }}
+          style={({ pressed }) => [
+            styles.filterButton,
+            { bottom: insets.bottom + 92 },
+            pressed && styles.sourceButtonPressed,
+          ]}
+        >
+          <Ionicons
+            name={ecoMode ? 'moon-outline' : 'sunny-outline'}
+            size={16}
+            color={colors.foreground}
+          />
+        </Pressable>
+      ) : null}
+
+      <View style={styles.topBar}>
+        <TopBar
+          remaining={snapshot.remainingToday}
+          unlimited={snapshot.unlimited}
+          onOpenPaywall={openPaywall}
+        />
+      </View>
     </View>
   );
 }
@@ -221,12 +238,31 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
+  topBar: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    left: 0,
+    zIndex: 10,
+  },
   sourceRow: {
     position: 'absolute',
     right: 16,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+  },
+  filterButton: {
+    position: 'absolute',
+    left: 16,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: 'rgba(10,10,10,0.94)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   historyButton: {
     width: 38,

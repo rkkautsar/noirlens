@@ -12,29 +12,22 @@ import {
 import { preferredCurrency } from '@/services/localeCurrency';
 import { colors, typography } from '@/theme';
 import { PriceEstimate } from './PriceEstimate';
-import { TopBar } from './TopBar';
 import { ChipButton, Hairline, MicroLabel, SolidButton } from './ui';
 
 export function ResultCard({
   result,
   remaining,
   unlimited,
-  ecoMode,
-  onEcoChange,
   onScanAgain,
   onShowOriginal,
   onOpenLanguages,
-  onOpenPaywall,
 }: {
   result: ScanResult;
   remaining: number | null;
   unlimited: boolean;
-  ecoMode: boolean;
-  onEcoChange: (eco: boolean) => void;
   onScanAgain: () => void;
   onShowOriginal: () => void;
   onOpenLanguages: () => void;
-  onOpenPaywall: () => void;
 }) {
   const insets = useSafeAreaInsets();
   const [copied, setCopied] = useState(false);
@@ -74,7 +67,7 @@ export function ResultCard({
   };
 
   const kicker = translated
-    ? 'TRANSLATED · ENGLISH'
+    ? `${language} → ENGLISH`
     : englishOnly
       ? result.sourceLanguage === 'und'
         ? 'NO LANGUAGE DETECTED'
@@ -103,19 +96,11 @@ export function ResultCard({
 
   return (
     <View style={styles.container}>
-      <TopBar
-        ecoMode={ecoMode}
-        onEcoChange={onEcoChange}
-        remaining={remaining}
-        unlimited={unlimited}
-        onOpenPaywall={onOpenPaywall}
-      />
-
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={[
           styles.content,
-          { paddingBottom: insets.bottom + 124 },
+          { paddingBottom: insets.bottom + 190 },
         ]}
       >
         <View style={styles.kickerRow}>
@@ -149,7 +134,6 @@ export function ResultCard({
         <Hairline />
 
         <View style={styles.sourceBlock}>
-          <MicroLabel tone="dim">SOURCE · {language}</MicroLabel>
           <Text
             style={styles.sourceText}
             numberOfLines={translated ? 3 : 6}
@@ -157,39 +141,6 @@ export function ResultCard({
           >
             {result.sourceText}
           </Text>
-        </View>
-
-        <View style={styles.actions}>
-          <SolidButton
-            label={primaryLabel}
-            icon={primaryIcon}
-            iconOnly
-            onPress={primaryAction}
-            primary
-          />
-          <ChipButton
-            label={copied ? 'COPIED' : 'COPY'}
-            icon={copied ? 'checkmark' : 'copy-outline'}
-            iconOnly
-            active={copied}
-            onPress={() => {
-              void copy();
-            }}
-          />
-          {translated ? null : (
-            <ChipButton
-              label="SCAN AGAIN"
-              icon="refresh"
-              iconOnly
-              onPress={onScanAgain}
-            />
-          )}
-          <ChipButton
-            label="ORIGINAL"
-            icon="image-outline"
-            iconOnly
-            onPress={onShowOriginal}
-          />
         </View>
 
         <MicroLabel tone="dim" style={styles.footer}>
@@ -200,6 +151,45 @@ export function ResultCard({
               : `NOT CHARGED · ${remaining ?? 0} OF 15 FREE SCANS LEFT TODAY`}
         </MicroLabel>
       </ScrollView>
+
+      <View
+        style={[
+          styles.actions,
+          styles.fixedActions,
+          { bottom: insets.bottom + 94 },
+        ]}
+      >
+        <ChipButton
+          label="INSPECT"
+          icon="search-outline"
+          iconOnly
+          onPress={onShowOriginal}
+        />
+        <ChipButton
+          label={copied ? 'COPIED' : 'COPY'}
+          icon={copied ? 'checkmark' : 'copy-outline'}
+          iconOnly
+          active={copied}
+          onPress={() => {
+            void copy();
+          }}
+        />
+        {translated ? null : (
+          <ChipButton
+            label="SCAN AGAIN"
+            icon="refresh"
+            iconOnly
+            onPress={onScanAgain}
+          />
+        )}
+        <SolidButton
+          label={primaryLabel}
+          icon={primaryIcon}
+          iconOnly
+          onPress={primaryAction}
+          primary
+        />
+      </View>
     </View>
   );
 }
@@ -254,7 +244,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flexWrap: 'wrap',
     gap: 10,
-    marginTop: 4,
+  },
+  fixedActions: {
+    position: 'absolute',
+    left: 20,
+    right: 20,
+    justifyContent: 'flex-end',
   },
   footer: {
     marginTop: 8,

@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { ResultSheet } from '@/components/ResultSheet';
 import { SheetHeader } from '@/components/SheetHeader';
 import { Badge, ChipButton, MicroLabel } from '@/components/ui';
 import { TRAVELER_LANGUAGES, languageLabel } from '@/constants/languages';
@@ -106,7 +107,13 @@ export default function LanguagesScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <View style={styles.overlay}>
+      <ResultSheet
+        style={styles.sheet}
+        onDismiss={() => {
+          router.back();
+        }}
+      >
       <SheetHeader
         title="LANGUAGES & PACKS"
         subtitle="SCAN SOURCE · OFFLINE MODELS"
@@ -241,14 +248,18 @@ export default function LanguagesScreen() {
           will ask again the next time it sees that language.
         </Text>
       </ScrollView>
+      </ResultSheet>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  overlay: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+  },
+  sheet: {
+    top: '34%',
   },
   content: {
     paddingHorizontal: 20,

@@ -1,5 +1,7 @@
+import { useMemo } from 'react';
 import {
   ActivityIndicator,
+  PanResponder,
   Pressable,
   StyleSheet,
   Text,
@@ -142,6 +144,54 @@ export function SolidButton({
   );
 }
 
+export function FilterToggle({
+  ecoMode,
+  onChange,
+}: {
+  ecoMode: boolean;
+  onChange: (eco: boolean) => void;
+}) {
+  const responder = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => true,
+        onMoveShouldSetPanResponder: () => true,
+        onPanResponderRelease: (_, gesture) => {
+          if (gesture.dx > 16) {
+            onChange(true);
+          } else if (gesture.dx < -16) {
+            onChange(false);
+          } else {
+            onChange(!ecoMode);
+          }
+        },
+      }),
+    [ecoMode, onChange],
+  );
+
+  return (
+    <View
+      {...responder.panHandlers}
+      accessibilityRole="adjustable"
+      accessibilityLabel={`Filter ${ecoMode ? 'Noir' : 'Color'}. Swipe to change.`}
+      style={styles.filter}
+    >
+      <View style={[styles.filterOption, ecoMode && styles.filterOptionActive]}>
+        <Text style={[styles.filterText, ecoMode && styles.filterTextActive]}>
+          NOIR
+        </Text>
+      </View>
+      <View
+        style={[styles.filterOption, !ecoMode && styles.filterOptionActive]}
+      >
+        <Text style={[styles.filterText, !ecoMode && styles.filterTextActive]}>
+          COLOR
+        </Text>
+      </View>
+    </View>
+  );
+}
+
 export function Badge({
   label,
   tone = 'muted',
@@ -189,6 +239,32 @@ const styles = StyleSheet.create({
   chipActive: {
     borderColor: colors.accent,
     backgroundColor: colors.accent,
+  },
+  filter: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    gap: 3,
+    padding: 3,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 999,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+  },
+  filterOption: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+  },
+  filterOptionActive: {
+    backgroundColor: colors.accent,
+  },
+  filterText: {
+    ...typography.micro,
+    color: colors.foreground,
+    textTransform: 'uppercase',
+  },
+  filterTextActive: {
+    color: colors.background,
   },
   chipText: {
     ...typography.micro,

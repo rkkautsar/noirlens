@@ -1,17 +1,14 @@
 import { StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { languageShortLabel } from '@/constants/languages';
-import { useSourceLanguage } from '@/services/sourceLanguage';
 import { colors, typography } from '@/theme';
-import { ChipButton } from './ui';
+import { ChipButton, FilterToggle } from './ui';
 
 export function TopBar({
   ecoMode,
   onEcoChange,
   remaining,
   unlimited,
-  onOpenLanguages,
   onOpenPaywall,
   showNavigation = true,
 }: {
@@ -19,15 +16,11 @@ export function TopBar({
   onEcoChange: (eco: boolean) => void;
   remaining: number | null;
   unlimited: boolean;
-  onOpenLanguages: () => void;
   onOpenPaywall: () => void;
   showNavigation?: boolean;
 }) {
   const insets = useSafeAreaInsets();
-  const source = useSourceLanguage();
   const counter = unlimited ? 'PRO' : `${remaining ?? 0} LEFT`;
-  const sourceLabel =
-    source.code === 'auto' ? 'AUTO' : languageShortLabel(source.code);
 
   return (
     <View style={[styles.container, { paddingTop: insets.top + 8 }]}>
@@ -39,24 +32,12 @@ export function TopBar({
 
         {showNavigation ? (
           <View style={styles.actions}>
-            <ChipButton label={sourceLabel} onPress={onOpenLanguages} />
             <ChipButton label={counter} onPress={onOpenPaywall} />
           </View>
         ) : null}
       </View>
 
-      <View style={styles.ecoRow}>
-        <ChipButton
-          label="NOIR"
-          active={ecoMode}
-          onPress={() => onEcoChange(true)}
-        />
-        <ChipButton
-          label="COLOR"
-          active={!ecoMode}
-          onPress={() => onEcoChange(false)}
-        />
-      </View>
+      <FilterToggle ecoMode={ecoMode} onChange={onEcoChange} />
     </View>
   );
 }
@@ -93,11 +74,6 @@ const styles = StyleSheet.create({
   },
   actions: {
     flexDirection: 'row',
-    gap: 8,
-  },
-  ecoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
     gap: 8,
   },
 });

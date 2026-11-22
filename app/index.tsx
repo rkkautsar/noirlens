@@ -1,23 +1,29 @@
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AimHud } from '@/components/AimHud';
 import { OriginalView } from '@/components/OriginalView';
 import { ResultCard } from '@/components/ResultCard';
 import { ScanShutter } from '@/components/ScanShutter';
 import { Standby } from '@/components/Standby';
+import { languageShortLabel } from '@/constants/languages';
 import { useScanner } from '@/scanner/useScanner';
 import {
   readEcoPreviewPreference,
   writeEcoPreviewPreference,
 } from '@/services/preferences';
-import { colors } from '@/theme';
+import { useSourceLanguage } from '@/services/sourceLanguage';
+import { colors, typography } from '@/theme';
 import { EcoCameraView } from '../modules/native-vision-translator';
 
 export default function ScannerScreen() {
   const router = useRouter();
   const scanner = useScanner();
+  const insets = useSafeAreaInsets();
+  const source = useSourceLanguage();
   const [ecoMode, setEcoMode] = useState(false);
   const [showOriginal, setShowOriginal] = useState(false);
 
@@ -155,6 +161,38 @@ export default function ScannerScreen() {
           onCapture={scanner.captureNow}
         />
       ) : null}
+
+      {!exhausted && !locked ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={
+            source.code === 'auto'
+              ? 'Source language: Auto. Open language settings.'
+              : `Source language: ${languageShortLabel(source.code)}. Open language settings.`
+          }
+          onPress={openLanguages}
+          style={({ pressed }) => [
+            styles.sourceButton,
+            { bottom: insets.bottom + 92 },
+            source.code === 'auto' && styles.sourceButtonAuto,
+            pressed && styles.sourceButtonPressed,
+          ]}
+        >
+          <Ionicons
+            name="language-outline"
+            size={14}
+            color={source.code === 'auto' ? colors.accent : colors.foreground}
+          />
+          <Text
+            style={[
+              styles.sourceButtonText,
+              source.code === 'auto' && styles.sourceButtonTextAuto,
+            ]}
+          >
+            {source.code === 'auto' ? 'AUTO' : languageShortLabel(source.code)}
+          </Text>
+        </Pressable>
+      ) : null}
     </View>
   );
 }
@@ -163,5 +201,33 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: colors.background,
+  },
+  sourceButton: {
+    position: 'absolute',
+    right: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: 'rgba(10,10,10,0.94)',
+  },
+  sourceButtonAuto: {
+    borderColor: colors.accent,
+  },
+  sourceButtonPressed: {
+    opacity: 0.7,
+  },
+  sourceButtonText: {
+    ...typography.label,
+    fontSize: 12,
+    letterSpacing: 1.2,
+    color: colors.foreground,
+  },
+  sourceButtonTextAuto: {
+    color: colors.accent,
   },
 });

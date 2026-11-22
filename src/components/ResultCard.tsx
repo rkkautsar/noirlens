@@ -108,7 +108,6 @@ export function ResultCard({
         onEcoChange={onEcoChange}
         remaining={remaining}
         unlimited={unlimited}
-        onOpenLanguages={onOpenLanguages}
         onOpenPaywall={onOpenPaywall}
       />
 

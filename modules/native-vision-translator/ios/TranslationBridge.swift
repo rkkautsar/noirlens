@@ -12,6 +12,7 @@ import UIKit
  of the work and dismissed before the awaiting promise resolves. No network
  calls are made by this app.
  */
+@MainActor
 enum TranslationBridge {
   private static let target = Locale.Language(identifier: "en")
 

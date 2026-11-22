@@ -61,6 +61,7 @@ export interface EcoCameraViewProps extends ViewProps {
 export interface NativeVisionTranslatorModule extends NativeModule {
   startCamera(): Promise<void>;
   stopCamera(): Promise<void>;
+  setTorch(enabled: boolean): Promise<void>;
   getCameraStatus(): Promise<CameraStatus>;
   captureFrame(sourceLanguage: string, crop?: OcrCrop): Promise<OcrPayload>;
   translate(params: {
@@ -75,6 +76,7 @@ export interface NativeVisionTranslatorModule extends NativeModule {
 const webMock = {
   startCamera: async () => {},
   stopCamera: async () => {},
+  setTorch: async () => {},
   getCameraStatus: async () => ({
     authorized: false,
     running: false,

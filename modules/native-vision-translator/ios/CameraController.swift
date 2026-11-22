@@ -58,6 +58,7 @@ final class CameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDele
   private let generationLock = NSLock()
   private var startGeneration = 0
   private var wantsCamera = false
+  private var torchEnabled = false
 
   private override init() {
     super.init()
@@ -110,6 +111,7 @@ final class CameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDele
           }
           try self.checkStart(generation)
           self.wantsCamera = true
+          self.applyTorch()
           self.notifyPreviewRotation()
           continuation.resume()
         } catch {
@@ -236,11 +238,41 @@ final class CameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDele
 
   /// Replaces the capture session when it is unrecoverable. The preview layer
   /// must be re-pointed at the new session on the main thread.
+  func setTorch(_ enabled: Bool) {
+    stateLock.lock()
+    torchEnabled = enabled
+    stateLock.unlock()
+    applyTorch()
+  }
+
+  private func applyTorch() {
+    sessionQueue.async {
+      self.stateLock.lock()
+      let enabled = self.torchEnabled
+      self.stateLock.unlock()
+      guard let device = self.device, device.hasTorch, device.isTorchAvailable else {
+        return
+      }
+      guard (try? device.lockForConfiguration()) != nil else {
+        return
+      }
+      // Torch follows the live session: never light it while the camera is off.
+      device.torchMode = enabled && self.session.isRunning ? .on : .off
+      device.unlockForConfiguration()
+    }
+  }
+
   func stop() async {
     invalidateStartGeneration()
     await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
       sessionQueue.async {
         self.wantsCamera = false
+        if let device = self.device, device.hasTorch, device.isTorchAvailable {
+          if (try? device.lockForConfiguration()) != nil {
+            device.torchMode = .off
+            device.unlockForConfiguration()
+          }
+        }
         self.session.stopRunning()
         self.replaceLatestSampleBuffer(nil)
         continuation.resume()

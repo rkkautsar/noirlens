@@ -19,7 +19,7 @@ import {
 } from '@/services/preferences';
 import { useSourceLanguage } from '@/services/sourceLanguage';
 import { colors, typography } from '@/theme';
-import { EcoCameraView } from '../modules/native-vision-translator';
+import vision, { EcoCameraView } from '../modules/native-vision-translator';
 
 export default function ScannerScreen() {
   const router = useRouter();
@@ -27,6 +27,9 @@ export default function ScannerScreen() {
   const insets = useSafeAreaInsets();
   const source = useSourceLanguage();
   const [ecoMode, setEcoMode] = useState(false);
+  // Torch is deliberately session-only: never persisted, off after relaunch,
+  // and the native side only lights it while the camera session runs.
+  const [torch, setTorch] = useState(false);
   const [showOriginal, setShowOriginal] = useState(false);
 
   const { snapshot } = scanner;
@@ -200,6 +203,33 @@ export default function ScannerScreen() {
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={
+            torch ? 'Turn torch off' : 'Turn torch on'
+          }
+          accessibilityState={{ checked: torch }}
+          onPress={() => {
+            const next = !torch;
+            setTorch(next);
+            void vision.setTorch(next).catch(() => {});
+          }}
+          style={({ pressed }) => [
+            styles.torchButton,
+            { bottom: insets.bottom + 92 },
+            torch && styles.torchButtonOn,
+            pressed && styles.sourceButtonPressed,
+          ]}
+        >
+          <Ionicons
+            name={torch ? 'flashlight' : 'flashlight-outline'}
+            size={16}
+            color={torch ? colors.accent : colors.foreground}
+          />
+        </Pressable>
+      ) : null}
+
+      {!exhausted && !locked ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={
             ecoMode ? 'Switch to light filter' : 'Switch to dark filter'
           }
           onPress={() => {
@@ -248,6 +278,22 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+  },
+  torchButton: {
+    position: 'absolute',
+    left: 62,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: 'rgba(10,10,10,0.94)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  torchButtonOn: {
+    borderColor: colors.accent,
+    backgroundColor: colors.accentSoft,
   },
   filterButton: {
     position: 'absolute',

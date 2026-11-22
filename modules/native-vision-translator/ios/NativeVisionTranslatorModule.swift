@@ -30,6 +30,10 @@ public final class NativeVisionTranslatorModule: Module {
       await CameraController.shared.stop()
     }
 
+    AsyncFunction("setTorch") { (enabled: Bool) in
+      CameraController.shared.setTorch(enabled)
+    }
+
     AsyncFunction("getCameraStatus") { () async -> [String: Any] in
       await CameraController.shared.status()
     }

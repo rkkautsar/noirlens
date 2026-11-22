@@ -92,6 +92,25 @@ enum TextRecognizer {
     }
 
     if lines.isEmpty {
+      // The reticle crop can miss small, low-contrast print. Retry the full
+      // upright frame with a grayscale/contrast upscale before auto mode.
+      do {
+        if !languages.isEmpty,
+           let enhanced = enhancedImage(upright),
+           let enhancedCG = ciContext.createCGImage(enhanced, from: enhanced.extent) {
+          lines = try runPass(
+            enhancedCG,
+            automatic: false,
+            languages: languages,
+            confidenceFloor: confidenceFloor
+          )
+        }
+      } catch {
+        NSLog("[NoirLens] OCR enhanced pass failed: %@", error.localizedDescription)
+      }
+    }
+
+    if lines.isEmpty {
       do {
         lines = try runPass(
           image,
@@ -256,6 +275,20 @@ enum TextRecognizer {
     let filtered = preferredLanguageCodes.filter { supportedSet.contains($0) }
     NSLog("[NoirLens] OCR preferred languages available=%d", filtered.count)
     return filtered
+  }
+
+  private static func enhancedImage(_ image: CIImage) -> CIImage? {
+    let mono = image.applyingFilter("CIColorControls", parameters: [
+      kCIInputSaturationKey: 0,
+      kCIInputContrastKey: 1.35,
+      kCIInputBrightnessKey: 0.02,
+    ])
+    let width = mono.extent.width
+    guard width > 0 else {
+      return nil
+    }
+    let scale = width < 1000 ? 2.0 : 1.0
+    return mono.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
   }
 
   private static func runPass(

@@ -16,7 +16,7 @@ export function SheetHeader({
   const insets = useSafeAreaInsets();
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top + 10 }]}>
+    <View style={[styles.container, { paddingTop: 12 }]}>
       <View style={styles.row}>
         <View style={styles.titles}>
           <Text style={styles.title}>{title}</Text>

@@ -11,7 +11,6 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { ResultSheet } from '@/components/ResultSheet';
 import { SheetHeader } from '@/components/SheetHeader';
 import { ChipButton, MicroLabel } from '@/components/ui';
 import { languageLabel } from '@/constants/languages';
@@ -100,21 +99,7 @@ export default function HistoryScreen() {
   };
 
   return (
-    <View style={styles.overlay}>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Dismiss"
-        style={StyleSheet.absoluteFill}
-        onPress={() => {
-          router.back();
-        }}
-      />
-      <ResultSheet
-        style={styles.sheet}
-        onDismiss={() => {
-          router.back();
-        }}
-      >
+    <>
       <SheetHeader
         title="RECENT SCANS"
         subtitle="LAST 50 · ON-DEVICE"
@@ -197,8 +182,7 @@ export default function HistoryScreen() {
           </>
         )}
       </ScrollView>
-      </ResultSheet>
-    </View>
+    </>
   );
 }
 

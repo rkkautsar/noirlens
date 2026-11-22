@@ -80,6 +80,16 @@ final class CameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDele
     try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
       sessionQueue.async {
         do {
+          let activeNow = DispatchQueue.main.sync {
+            UIApplication.shared.applicationState == .active
+          }
+          guard activeNow else {
+            throw cameraException(
+              name: "CameraUnavailable",
+              description: "The app is not active; the camera cannot start in the background.",
+              code: "ERR_CAMERA_INACTIVE"
+            )
+          }
           try self.configureIfNeeded()
           if let device = self.device {
             // Restore continuous AF/AE after the previous capture's one-shot

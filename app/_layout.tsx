@@ -28,17 +28,21 @@ export default function RootLayout() {
         <Stack.Screen
           name="languages"
           options={{
-            presentation: 'transparentModal',
-            animation: 'fade',
-            contentStyle: { backgroundColor: 'transparent' },
+            presentation: 'formSheet',
+            sheetAllowedDetents: [0.6, 1],
+            sheetGrabberVisible: true,
+            sheetCornerRadius: 24,
+            contentStyle: { backgroundColor: colors.background },
           }}
         />
         <Stack.Screen
           name="history"
           options={{
-            presentation: 'transparentModal',
-            animation: 'fade',
-            contentStyle: { backgroundColor: 'transparent' },
+            presentation: 'formSheet',
+            sheetAllowedDetents: [0.6, 1],
+            sheetGrabberVisible: true,
+            sheetCornerRadius: 24,
+            contentStyle: { backgroundColor: colors.background },
           }}
         />
         <Stack.Screen

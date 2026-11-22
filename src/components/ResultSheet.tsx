@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import {
   Animated,
   PanResponder,
@@ -7,13 +7,15 @@ import {
   View,
   type ViewStyle,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { colors } from '@/theme';
 
 /**
- * Bottom sheet for scan results. The grabber accepts a downward drag; the
- * content below it keeps its own scrolling. Dragging the grabber down far
- * enough dismisses the sheet.
+ * Bottom sheet for scan results. Anchored to the bottom edge, it grows in
+ * height: dragging the handle up expands it to full height instead of
+ * translating the whole panel and leaving a gap underneath, and dragging it
+ * down below the resting height dismisses it.
  */
 export function ResultSheet({
   children,
@@ -24,62 +26,94 @@ export function ResultSheet({
   onDismiss: () => void;
   style?: ViewStyle;
 }) {
-  const translateY = useRef(new Animated.Value(0)).current;
+  const insets = useSafeAreaInsets();
   const { height } = useWindowDimensions();
-  const maxUp = Math.max(120, height * 0.3);
+  const collapsed = Math.round(height * 0.82);
+  const expanded = Math.max(collapsed, height - Math.max(insets.top, 20) - 8);
+
+  const sheetHeight = useRef(new Animated.Value(0)).current;
+  const currentHeight = useRef(0);
+  const gestureStart = useRef(collapsed);
+
+  useEffect(() => {
+    const listener = sheetHeight.addListener(({ value }) => {
+      currentHeight.current = value;
+    });
+    Animated.spring(sheetHeight, {
+      toValue: collapsed,
+      useNativeDriver: false,
+      damping: 24,
+      stiffness: 220,
+      mass: 0.8,
+    }).start();
+    return () => {
+      sheetHeight.removeListener(listener);
+    };
+  }, [collapsed, sheetHeight]);
+
+  const close = () => {
+    Animated.timing(sheetHeight, {
+      toValue: 0,
+      duration: 200,
+      useNativeDriver: false,
+    }).start(({ finished }) => {
+      if (finished) {
+        onDismiss();
+      }
+    });
+  };
+
+  const snap = (toValue: number) => {
+    Animated.spring(sheetHeight, {
+      toValue,
+      useNativeDriver: false,
+      damping: 24,
+      stiffness: 220,
+      mass: 0.8,
+    }).start();
+  };
 
   const responder = useRef(
     PanResponder.create({
       onMoveShouldSetPanResponder: (_, gesture) =>
-        Math.abs(gesture.dy) > 6 &&
+        Math.abs(gesture.dy) > 4 &&
         Math.abs(gesture.dy) > Math.abs(gesture.dx),
-      onPanResponderMove: (_, gesture) => {
-        translateY.setValue(
-          Math.min(0, Math.max(-maxUp, gesture.dy)),
-        );
+      onPanResponderGrant: () => {
+        gestureStart.current = currentHeight.current;
       },
-      onPanResponderTerminate: () => {
-        Animated.spring(translateY, {
-          toValue: 0,
-          useNativeDriver: false,
-        }).start();
+      onPanResponderMove: (_, gesture) => {
+        const next = Math.min(expanded, Math.max(0, gestureStart.current - gesture.dy));
+        sheetHeight.setValue(next);
+        currentHeight.current = next;
       },
       onPanResponderRelease: (_, gesture) => {
-        if (gesture.dy < -maxUp * 0.35 || gesture.vy < -0.7) {
-          Animated.spring(translateY, {
-            toValue: -maxUp,
-            useNativeDriver: false,
-          }).start();
+        if (gesture.dy > 120 || gesture.vy > 0.9) {
+          close();
           return;
         }
-        if (gesture.dy > 110 || gesture.vy > 0.8) {
-          Animated.timing(translateY, {
-            toValue: 900,
-            duration: 180,
-            useNativeDriver: false,
-          }).start(({ finished }) => {
-            if (finished) {
-              onDismiss();
-            }
-          });
+        if (gesture.dy < -40 || currentHeight.current > (collapsed + expanded) / 2) {
+          snap(expanded);
           return;
         }
-        Animated.spring(translateY, {
-          toValue: 0,
-          useNativeDriver: false,
-        }).start();
+        snap(collapsed);
+      },
+      onPanResponderTerminate: () => {
+        snap(currentHeight.current > (collapsed + expanded) / 2 ? expanded : collapsed);
       },
     }),
   ).current;
 
   return (
     <Animated.View
-      style={[styles.sheet, style, { transform: [{ translateY }] }]}
+      style={[styles.sheet, style, { height: sheetHeight }]}
+      pointerEvents="box-none"
     >
       <View style={styles.handleArea} {...responder.panHandlers}>
         <View style={styles.handle} />
       </View>
-      <View style={styles.content}>{children}</View>
+      <View style={[styles.content, { paddingBottom: insets.bottom }]}>
+        {children}
+      </View>
     </Animated.View>
   );
 }
@@ -87,7 +121,6 @@ export function ResultSheet({
 const styles = StyleSheet.create({
   sheet: {
     position: 'absolute',
-    top: '18%',
     right: 0,
     bottom: 0,
     left: 0,

@@ -75,6 +75,11 @@ final class CameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDele
   // MARK: - Lifecycle
 
   func start() async throws {
+    NSLog(
+      "[NoirLens] start: multitasking supported=%d enabled=%d",
+      session.isMultitaskingCameraAccessSupported ? 1 : 0,
+      session.isMultitaskingCameraAccessEnabled ? 1 : 0
+    )
     let generation = nextStartGeneration()
     try await ensureCameraPermission()
     try checkStart(generation)

@@ -24,7 +24,7 @@ concurrency:
 
 jobs:
   build:
-    runs-on: macos-latest
+    runs-on: macos-27
     timeout-minutes: 60
     env:
       # Test artifact: unlock scans so a sideload can be exercised without

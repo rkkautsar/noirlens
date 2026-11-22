@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import {
   Image,
   Pressable,
@@ -11,6 +11,7 @@ import {
 import { Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import vision from '../../modules/native-vision-translator';
 import { imageFitRect, mapBlockRect } from '@/scanner/geometry';
 import type { ScanResult } from '@/scanner/machine';
 import { colors, typography } from '@/theme';
@@ -28,6 +29,9 @@ export function OriginalView({
   const insets = useSafeAreaInsets();
   const [stage, setStage] = useState({ width: 0, height: 0 });
   const [selected, setSelected] = useState<number | null>(null);
+  const [translation, setTranslation] = useState<string | null>(null);
+  const [translating, setTranslating] = useState(false);
+  const requestId = useRef(0);
 
   const imageRect = imageFitRect(
     { width: result.imageWidth, height: result.imageHeight },
@@ -78,6 +82,30 @@ export function OriginalView({
       }
     });
     setSelected(best >= 0 ? best : null);
+    setTranslation(null);
+    const block = best >= 0 ? result.blocks[best] : null;
+    if (!block) {
+      return;
+    }
+    const id = ++requestId.current;
+    setTranslating(true);
+    void vision
+      .translate({ text: block.text, sourceLanguage: result.sourceLanguage })
+      .then((payload) => {
+        if (requestId.current === id) {
+          setTranslation(payload.translatedText || null);
+        }
+      })
+      .catch(() => {
+        if (requestId.current === id && result.kind === 'translated') {
+          setTranslation(result.translatedText || null);
+        }
+      })
+      .finally(() => {
+        if (requestId.current === id) {
+          setTranslating(false);
+        }
+      });
   };
 
   const picked = selected !== null ? result.blocks[selected] : null;
@@ -133,6 +161,13 @@ export function OriginalView({
             <Text style={styles.pickedText} selectable>
               {picked.text}
             </Text>
+            {translating ? (
+              <MicroLabel tone="dim">TRANSLATING…</MicroLabel>
+            ) : translation ? (
+              <Text style={styles.translatedText} selectable>
+                {translation}
+              </Text>
+            ) : null}
           </ScrollView>
         ) : (
           <Text style={styles.hint}>
@@ -198,6 +233,13 @@ const styles = StyleSheet.create({
     fontSize: 18,
     lineHeight: 24,
     color: colors.foreground,
+  },
+  translatedText: {
+    ...typography.body,
+    fontSize: 16,
+    lineHeight: 22,
+    color: colors.accent,
+    marginTop: 6,
   },
   hint: {
     ...typography.body,

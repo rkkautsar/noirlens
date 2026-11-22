@@ -106,6 +106,7 @@ export default function HistoryScreen() {
       />
 
       <ScrollView
+        style={styles.scroll}
         contentContainerStyle={[
           styles.content,
           { paddingBottom: insets.bottom + 28 },
@@ -188,6 +189,9 @@ export default function HistoryScreen() {
 
 const styles = StyleSheet.create({
   sheetBody: {
+    flex: 1,
+  },
+  scroll: {
     flex: 1,
   },
   overlay: {

@@ -113,6 +113,7 @@ export default function LanguagesScreen() {
       />
 
       <ScrollView
+        style={styles.scroll}
         contentContainerStyle={[
           styles.content,
           { paddingBottom: insets.bottom + 28 },
@@ -244,6 +245,9 @@ export default function LanguagesScreen() {
 
 const styles = StyleSheet.create({
   sheetBody: {
+    flex: 1,
+  },
+  scroll: {
     flex: 1,
   },
   overlay: {

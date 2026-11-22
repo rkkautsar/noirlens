@@ -25,7 +25,7 @@ struct CapturedFrame {
 final class CameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, @unchecked Sendable {
   static let shared = CameraController()
 
-  let session = AVCaptureSession()
+  var session = AVCaptureSession()
 
   private let sessionQueue = DispatchQueue(label: "app.noirlens.camera.session")
   private let videoQueue = DispatchQueue(
@@ -63,23 +63,23 @@ final class CameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDele
             self.configureDevice(device)
           }
           self.replaceLatestSampleBuffer(nil)
-          // The session is stopped after every capture and on every failure.
-          // Restarting immediately can report !isRunning for a moment while
-          // the previous stop drains, so retry briefly before failing.
-          var attempts = 0
-          while !self.session.isRunning, attempts < 3 {
-            if attempts > 0 {
-              Thread.sleep(forTimeInterval: 0.2)
+          if !self.startRunning() {
+            // The singleton session can be left in a state that never
+            // reports running after a stop while its preview layer is
+            // attached. Rebuild it once instead of retrying the same object.
+            self.rebuildSession()
+            try self.configureIfNeeded()
+            if let device = self.device {
+              self.configureDevice(device)
             }
-            self.session.startRunning()
-            attempts += 1
-          }
-          guard self.session.isRunning else {
-            throw cameraException(
-              name: "CameraUnavailable",
-              description: "The capture session could not start.",
-              code: "ERR_CAMERA_UNAVAILABLE"
-            )
+            self.replaceLatestSampleBuffer(nil)
+            guard self.startRunning() else {
+              throw cameraException(
+                name: "CameraUnavailable",
+                description: "The capture session could not start.",
+                code: "ERR_CAMERA_UNAVAILABLE"
+              )
+            }
           }
           self.notifyPreviewRotation()
           continuation.resume()
@@ -87,6 +87,35 @@ final class CameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDele
           continuation.resume(throwing: error)
         }
       }
+    }
+  }
+
+  private func startRunning() -> Bool {
+    var attempts = 0
+    while !session.isRunning, attempts < 3 {
+      if attempts > 0 {
+        Thread.sleep(forTimeInterval: 0.2)
+      }
+      session.startRunning()
+      attempts += 1
+    }
+    return session.isRunning
+  }
+
+  /// Replaces the capture session when it is unrecoverable. The preview layer
+  /// must be re-pointed at the new session on the main thread.
+  private func rebuildSession() {
+    if session.isRunning {
+      session.stopRunning()
+    }
+    let next = AVCaptureSession()
+    session = next
+    configured = false
+    device = nil
+    videoOutput = nil
+    replaceLatestSampleBuffer(nil)
+    DispatchQueue.main.async { [weak self] in
+      self?.edgeSink?.updateSession(next)
     }
   }
 
@@ -131,17 +160,12 @@ final class CameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDele
     replaceLatestSampleBuffer(nil)
 
     guard let sampleBuffer = await waitForSampleBuffer(timeout: 1.5) else {
-      await stop()
       throw cameraException(
         name: "NoFrame",
         description: "The camera did not deliver a frame in time.",
         code: "ERR_NO_FRAME"
       )
     }
-
-    // The sensor is no longer needed once a frame is in hand. Powering down
-    // before OCR and translation is what keeps the read phase at ~0 W.
-    await stop()
 
     guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else {
       throw cameraException(

@@ -26,7 +26,9 @@ export function describeNativeError(
     case 'ERR_CAMERA_UNAVAILABLE':
       return {
         code: 'camera_unavailable',
-        message: 'The camera is unavailable on this device.',
+        message: nativeMessage
+          ? `The camera could not start: ${nativeMessage}`
+          : 'The camera is unavailable on this device.',
         fatal: true,
       };
     case 'ERR_NO_FRAME':

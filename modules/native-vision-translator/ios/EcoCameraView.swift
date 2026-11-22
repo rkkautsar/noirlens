@@ -58,6 +58,11 @@ class EcoCameraView: ExpoView {
     updatePreviewRotation()
   }
 
+  func updateSession(_ session: AVCaptureSession) {
+    previewLayer.session = session
+    updatePreviewRotation()
+  }
+
   func updatePreviewRotation() {
     guard
       let connection = previewLayer.connection,

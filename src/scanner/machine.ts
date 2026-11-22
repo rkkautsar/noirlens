@@ -701,6 +701,21 @@ export function reduceScanner(
         };
       }
 
+      // A manual hold has already ended; never re-arm the camera without a
+      // new press. Auto mode may retry while the arm band is still dwelled in.
+      if (context.armMode === 'MANUAL') {
+        const slept = enterSleep(
+          context,
+          effects,
+          { clearResult: true },
+          event.timestampMs,
+        );
+        return {
+          context: { ...slept, error: event.error },
+          effects,
+        };
+      }
+
       const attempts = context.attemptsThisArm + 1;
       if (attempts >= tuning.maxCaptureAttempts) {
         const slept = enterSleep(

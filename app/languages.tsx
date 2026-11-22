@@ -188,6 +188,9 @@ export default function LanguagesScreen() {
                 style={[styles.sourceRow, isSelected && styles.sourceRowActive]}
               >
                 <Pressable
+                  accessibilityRole="radio"
+                  accessibilityState={{ checked: isSelected }}
+                  accessibilityLabel={`${language.nativeName}, ${language.name}`}
                   style={styles.selectArea}
                   onPress={() => {
                     void sourceLanguage.set(language.code).catch(() => {});

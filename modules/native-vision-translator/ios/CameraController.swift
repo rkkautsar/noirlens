@@ -293,6 +293,9 @@ final class CameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDele
     }
 
     let cropRect = imageCropRect(for: crop, pixelBuffer: pixelBuffer)
+    // The frame is retained; power the sensor down before JPEG/OCR/translation
+    // so the camera is not streaming after the user released.
+    session.stopRunning()
     return CapturedFrame(
       sampleBuffer: sampleBuffer,
       previewJpegBase64: makePreviewJPEG(pixelBuffer: pixelBuffer, cropRect: cropRect),

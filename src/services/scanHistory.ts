@@ -40,6 +40,14 @@ function parse(raw: string | null): ScanHistoryEntry[] {
   }
 }
 
+let writeQueue: Promise<unknown> = Promise.resolve();
+
+function serialized<T>(operation: () => Promise<T>): Promise<T> {
+  const run = writeQueue.then(operation, operation);
+  writeQueue = run.catch(() => {});
+  return run;
+}
+
 export async function readScanHistory(): Promise<ScanHistoryEntry[]> {
   try {
     return parse(await readMeta(HISTORY_KEY));
@@ -48,21 +56,27 @@ export async function readScanHistory(): Promise<ScanHistoryEntry[]> {
   }
 }
 
-export async function addScanHistory(
+export function addScanHistory(
   entry: Omit<ScanHistoryEntry, 'id' | 'at'>,
 ): Promise<void> {
-  const at = Date.now();
-  const next: ScanHistoryEntry[] = [
-    {
-      ...entry,
-      id: `${at}-${Math.random().toString(36).slice(2, 8)}`,
-      at,
-    },
-    ...(await readScanHistory()),
-  ].slice(0, MAX_ENTRIES);
-  await writeMeta(HISTORY_KEY, JSON.stringify(next));
+  return serialized(async () => {
+    const at = Date.now();
+    // Read raw so a failed read rejects instead of overwriting history.
+    const existing = parse(await readMeta(HISTORY_KEY));
+    const next: ScanHistoryEntry[] = [
+      {
+        ...entry,
+        id: `${at}-${Math.random().toString(36).slice(2, 8)}`,
+        at,
+      },
+      ...existing,
+    ].slice(0, MAX_ENTRIES);
+    await writeMeta(HISTORY_KEY, JSON.stringify(next));
+  });
 }
 
-export async function clearScanHistory(): Promise<void> {
-  await writeMeta(HISTORY_KEY, '[]');
+export function clearScanHistory(): Promise<void> {
+  return serialized(async () => {
+    await writeMeta(HISTORY_KEY, '[]');
+  });
 }

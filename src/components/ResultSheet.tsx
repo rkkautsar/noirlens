@@ -29,7 +29,10 @@ export function ResultSheet({
   const insets = useSafeAreaInsets();
   const { height } = useWindowDimensions();
   const collapsed = Math.round(height * 0.82);
-  const expanded = Math.max(collapsed, height - Math.max(insets.top, 20) - 8);
+  const expanded = Math.max(
+    collapsed,
+    height - Math.max(insets.top, 20) - 56,
+  );
 
   const sheetHeight = useRef(new Animated.Value(0)).current;
   const currentHeight = useRef(0);

@@ -41,6 +41,8 @@ class SourceLanguageManager {
     }
   }
 
+  private selectionVersion = 0;
+
   async hydrate(): Promise<void> {
     if (this.snapshot.loaded) {
       return;
@@ -54,8 +56,12 @@ class SourceLanguageManager {
   }
 
   private async load(): Promise<void> {
+    const version = this.selectionVersion;
     try {
       const stored = await readMeta(SOURCE_LANGUAGE_KEY);
+      if (this.selectionVersion !== version) {
+        return;
+      }
       const code = stored !== null && VALID_CODES.has(stored) ? stored : 'auto';
       this.emit({ code, loaded: true });
     } catch {
@@ -64,6 +70,7 @@ class SourceLanguageManager {
   }
 
   async set(code: string): Promise<void> {
+    this.selectionVersion += 1;
     const next = VALID_CODES.has(code) ? code : 'auto';
     this.emit({ code: next, loaded: true });
     try {

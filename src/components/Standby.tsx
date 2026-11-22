@@ -58,7 +58,7 @@ export function Standby({
           onResponderTerminationRequest={() => false}
           style={[
             styles.errorCard,
-            { marginBottom: insets.bottom + 104 },
+            { marginBottom: insets.bottom + 160 },
           ]}
         >
           <MicroLabel

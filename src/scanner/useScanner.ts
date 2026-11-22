@@ -89,6 +89,7 @@ export function useScanner(): ScannerController {
     let disposed = false;
     let capturing = false;
     let captureToken = 0;
+    let captureWatchdog: ReturnType<typeof setTimeout> | null = null;
     let pollingStatus = false;
     let statusTimer: ReturnType<typeof setInterval> | null = null;
     let currentDay = localDayKey();
@@ -119,6 +120,7 @@ export function useScanner(): ScannerController {
           });
         }
       }, CAPTURE_TIMEOUT_MS);
+      captureWatchdog = watchdog;
 
       try {
         const selectedLanguage = sourceLanguage.current();
@@ -364,6 +366,12 @@ export function useScanner(): ScannerController {
             });
           break;
         case 'STOP_CAMERA':
+          captureToken += 1;
+          capturing = false;
+          if (captureWatchdog !== null) {
+            clearTimeout(captureWatchdog);
+            captureWatchdog = null;
+          }
           void vision.stopCamera().catch(() => {});
           break;
         case 'CAPTURE_FRAME':
@@ -471,7 +479,10 @@ export function useScanner(): ScannerController {
     }, 30_000);
 
     const appStateSubscription = AppState.addEventListener('change', (next) => {
-      if (next !== 'active') {
+      if (
+        next !== 'active' &&
+        store.getSnapshot().state !== 'LOCKED_READ'
+      ) {
         store.send({ type: 'SLEEP', timestampMs: Date.now() });
       }
     });

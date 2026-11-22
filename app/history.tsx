@@ -142,7 +142,10 @@ export default function HistoryScreen() {
                 <Pressable
                   key={entry.id}
                   accessibilityRole="button"
-                  accessibilityLabel="Copy scan result"
+                  accessibilityLabel={`Copy scan: ${
+                    entry.translatedText || entry.sourceText
+                  }`}
+                  accessibilityHint="Copies the result and prices"
                   onPress={() => {
                     void copy(entry);
                   }}
@@ -241,11 +244,13 @@ const styles = StyleSheet.create({
   entryText: {
     ...typography.body,
     color: colors.foreground,
+    paddingRight: 24,
   },
   entrySource: {
     ...typography.body,
     fontSize: 13,
     color: colors.muted,
+    paddingRight: 24,
   },
   copyIcon: {
     position: 'absolute',

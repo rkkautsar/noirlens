@@ -31,6 +31,7 @@ export function OriginalView({
   const [selected, setSelected] = useState<number | null>(null);
   const [translation, setTranslation] = useState<string | null>(null);
   const [translating, setTranslating] = useState(false);
+  const [translationFailed, setTranslationFailed] = useState(false);
   const requestId = useRef(0);
 
   const imageRect = imageFitRect(
@@ -83,6 +84,7 @@ export function OriginalView({
     });
     setSelected(best >= 0 ? best : null);
     setTranslation(null);
+    setTranslationFailed(false);
     const block = best >= 0 ? result.blocks[best] : null;
     if (!block) {
       return;
@@ -97,8 +99,8 @@ export function OriginalView({
         }
       })
       .catch(() => {
-        if (requestId.current === id && result.kind === 'translated') {
-          setTranslation(result.translatedText || null);
+        if (requestId.current === id) {
+          setTranslationFailed(true);
         }
       })
       .finally(() => {
@@ -167,6 +169,10 @@ export function OriginalView({
               <Text style={styles.translatedText} selectable>
                 {translation}
               </Text>
+            ) : translationFailed ? (
+              <MicroLabel tone="dim">
+                COULD NOT TRANSLATE THIS TEXT
+              </MicroLabel>
             ) : null}
           </ScrollView>
         ) : (

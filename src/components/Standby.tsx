@@ -26,7 +26,7 @@ export function Standby({
   const heading = exhausted ? 'DAILY LIMIT REACHED' : 'HOLD TO SCAN';
   const subheading = exhausted
     ? 'Unlock unlimited scans to keep going.'
-    : 'Press and hold anywhere on the screen. Aim while it is held, then release to capture.';
+    : 'Hold to aim, release to capture.';
 
   const primaryAction = exhausted ? onOpenPaywall : null;
 
@@ -65,7 +65,7 @@ export function Standby({
             tone={error.fatal ? 'danger' : 'warning'}
             style={styles.errorKicker}
           >
-            {error.fatal ? 'ACTION NEEDED' : 'SCAN NOTICE'}
+            NOTICE
           </MicroLabel>
           <Text style={styles.errorMessage}>{error.message}</Text>
           <View style={styles.errorActions}>

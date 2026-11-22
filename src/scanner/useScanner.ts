@@ -114,7 +114,7 @@ export function useScanner(): ScannerController {
             type: 'CAPTURE_FAILED',
             error: {
               code: 'capture_failed',
-              message: 'The scan timed out. Hold steady and try again.',
+              message: 'Scan timed out. Hold steady.',
               fatal: false,
             },
             timestampMs: Date.now(),
@@ -149,7 +149,7 @@ export function useScanner(): ScannerController {
             type: 'CAPTURE_FAILED',
             error: {
               code: 'no_text',
-              message: 'No readable text. Fill the frame with the sign.',
+              message: 'No text found.',
               fatal: true,
             },
             timestampMs: Date.now(),

@@ -42,6 +42,16 @@ export default function ScannerScreen() {
   const locked = state === 'LOCKED_READ' && result !== null;
   const exhausted = snapshot.remainingToday === 0;
 
+  useEffect(() => {
+    if (!snapshot.error) {
+      return;
+    }
+    const timer = setTimeout(() => {
+      scanner.dismissError();
+    }, 6000);
+    return () => clearTimeout(timer);
+  }, [snapshot.error, scanner.dismissError]);
+
   const lastSourceRef = useRef(source.code);
   useEffect(() => {
     if (!locked) {

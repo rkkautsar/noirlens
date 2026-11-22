@@ -54,6 +54,8 @@ export function Standby({
 
       {error ? (
         <View
+          onStartShouldSetResponder={() => true}
+          onResponderTerminationRequest={() => false}
           style={[
             styles.errorCard,
             { marginBottom: insets.bottom + 104 },

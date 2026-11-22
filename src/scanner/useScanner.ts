@@ -335,8 +335,11 @@ export function useScanner(): ScannerController {
             .startCamera()
             .then(() => {
               // The permission prompt can outlive the arm (the reducer times
-              // out after 4 s). Never leave a session running after SLEEP.
-              if (store.getSnapshot().state !== 'PREWARM') {
+              // out after 4 s). Never leave a session running after SLEEP,
+              // but do not stop a session the capture phase is using: a fast
+              // release moves PREWARM -> SCANNING before startup resolves.
+              const current = store.getSnapshot().state;
+              if (current !== 'PREWARM' && current !== 'SCANNING') {
                 void vision.stopCamera().catch(() => {});
               }
             })

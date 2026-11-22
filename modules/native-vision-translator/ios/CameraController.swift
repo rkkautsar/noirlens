@@ -93,15 +93,11 @@ final class CameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDele
           }
           self.replaceLatestSampleBuffer(nil)
           if try !self.startRunning(generation) {
-            // The singleton session can be left in a state that never
-            // reports running after a stop while its preview layer is
-            // attached. Rebuild it once instead of retrying the same object.
+            // Never replace the session: a second AVCaptureSession contends
+            // with the first for the device and can be reported as a
+            // multi-app interruption. Reset this same session and retry once.
             try self.checkStart(generation)
-            self.rebuildSession()
-            try self.configureIfNeeded()
-            if let device = self.device {
-              self.configureDevice(device)
-            }
+            self.session.stopRunning()
             self.replaceLatestSampleBuffer(nil)
             guard try self.startRunning(generation) else {
               throw self.startFailureError(generation)
@@ -235,26 +231,6 @@ final class CameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDele
 
   /// Replaces the capture session when it is unrecoverable. The preview layer
   /// must be re-pointed at the new session on the main thread.
-  private func rebuildSession() {
-    sessionLock.lock()
-    let old = _session
-    sessionLock.unlock()
-    if old.isRunning {
-      old.stopRunning()
-    }
-    let next = AVCaptureSession()
-    sessionLock.lock()
-    _session = next
-    sessionLock.unlock()
-    configured = false
-    device = nil
-    videoOutput = nil
-    replaceLatestSampleBuffer(nil)
-    DispatchQueue.main.async { [weak self] in
-      self?.edgeSink?.updateSession(next)
-    }
-  }
-
   func stop() async {
     invalidateStartGeneration()
     await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in

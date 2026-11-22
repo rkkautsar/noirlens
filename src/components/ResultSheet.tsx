@@ -3,6 +3,7 @@ import {
   Animated,
   PanResponder,
   StyleSheet,
+  useWindowDimensions,
   View,
   type ViewStyle,
 } from 'react-native';
@@ -24,13 +25,18 @@ export function ResultSheet({
   style?: ViewStyle;
 }) {
   const translateY = useRef(new Animated.Value(0)).current;
+  const { height } = useWindowDimensions();
+  const maxUp = Math.max(120, height * 0.3);
 
   const responder = useRef(
     PanResponder.create({
       onMoveShouldSetPanResponder: (_, gesture) =>
-        gesture.dy > 6 && Math.abs(gesture.dy) > Math.abs(gesture.dx),
+        Math.abs(gesture.dy) > 6 &&
+        Math.abs(gesture.dy) > Math.abs(gesture.dx),
       onPanResponderMove: (_, gesture) => {
-        translateY.setValue(Math.max(0, gesture.dy));
+        translateY.setValue(
+          Math.min(0, Math.max(-maxUp, gesture.dy)),
+        );
       },
       onPanResponderTerminate: () => {
         Animated.spring(translateY, {
@@ -39,6 +45,13 @@ export function ResultSheet({
         }).start();
       },
       onPanResponderRelease: (_, gesture) => {
+        if (gesture.dy < -maxUp * 0.35 || gesture.vy < -0.7) {
+          Animated.spring(translateY, {
+            toValue: -maxUp,
+            useNativeDriver: false,
+          }).start();
+          return;
+        }
         if (gesture.dy > 110 || gesture.vy > 0.8) {
           Animated.timing(translateY, {
             toValue: 900,

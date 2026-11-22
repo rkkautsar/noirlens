@@ -11,7 +11,7 @@ export function SheetHeader({
 }: {
   title: string;
   subtitle: string;
-  onClose: () => void;
+  onClose?: () => void;
 }) {
   const insets = useSafeAreaInsets();
 
@@ -22,7 +22,7 @@ export function SheetHeader({
           <Text style={styles.title}>{title}</Text>
           <MicroLabel tone="dim">{subtitle}</MicroLabel>
         </View>
-        <ChipButton label="CLOSE" onPress={onClose} />
+        {onClose ? <ChipButton label="CLOSE" onPress={onClose} /> : null}
       </View>
     </View>
   );

@@ -108,6 +108,14 @@ export default function LanguagesScreen() {
 
   return (
     <View style={styles.overlay}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Dismiss"
+        style={StyleSheet.absoluteFill}
+        onPress={() => {
+          router.back();
+        }}
+      />
       <ResultSheet
         style={styles.sheet}
         onDismiss={() => {
@@ -117,9 +125,6 @@ export default function LanguagesScreen() {
       <SheetHeader
         title="LANGUAGES & PACKS"
         subtitle="SCAN SOURCE · OFFLINE MODELS"
-        onClose={() => {
-          router.back();
-        }}
       />
 
       <ScrollView

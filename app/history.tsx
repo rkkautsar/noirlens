@@ -101,6 +101,14 @@ export default function HistoryScreen() {
 
   return (
     <View style={styles.overlay}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Dismiss"
+        style={StyleSheet.absoluteFill}
+        onPress={() => {
+          router.back();
+        }}
+      />
       <ResultSheet
         style={styles.sheet}
         onDismiss={() => {
@@ -110,9 +118,6 @@ export default function HistoryScreen() {
       <SheetHeader
         title="RECENT SCANS"
         subtitle="LAST 50 · ON-DEVICE"
-        onClose={() => {
-          router.back();
-        }}
       />
 
       <ScrollView

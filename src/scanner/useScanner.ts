@@ -18,6 +18,7 @@ import { localDayKey } from '@/services/day';
 import { entitlements } from '@/services/entitlements';
 import {
   describeNativeError,
+  isCameraCancellation,
   isLanguagePackFailure,
 } from '@/services/nativeErrors';
 import { readScanCount, writeScanCount } from '@/services/scanLedger';
@@ -331,6 +332,10 @@ export function useScanner(): ScannerController {
     const handleEffect = (effect: ScannerEffect) => {
       switch (effect.type) {
         case 'START_CAMERA':
+          if (AppState.currentState !== 'active') {
+            store.send({ type: 'SLEEP', timestampMs: Date.now() });
+            break;
+          }
           void vision
             .startCamera()
             .then(() => {
@@ -344,13 +349,18 @@ export function useScanner(): ScannerController {
               }
             })
             .catch((error: unknown) => {
-              if (store.getSnapshot().state === 'PREWARM') {
-                store.send({
-                  type: 'CAMERA_FAILED',
-                  error: describeNativeError(error),
-                  timestampMs: Date.now(),
-                });
+              if (store.getSnapshot().state !== 'PREWARM') {
+                return;
               }
+              if (isCameraCancellation(error)) {
+                store.send({ type: 'SLEEP', timestampMs: Date.now() });
+                return;
+              }
+              store.send({
+                type: 'CAMERA_FAILED',
+                error: describeNativeError(error),
+                timestampMs: Date.now(),
+              });
             });
           break;
         case 'STOP_CAMERA':
@@ -484,6 +494,9 @@ export function useScanner(): ScannerController {
   }, []);
 
   const beginHold = useCallback(() => {
+    if (AppState.currentState !== 'active') {
+      return;
+    }
     if (store.getSnapshot().state === 'SLEEP') {
       store.send({ type: 'WAKE', timestampMs: Date.now() });
     }

@@ -55,41 +55,35 @@ final class CameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDele
   private var lastRuntimeError: Error?
   private var lastInterruptionReason: AVCaptureSession.InterruptionReason?
   private var sessionObservers: [NSObjectProtocol] = []
+  private let generationLock = NSLock()
+  private var startGeneration = 0
 
   private override init() {
     super.init()
+    NotificationCenter.default.addObserver(
+      forName: UIApplication.willResignActiveNotification,
+      object: nil,
+      queue: .main
+    ) { [weak self] _ in
+      guard let self else { return }
+      self.invalidateStartGeneration()
+      Task { await self.stop() }
+    }
   }
 
   // MARK: - Lifecycle
 
   func start() async throws {
+    let generation = nextStartGeneration()
     try await ensureCameraPermission()
-    let active = await MainActor.run {
-      UIApplication.shared.applicationState == .active
-    }
-    guard active else {
-      throw cameraException(
-        name: "CameraUnavailable",
-        description: "The app was not active when the camera was asked to start.",
-        code: "ERR_CAMERA_UNAVAILABLE"
-      )
-    }
+    try checkStart(generation)
     lastRuntimeError = nil
     lastInterruptionReason = nil
 
     try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
       sessionQueue.async {
         do {
-          let activeNow = DispatchQueue.main.sync {
-            UIApplication.shared.applicationState == .active
-          }
-          guard activeNow else {
-            throw cameraException(
-              name: "CameraUnavailable",
-              description: "The app is not active; the camera cannot start in the background.",
-              code: "ERR_CAMERA_INACTIVE"
-            )
-          }
+          try self.checkStart(generation)
           try self.configureIfNeeded()
           if let device = self.device {
             // Restore continuous AF/AE after the previous capture's one-shot
@@ -97,17 +91,18 @@ final class CameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDele
             self.configureDevice(device)
           }
           self.replaceLatestSampleBuffer(nil)
-          if !self.startRunning() {
+          if try !self.startRunning(generation) {
             // The singleton session can be left in a state that never
             // reports running after a stop while its preview layer is
             // attached. Rebuild it once instead of retrying the same object.
+            try self.checkStart(generation)
             self.rebuildSession()
             try self.configureIfNeeded()
             if let device = self.device {
               self.configureDevice(device)
             }
             self.replaceLatestSampleBuffer(nil)
-            guard self.startRunning() else {
+            guard try self.startRunning(generation) else {
               throw cameraException(
                 name: "CameraUnavailable",
                 description: self.startFailureDescription(),
@@ -115,6 +110,7 @@ final class CameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDele
               )
             }
           }
+          try self.checkStart(generation)
           self.notifyPreviewRotation()
           continuation.resume()
         } catch {
@@ -163,9 +159,56 @@ final class CameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDele
     ]
   }
 
-  private func startRunning() -> Bool {
+  private func nextStartGeneration() -> Int {
+    generationLock.lock()
+    startGeneration += 1
+    let generation = startGeneration
+    generationLock.unlock()
+    return generation
+  }
+
+  private func invalidateStartGeneration() {
+    generationLock.lock()
+    startGeneration += 1
+    generationLock.unlock()
+  }
+
+  private func isCurrentStart(_ generation: Int) -> Bool {
+    generationLock.lock()
+    defer { generationLock.unlock() }
+    return startGeneration == generation
+  }
+
+  private func checkStart(_ generation: Int) throws {
+    guard isCurrentStart(generation) else {
+      throw cameraException(
+        name: "CameraCancelled",
+        description: "The camera start was cancelled.",
+        code: "ERR_CAMERA_CANCELLED"
+      )
+    }
+    guard appIsActive() else {
+      throw cameraException(
+        name: "CameraUnavailable",
+        description: "The app is not active; the camera cannot start in the background.",
+        code: "ERR_CAMERA_INACTIVE"
+      )
+    }
+  }
+
+  private func appIsActive() -> Bool {
+    if Thread.isMainThread {
+      return UIApplication.shared.applicationState == .active
+    }
+    return DispatchQueue.main.sync {
+      UIApplication.shared.applicationState == .active
+    }
+  }
+
+  private func startRunning(_ generation: Int) throws -> Bool {
     var attempts = 0
     while !session.isRunning, attempts < 3 {
+      try checkStart(generation)
       if attempts > 0 {
         Thread.sleep(forTimeInterval: 0.2)
       }
@@ -198,6 +241,7 @@ final class CameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDele
   }
 
   func stop() async {
+    invalidateStartGeneration()
     await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
       sessionQueue.async {
         if self.session.isRunning {

@@ -72,6 +72,11 @@ export function describeNativeError(
   }
 }
 
+export function isCameraCancellation(error: unknown): boolean {
+  const code = readString(error, 'code');
+  return code === 'ERR_CAMERA_INACTIVE' || code === 'ERR_CAMERA_CANCELLED';
+}
+
 export function isLanguagePackFailure(error: unknown): boolean {
   const code = readString(error, 'code');
   return (

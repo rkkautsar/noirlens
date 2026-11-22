@@ -4,7 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { languageShortLabel } from '@/constants/languages';
 import { useSourceLanguage } from '@/services/sourceLanguage';
 import { colors, typography } from '@/theme';
-import { ChipButton, MicroLabel } from './ui';
+import { ChipButton } from './ui';
 
 export function TopBar({
   ecoMode,
@@ -35,9 +35,6 @@ export function TopBar({
         <View style={styles.brandGroup}>
           <View style={styles.dot} />
           <Text style={styles.brand}>NOIRLENS</Text>
-          <MicroLabel tone="dim" style={styles.offline}>
-            OFFLINE READY
-          </MicroLabel>
         </View>
 
         {showNavigation ? (
@@ -49,7 +46,6 @@ export function TopBar({
       </View>
 
       <View style={styles.ecoRow}>
-        <MicroLabel tone="dim">PREVIEW</MicroLabel>
         <ChipButton
           label="NOIR"
           active={ecoMode}
@@ -94,9 +90,6 @@ const styles = StyleSheet.create({
     ...typography.label,
     color: colors.foreground,
     letterSpacing: 2.4,
-  },
-  offline: {
-    fontSize: 9,
   },
   actions: {
     flexDirection: 'row',

@@ -60,7 +60,7 @@ export function Standby({
       />
 
       <View style={styles.center}>
-        <MicroLabel tone="dim">CAMERA OFF · 0 W</MicroLabel>
+        <MicroLabel tone="dim">CAMERA OFF</MicroLabel>
         <Text style={styles.heading}>{heading}</Text>
         <Text style={styles.subheading}>{subheading}</Text>
 
@@ -111,14 +111,7 @@ export function Standby({
             <ChipButton label="DISMISS" icon="close" onPress={onDismissError} />
           </View>
         </View>
-      ) : (
-        <MicroLabel
-          tone="dim"
-          style={[styles.footer, { marginBottom: insets.bottom + 104 }]}
-        >
-          CAMERA OFF · SENSOR POWERED DOWN
-        </MicroLabel>
-      )}
+      ) : null}
     </View>
   );
 }
@@ -164,9 +157,6 @@ const styles = StyleSheet.create({
   counterText: {
     ...typography.micro,
     color: colors.accent,
-    textAlign: 'center',
-  },
-  footer: {
     textAlign: 'center',
   },
   errorCard: {

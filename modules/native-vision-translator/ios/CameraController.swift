@@ -63,8 +63,16 @@ final class CameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDele
             self.configureDevice(device)
           }
           self.replaceLatestSampleBuffer(nil)
-          if !self.session.isRunning {
+          // The session is stopped after every capture and on every failure.
+          // Restarting immediately can report !isRunning for a moment while
+          // the previous stop drains, so retry briefly before failing.
+          var attempts = 0
+          while !self.session.isRunning, attempts < 3 {
+            if attempts > 0 {
+              Thread.sleep(forTimeInterval: 0.2)
+            }
             self.session.startRunning()
+            attempts += 1
           }
           guard self.session.isRunning else {
             throw cameraException(

@@ -190,8 +190,9 @@ export function OriginalView({
             onPress={onClose}
           />
           <ChipButton
-            label="LANGUAGE"
+            label="Change language"
             icon="language-outline"
+            iconOnly
             onPress={onOpenLanguages}
           />
           <SolidButton

@@ -193,7 +193,15 @@ export default function LanguagesScreen() {
                   accessibilityLabel={`${language.nativeName}, ${language.name}`}
                   style={styles.selectArea}
                   onPress={() => {
-                    void sourceLanguage.set(language.code).catch(() => {});
+                    if (status === 'installed') {
+                      void sourceLanguage.set(language.code).catch(() => {});
+                      return;
+                    }
+                    // A pack that is not installed cannot be selected; trigger
+                    // the system download sheet instead.
+                    if (status === 'supported') {
+                      void prepare(language.code);
+                    }
                   }}
                 >
                   <View

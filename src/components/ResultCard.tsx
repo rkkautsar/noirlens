@@ -183,8 +183,9 @@ export function ResultCard({
           />
         )}
         <ChipButton
-          label="LANGUAGE"
+          label="Change language"
           icon="language-outline"
+          iconOnly
           onPress={onOpenLanguages}
         />
         <SolidButton

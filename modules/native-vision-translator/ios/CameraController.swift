@@ -52,6 +52,9 @@ final class CameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDele
   private var ecoMode = false
   private var lastEdgeFrameAt: CFTimeInterval = 0
   private var previewViewSize: CGSize = .zero
+  private var lastRuntimeError: Error?
+  private var lastInterruptionReason: AVCaptureSession.InterruptionReason?
+  private var sessionObservers: [NSObjectProtocol] = []
 
   private override init() {
     super.init()
@@ -61,6 +64,18 @@ final class CameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDele
 
   func start() async throws {
     try await ensureCameraPermission()
+    let active = await MainActor.run {
+      UIApplication.shared.applicationState == .active
+    }
+    guard active else {
+      throw cameraException(
+        name: "CameraUnavailable",
+        description: "The app was not active when the camera was asked to start.",
+        code: "ERR_CAMERA_UNAVAILABLE"
+      )
+    }
+    lastRuntimeError = nil
+    lastInterruptionReason = nil
 
     try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
       sessionQueue.async {
@@ -85,7 +100,7 @@ final class CameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDele
             guard self.startRunning() else {
               throw cameraException(
                 name: "CameraUnavailable",
-                description: "The capture session could not start.",
+                description: self.startFailureDescription(),
                 code: "ERR_CAMERA_UNAVAILABLE"
               )
             }
@@ -97,6 +112,45 @@ final class CameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDele
         }
       }
     }
+  }
+
+  private func startFailureDescription() -> String {
+    if let error = lastRuntimeError {
+      let ns = error as NSError
+      return "AVFoundation error: \(ns.domain) \(ns.code): \(ns.localizedDescription)"
+    }
+    if let reason = lastInterruptionReason {
+      return "AVFoundation interrupted the session (reason \(reason.rawValue))."
+    }
+    return "The capture session could not start."
+  }
+
+  private func observeSession(_ session: AVCaptureSession) {
+    for observer in sessionObservers {
+      NotificationCenter.default.removeObserver(observer)
+    }
+    sessionObservers = [
+      NotificationCenter.default.addObserver(
+        forName: .AVCaptureSessionRuntimeError,
+        object: session,
+        queue: .main
+      ) { [weak self] note in
+        let error = note.userInfo?[AVCaptureSessionErrorKey] as? Error
+        self?.lastRuntimeError = error
+        NSLog("[NoirLens] AVCaptureSession runtime error: \(String(describing: error))")
+      },
+      NotificationCenter.default.addObserver(
+        forName: .AVCaptureSessionWasInterrupted,
+        object: session,
+        queue: .main
+      ) { [weak self] note in
+        let raw = note.userInfo?[AVCaptureSessionInterruptionReasonKey] as? Int
+        if let raw, let reason = AVCaptureSession.InterruptionReason(rawValue: raw) {
+          self?.lastInterruptionReason = reason
+        }
+        NSLog("[NoirLens] AVCaptureSession interrupted: \(String(describing: note.userInfo))")
+      },
+    ]
   }
 
   private func startRunning() -> Bool {
@@ -429,6 +483,7 @@ final class CameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDele
     self.device = device
     self.videoOutput = output
     self.configured = true
+    self.observeSession(session)
     self.notifyPreviewRotation()
   }
 

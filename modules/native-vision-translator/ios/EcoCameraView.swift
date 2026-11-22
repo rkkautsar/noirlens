@@ -59,7 +59,9 @@ class EcoCameraView: ExpoView {
   }
 
   func updateSession(_ session: AVCaptureSession) {
-    previewLayer.session = session
+    if previewLayer.session !== session {
+      previewLayer.session = session
+    }
     updatePreviewRotation()
   }
 
@@ -81,6 +83,7 @@ class EcoCameraView: ExpoView {
       CameraController.shared.detach(self)
     } else {
       CameraController.shared.attach(self)
+      updateSession(CameraController.shared.currentSession())
       CameraController.shared.setEcoMode(ecoMode)
       updatePreviewRotation()
     }

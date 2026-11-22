@@ -209,12 +209,24 @@ enum TextRecognizer {
     }
 
     let text = candidate.string.trimmingCharacters(in: .whitespacesAndNewlines)
-    // Long strings are kept at a permissive confidence floor; short strings
-    // need to be convincing so signage noise does not flood the result.
-    let floor: Float = text.count >= 4 ? confidenceFloor : 0.72
+    // Short CJK/Hangul/Thai/Arabic labels are meaningful (a dish name, a
+    // product line); a one-letter Latin fragment is noise.
+    let scripted = text.unicodeScalars.contains { scalar in
+      let v = scalar.value
+      return (0x3040...0x30FF).contains(v)
+        || (0x4E00...0x9FFF).contains(v)
+        || (0xAC00...0xD7AF).contains(v)
+        || (0x0E00...0x0E7F).contains(v)
+        || (0x0600...0x06FF).contains(v)
+        || (0x0400...0x04FF).contains(v)
+    }
+    let floor: Float = text.count >= 4
+      ? confidenceFloor
+      : (scripted ? 0.45 : 0.72)
+    let minimumCharacters = scripted ? 1 : 2
     guard
       candidate.confidence >= floor,
-      text.count >= 2,
+      text.count >= minimumCharacters,
       !isNoise(text)
     else {
       return nil
@@ -293,6 +305,10 @@ enum TextRecognizer {
       ranges = [0x4E00...0x9FFF, 0x3400...0x4DBF]
     case "th":
       ranges = [0x0E00...0x0E7F]
+    case "ru", "uk":
+      ranges = [0x0400...0x04FF]
+    case "ar":
+      ranges = [0x0600...0x06FF, 0x0750...0x077F]
     default:
       ranges = [0x0041...0x024F]
     }
@@ -338,17 +354,38 @@ enum TextRecognizer {
       }
     }
 
+    let nonLatin = ["ko", "ja", "zh", "th", "ru", "uk", "ar"]
+    var bestNonLatin: (score: Int, lines: [Line])?
+    var bestLatin: (score: Int, lines: [Line])?
     var fallback: [Line] = []
+
     for (index, group) in groups.enumerated() {
       guard let candidate = results[index], !candidate.isEmpty else {
         continue
       }
-      if scriptScore(candidate, for: group.first ?? "") >= 4 {
-        return candidate
-      }
       if fallback.isEmpty {
         fallback = candidate
       }
+      let primary = group.first ?? ""
+      let score = scriptScore(candidate, for: primary)
+      let prefix = String(primary.lowercased().prefix(2))
+      if nonLatin.contains(prefix) {
+        // A foreign sign that happens to carry Latin branding must not lose
+        // to the Latin fragment: any real foreign-script read wins.
+        if score >= 2, bestNonLatin == nil || score > bestNonLatin!.score {
+          bestNonLatin = (score, candidate)
+        }
+      } else if score >= 4 {
+        if bestLatin == nil || score > bestLatin!.score {
+          bestLatin = (score, candidate)
+        }
+      }
+    }
+    if let bestNonLatin {
+      return bestNonLatin.lines
+    }
+    if let bestLatin {
+      return bestLatin.lines
     }
     return fallback
   }

@@ -56,6 +56,7 @@ export interface LanguagePackStatusPayload {
 
 export interface EcoCameraViewProps extends ViewProps {
   ecoMode?: boolean;
+  scanlineLevel?: number;
 }
 
 export interface NativeVisionTranslatorModule extends NativeModule {

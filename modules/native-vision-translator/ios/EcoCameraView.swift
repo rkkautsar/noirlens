@@ -25,6 +25,13 @@ class EcoCameraView: ExpoView {
     }
   }
 
+  /// 0 = no scanlines, 1 = thickest (still leaves the preview readable).
+  var scanlineLevel: CGFloat = 0.5 {
+    didSet {
+      applyScanlines()
+    }
+  }
+
   required init(appContext: AppContext? = nil) {
     previewLayer = AVCaptureVideoPreviewLayer(session: CameraController.shared.currentSession())
     super.init(appContext: appContext)
@@ -62,8 +69,7 @@ class EcoCameraView: ExpoView {
     previewLayer.frame = bounds
     dimLayer.frame = bounds
     scanlines.frame = bounds
-    scanline.frame = CGRect(x: 0, y: 0, width: bounds.width, height: 1)
-    scanlines.instanceCount = max(1, Int(ceil(bounds.height / 3)))
+    applyScanlines()
     CATransaction.commit()
 
     CameraController.shared.updatePreviewSize(bounds.size)
@@ -106,10 +112,37 @@ class EcoCameraView: ExpoView {
     // compatibility but do nothing with per-frame edge images.
   }
 
+  private func applyScanlines() {
+    guard ecoMode, scanlineLevel > 0.01 else {
+      scanlines.isHidden = true
+      return
+    }
+    let level = max(0, min(1, scanlineLevel))
+    // 0.5 is the original HUD (1 px line every 3 px); 1.0 is the thickest
+    // that still leaves the preview legible (2 px every 4 px).
+    let lineHeight: CGFloat = level > 0.8 ? 2 : 1
+    let spacing: CGFloat = level > 0.8
+      ? 4
+      : (level >= 0.5 ? 3 : 6 - 6 * level)
+    scanline.backgroundColor = UIColor(
+      white: 0,
+      alpha: 0.35 + 0.4 * level
+    ).cgColor
+    scanline.frame = CGRect(
+      x: 0,
+      y: 0,
+      width: bounds.width,
+      height: lineHeight
+    )
+    scanlines.instanceTransform = CATransform3DMakeTranslation(0, spacing, 0)
+    scanlines.instanceCount = max(1, Int(ceil(bounds.height / spacing)))
+    scanlines.isHidden = false
+  }
+
   private func applyMode() {
     previewLayer.isHidden = false
     dimLayer.isHidden = !ecoMode
-    scanlines.isHidden = !ecoMode
+    applyScanlines()
     // The controller's CoreImage edge pass stays disabled: overlay mode needs
     // no per-frame processing.
     CameraController.shared.setEcoMode(false)

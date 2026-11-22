@@ -20,6 +20,9 @@ public final class NativeVisionTranslatorModule: Module {
       Prop("ecoMode") { (view: EcoCameraView, ecoMode: Bool) in
         view.ecoMode = ecoMode
       }
+      Prop("scanlineLevel") { (view: EcoCameraView, level: Double) in
+        view.scanlineLevel = CGFloat(level)
+      }
     }
 
     AsyncFunction("startCamera") { () async throws -> Void in

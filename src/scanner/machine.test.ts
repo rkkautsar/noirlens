@@ -474,7 +474,7 @@ describe('CAPTURE flow', () => {
     expect(result.context.armMode).toBe('AUTO');
   });
 
-  it('keeps a manual retry manual', () => {
+  it('returns a manual scan to standby after a failed capture', () => {
     const woken = run(ctx(), [{ type: 'WAKE', timestampMs: 1000 }]).context;
     const captured = run(woken, [
       { type: 'CAPTURE_NOW', timestampMs: 1100 },
@@ -486,8 +486,9 @@ describe('CAPTURE flow', () => {
         timestampMs: 1200,
       },
     ]);
-    expect(result.context.state).toBe('PREWARM');
-    expect(result.context.armMode).toBe('MANUAL');
+    expect(result.context.state).toBe('SLEEP');
+    expect(result.context.error?.code).toBe('no_text');
+    expect(hasEffect(result.effects, 'START_CAMERA')).toBe(false);
   });
 
   it('stops retrying after the attempt cap', () => {

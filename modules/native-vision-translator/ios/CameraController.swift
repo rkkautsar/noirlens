@@ -306,9 +306,28 @@ final class CameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDele
     // The auto arm can fire while AF is still settling; this gives every
     // capture a dedicated, sharp frame instead of whatever was on screen.
     await prepareForCapture()
-    replaceLatestSampleBuffer(nil)
+    // Give the one-shot AF/AE a moment to settle before sampling.
+    await waitForSettledDevice(timeout: 0.45)
 
-    guard let sampleBuffer = await waitForSampleBuffer(timeout: 1.5) else {
+    // Burst three frames and keep the sharpest: a single frame can land while
+    // focus or the hand is still moving.
+    var best: (buffer: CMSampleBuffer, score: Float)?
+    for _ in 0..<3 {
+      replaceLatestSampleBuffer(nil)
+      guard let candidate = await waitForSampleBuffer(timeout: 1.0) else {
+        break
+      }
+      guard let buffer = CMSampleBufferGetImageBuffer(candidate) else {
+        continue
+      }
+      let score = sharpnessScore(buffer)
+      if best == nil || score > best!.score {
+        best = (candidate, score)
+      }
+      try? await Task.sleep(nanoseconds: 70_000_000)
+    }
+
+    guard let sampleBuffer = best?.buffer else {
       throw cameraException(
         name: "NoFrame",
         description: "The camera did not deliver a frame in time.",
@@ -388,6 +407,49 @@ final class CameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDele
       CGRect(x: 0, y: 0, width: uprightWidth, height: uprightHeight)
     )
     return clipped.isNull ? nil : clipped
+  }
+
+  private static let sharpnessContext = CIContext(
+    options: [.useSoftwareRenderer: false]
+  )
+
+  private func sharpnessScore(_ pixelBuffer: CVPixelBuffer) -> Float {
+    let image = CIImage(cvPixelBuffer: pixelBuffer)
+    let gray = image.applyingFilter("CIColorControls", parameters: [
+      kCIInputSaturationKey: 0,
+    ])
+    let edges = gray.applyingFilter("CIEdges", parameters: [
+      kCIInputIntensityKey: 1.0,
+    ])
+    let average = edges.applyingFilter("CIAreaAverage", parameters: [
+      kCIInputExtentKey: CIVector(cgRect: edges.extent),
+    ])
+    var pixel = [UInt8](repeating: 0, count: 4)
+    CameraController.sharpnessContext.render(
+      average,
+      toBitmap: &pixel,
+      rowBytes: 4,
+      bounds: CGRect(x: 0, y: 0, width: 1, height: 1),
+      format: .RGBA8,
+      colorSpace: CGColorSpaceCreateDeviceRGB()
+    )
+    return Float(pixel[0]) + Float(pixel[1]) + Float(pixel[2])
+  }
+
+  private func waitForSettledDevice(timeout: TimeInterval) async {
+    let deadline = Date().addingTimeInterval(timeout)
+    while Date() < deadline {
+      let adjusting = sessionQueue.sync {
+        guard let device = self.device else {
+          return false
+        }
+        return device.isAdjustingFocus || device.isAdjustingExposure
+      }
+      if !adjusting {
+        return
+      }
+      try? await Task.sleep(nanoseconds: 30_000_000)
+    }
   }
 
   private func prepareForCapture() async {

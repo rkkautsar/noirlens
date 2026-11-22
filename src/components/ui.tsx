@@ -189,7 +189,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.borderSoft,
     borderRadius: radius.pill,
-    backgroundColor: 'transparent',
+    // Translucent so icon-only chips stay readable over dense result text.
+    backgroundColor: 'rgba(10,10,10,0.78)',
   },
   chipIconOnly: {
     width: 46,

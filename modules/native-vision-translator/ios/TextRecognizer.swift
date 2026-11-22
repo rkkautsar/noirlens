@@ -85,7 +85,7 @@ enum TextRecognizer {
           automatic: false,
           languages: languages,
           confidenceFloor: confidenceFloor
-        )
+        ).filter { !isUrlNoise($0.text) }
       } catch {
         NSLog("[NoirLens] OCR explicit pass failed: %@", error.localizedDescription)
       }
@@ -96,14 +96,14 @@ enum TextRecognizer {
       // upright frame with a grayscale/contrast upscale before auto mode.
       do {
         if !languages.isEmpty,
-           let enhanced = enhancedImage(upright),
+           let enhanced = enhancedImage(cropped),
            let enhancedCG = ciContext.createCGImage(enhanced, from: enhanced.extent) {
           lines = try runPass(
             enhancedCG,
             automatic: false,
             languages: languages,
             confidenceFloor: confidenceFloor
-          )
+          ).filter { !isUrlNoise($0.text) }
         }
       } catch {
         NSLog("[NoirLens] OCR enhanced pass failed: %@", error.localizedDescription)
@@ -117,7 +117,7 @@ enum TextRecognizer {
           automatic: true,
           languages: [],
           confidenceFloor: 0.50
-        )
+        ).filter { !isUrlNoise($0.text) }
       } catch {
         throw Exception(
           name: "TextRecognitionFailed",

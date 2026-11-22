@@ -312,7 +312,7 @@ final class CameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDele
     // Burst three frames and keep the sharpest: a single frame can land while
     // focus or the hand is still moving.
     var best: (buffer: CMSampleBuffer, score: Float)?
-    for _ in 0..<3 {
+    for index in 0..<3 {
       replaceLatestSampleBuffer(nil)
       guard let candidate = await waitForSampleBuffer(timeout: 1.0) else {
         break
@@ -320,11 +320,16 @@ final class CameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDele
       guard let buffer = CMSampleBufferGetImageBuffer(candidate) else {
         continue
       }
-      let score = sharpnessScore(buffer)
+      let score = sharpnessScore(
+        buffer,
+        cropRect: imageCropRect(for: crop, pixelBuffer: buffer)
+      )
       if best == nil || score > best!.score {
         best = (candidate, score)
       }
-      try? await Task.sleep(nanoseconds: 70_000_000)
+      if index < 2 {
+        try? await Task.sleep(nanoseconds: 70_000_000)
+      }
     }
 
     guard let sampleBuffer = best?.buffer else {
@@ -406,15 +411,30 @@ final class CameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDele
     let clipped = imageRect.intersection(
       CGRect(x: 0, y: 0, width: uprightWidth, height: uprightHeight)
     )
-    return clipped.isNull ? nil : clipped
+    guard !clipped.isNull else {
+      return nil
+    }
+    // CoreImage's origin is bottom-left; the reticle is reported top-left.
+    return CGRect(
+      x: clipped.minX,
+      y: uprightHeight - clipped.maxY,
+      width: clipped.width,
+      height: clipped.height
+    )
   }
 
   private static let sharpnessContext = CIContext(
     options: [.useSoftwareRenderer: false]
   )
 
-  private func sharpnessScore(_ pixelBuffer: CVPixelBuffer) -> Float {
-    let image = CIImage(cvPixelBuffer: pixelBuffer)
+  private func sharpnessScore(
+    _ pixelBuffer: CVPixelBuffer,
+    cropRect: CGRect?
+  ) -> Float {
+    var image = CIImage(cvPixelBuffer: pixelBuffer).oriented(.right)
+    if let cropRect {
+      image = image.cropped(to: cropRect)
+    }
     let gray = image.applyingFilter("CIColorControls", parameters: [
       kCIInputSaturationKey: 0,
     ])

@@ -96,7 +96,7 @@ class EcoCameraView: ExpoView {
     } else {
       CameraController.shared.attach(self)
       updateSession(CameraController.shared.currentSession())
-      CameraController.shared.setEcoMode(ecoMode)
+      CameraController.shared.setEcoMode(false)
       updatePreviewRotation()
     }
   }

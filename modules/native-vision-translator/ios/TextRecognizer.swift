@@ -308,10 +308,16 @@ enum TextRecognizer {
     groups: [[String]],
     confidenceFloor: Float
   ) throws -> [Line] {
-    var fallback: [Line] = []
-    for group in groups {
-      guard let primary = group.first else {
-        continue
+    // AUTO runs the script models side by side: latency is one pass instead
+    // of four, and the energy is a short ANE burst on a single frame, far
+    // below the camera/display cost. The first group whose pass actually
+    // contains that script wins; otherwise the first non-empty result is kept.
+    let lock = NSLock()
+    var results = [[Line]?](repeating: nil, count: groups.count)
+    DispatchQueue.concurrentPerform(iterations: groups.count) { index in
+      let group = groups[index]
+      guard !group.isEmpty else {
+        return
       }
       do {
         let candidate = try runPass(
@@ -320,21 +326,28 @@ enum TextRecognizer {
           languages: group,
           confidenceFloor: confidenceFloor
         ).filter { !isUrlNoise($0.text) }
-        if candidate.isEmpty {
-          continue
-        }
-        if scriptScore(candidate, for: primary) >= 4 {
-          return candidate
-        }
-        if fallback.isEmpty {
-          fallback = candidate
-        }
+        lock.lock()
+        results[index] = candidate
+        lock.unlock()
       } catch {
         NSLog(
           "[NoirLens] OCR group pass failed (%@): %@",
-          primary,
+          group.first ?? "?",
           error.localizedDescription
         )
+      }
+    }
+
+    var fallback: [Line] = []
+    for (index, group) in groups.enumerated() {
+      guard let candidate = results[index], !candidate.isEmpty else {
+        continue
+      }
+      if scriptScore(candidate, for: group.first ?? "") >= 4 {
+        return candidate
+      }
+      if fallback.isEmpty {
+        fallback = candidate
       }
     }
     return fallback

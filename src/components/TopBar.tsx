@@ -26,7 +26,6 @@ export function TopBar({
     <View style={[styles.container, { paddingTop: insets.top + 8 }]}>
       <View style={styles.row}>
         <View style={styles.brandGroup}>
-          <View style={styles.dot} />
           <Text style={styles.brand}>NOIRLENS</Text>
         </View>
 
@@ -60,12 +59,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
     flexShrink: 1,
-  },
-  dot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: colors.success,
   },
   brand: {
     ...typography.label,

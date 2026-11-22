@@ -295,10 +295,10 @@ const styles = StyleSheet.create({
   },
   bar: {
     minHeight: 64,
-    borderRadius: 18,
+    borderRadius: 22,
     borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: 'rgba(10,10,10,0.94)',
+    borderColor: colors.borderSoft,
+    backgroundColor: 'rgba(9,9,10,0.92)',
     paddingHorizontal: 18,
     paddingVertical: 12,
     flexDirection: 'row',
@@ -309,6 +309,7 @@ const styles = StyleSheet.create({
   },
   barActive: {
     borderColor: colors.accent,
+    backgroundColor: colors.accentSoft,
   },
   barBusy: {
     opacity: 0.8,
@@ -316,8 +317,8 @@ const styles = StyleSheet.create({
   label: {
     ...typography.label,
     color: colors.foreground,
-    letterSpacing: 1.6,
-    fontSize: 16,
+    letterSpacing: 1.1,
+    fontSize: 15,
     flexShrink: 1,
   },
   labelActive: {

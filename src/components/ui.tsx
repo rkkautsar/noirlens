@@ -9,8 +9,9 @@ import {
 } from 'react-native';
 
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { useState } from 'react';
 
-import { colors, typography } from '@/theme';
+import { colors, radius, typography } from '@/theme';
 
 export type IconName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -54,17 +55,23 @@ export function ChipButton({
   active?: boolean;
   disabled?: boolean;
 }) {
+  const [focused, setFocused] = useState(false);
   const tint = active ? colors.background : colors.foreground;
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={label}
+      accessibilityState={{ disabled, selected: active }}
       disabled={disabled}
+      hitSlop={8}
+      onFocus={() => setFocused(true)}
+      onBlur={() => setFocused(false)}
       onPress={onPress}
       style={({ pressed }) => [
         styles.chip,
         iconOnly && styles.chipIconOnly,
         active && styles.chipActive,
+        focused && styles.focused,
         pressed && styles.pressed,
         disabled && styles.disabled,
       ]}
@@ -98,16 +105,22 @@ export function SolidButton({
   disabled?: boolean;
   loading?: boolean;
 }) {
+  const [focused, setFocused] = useState(false);
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={label}
+      accessibilityState={{ disabled: disabled || loading }}
       disabled={disabled || loading}
+      hitSlop={6}
+      onFocus={() => setFocused(true)}
+      onBlur={() => setFocused(false)}
       onPress={onPress}
       style={({ pressed }) => [
         styles.solid,
         primary ? styles.solidPrimary : styles.solidGhost,
         iconOnly && styles.solidIconOnly,
+        focused && styles.focused,
         pressed && styles.pressed,
         (disabled || loading) && styles.disabled,
       ]}
@@ -123,7 +136,7 @@ export function SolidButton({
             <Ionicons
               name={icon}
               size={iconOnly ? 20 : 15}
-              color={primary ? colors.background : colors.accent}
+              color={primary ? colors.background : colors.foreground}
             />
           ) : null}
           {iconOnly ? null : (
@@ -150,7 +163,7 @@ export function Badge({
   tone?: Tone;
 }) {
   return (
-    <View style={[styles.badge, { borderColor: colors[tone] }]}>
+    <View style={styles.badge}>
       <Text style={[styles.badgeText, { color: colors[tone] }]}>{label}</Text>
     </View>
   );
@@ -167,16 +180,16 @@ const styles = StyleSheet.create({
   },
   chip: {
     minHeight: 38,
-    paddingHorizontal: 12,
+    paddingHorizontal: 14,
     paddingVertical: 8,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 999,
-    backgroundColor: 'rgba(0,0,0,0.55)',
+    borderColor: colors.borderSoft,
+    borderRadius: radius.pill,
+    backgroundColor: 'transparent',
   },
   chipIconOnly: {
     width: 46,
@@ -184,7 +197,7 @@ const styles = StyleSheet.create({
     minHeight: 46,
     paddingHorizontal: 0,
     paddingVertical: 0,
-    borderRadius: 16,
+    borderRadius: radius.lg,
   },
   chipActive: {
     borderColor: colors.accent,
@@ -198,16 +211,21 @@ const styles = StyleSheet.create({
   chipTextActive: {
     color: colors.background,
   },
+  focused: {
+    borderColor: colors.focus,
+    backgroundColor: colors.surfaceRaised,
+  },
   pressed: {
-    opacity: 0.65,
+    opacity: 0.7,
+    transform: [{ scale: 0.985 }],
   },
   disabled: {
     opacity: 0.35,
   },
   solid: {
     minHeight: 48,
-    borderRadius: 12,
-    paddingHorizontal: 16,
+    borderRadius: radius.md,
+    paddingHorizontal: 18,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -216,14 +234,14 @@ const styles = StyleSheet.create({
   solidIconOnly: {
     width: 52,
     paddingHorizontal: 0,
-    borderRadius: 16,
+    borderRadius: radius.lg,
   },
   solidPrimary: {
     backgroundColor: colors.accent,
   },
   solidGhost: {
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.borderSoft,
     backgroundColor: colors.surface,
   },
   solidText: {
@@ -237,10 +255,10 @@ const styles = StyleSheet.create({
     color: colors.foreground,
   },
   badge: {
-    borderWidth: 1,
-    borderRadius: 4,
-    paddingHorizontal: 6,
-    paddingVertical: 3,
+    borderRadius: radius.sm,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    backgroundColor: colors.surfaceRaised,
   },
   badgeText: {
     ...typography.micro,
@@ -248,6 +266,6 @@ const styles = StyleSheet.create({
   },
   hairline: {
     height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.border,
+    backgroundColor: colors.borderSoft,
   },
 });

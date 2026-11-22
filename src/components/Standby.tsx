@@ -114,14 +114,15 @@ const styles = StyleSheet.create({
     ...typography.result,
     color: colors.foreground,
     textAlign: 'center',
-    letterSpacing: 3,
-    marginTop: 8,
+    letterSpacing: 1.2,
+    marginTop: 6,
   },
   subheading: {
     ...typography.body,
     color: colors.muted,
     textAlign: 'center',
-    maxWidth: 280,
+    maxWidth: 300,
+    lineHeight: 23,
   },
   primaryAction: {
     alignSelf: 'stretch',
@@ -131,11 +132,9 @@ const styles = StyleSheet.create({
   },
   errorCard: {
     marginHorizontal: 16,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 14,
-    padding: 16,
-    backgroundColor: colors.surface,
+    borderRadius: 18,
+    padding: 18,
+    backgroundColor: colors.surfaceRaised,
     gap: 10,
   },
   errorKicker: {

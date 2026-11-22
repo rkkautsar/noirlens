@@ -37,10 +37,9 @@ export function TopBar({
 
 const styles = StyleSheet.create({
   container: {
-    paddingHorizontal: 16,
-    paddingBottom: 10,
+    paddingHorizontal: 18,
+    paddingBottom: 12,
     gap: 10,
-    backgroundColor: 'rgba(0,0,0,0.72)',
   },
   row: {
     flexDirection: 'row',
@@ -57,7 +56,7 @@ const styles = StyleSheet.create({
   brand: {
     ...typography.label,
     color: colors.foreground,
-    letterSpacing: 2.4,
+    letterSpacing: 3,
   },
   actions: {
     flexDirection: 'row',

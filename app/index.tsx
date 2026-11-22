@@ -93,48 +93,45 @@ export default function ScannerScreen() {
     >
       <EcoCameraView style={StyleSheet.absoluteFill} ecoMode={ecoMode} />
 
+      <Standby
+        hidden={active}
+        remaining={snapshot.remainingToday}
+        error={snapshot.error}
+        onOpenLanguages={openLanguages}
+        onOpenPaywall={openPaywall}
+        onDismissError={scanner.dismissError}
+      />
+      {active ? (
+        <AimHud
+          scanning={state === 'SCANNING'}
+          error={snapshot.error}
+          onReticleFrame={scanner.setReticleFrame}
+        />
+      ) : null}
       {locked ? (
         <ResultSheet onDismiss={scanner.stop}>
-            {showOriginal ? (
-              <OriginalView
-                result={result}
-                onClose={() => {
-                  setShowOriginal(false);
-                }}
-                onScanAgain={scanner.scanAgain}
-              />
-            ) : (
-              <ResultCard
-                result={result}
-                remaining={snapshot.remainingToday}
-                unlimited={snapshot.unlimited}
-                onScanAgain={scanner.scanAgain}
-                onShowOriginal={() => {
-                  setShowOriginal(true);
-                }}
-                onOpenLanguages={openLanguages}
-              />
-            )}
-          </ResultSheet>
-      ) : (
-        <>
-          <Standby
-            hidden={active}
-            remaining={snapshot.remainingToday}
-            error={snapshot.error}
-            onOpenLanguages={openLanguages}
-            onOpenPaywall={openPaywall}
-            onDismissError={scanner.dismissError}
-          />
-          {active ? (
-            <AimHud
-              scanning={state === 'SCANNING'}
-              error={snapshot.error}
-              onReticleFrame={scanner.setReticleFrame}
+          {showOriginal ? (
+            <OriginalView
+              result={result}
+              onClose={() => {
+                setShowOriginal(false);
+              }}
+              onScanAgain={scanner.scanAgain}
             />
-          ) : null}
-        </>
-      )}
+          ) : (
+            <ResultCard
+              result={result}
+              remaining={snapshot.remainingToday}
+              unlimited={snapshot.unlimited}
+              onScanAgain={scanner.scanAgain}
+              onShowOriginal={() => {
+                setShowOriginal(true);
+              }}
+              onOpenLanguages={openLanguages}
+            />
+          )}
+        </ResultSheet>
+      ) : null}
 
       {!exhausted ? (
         <ScanShutter

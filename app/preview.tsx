@@ -97,6 +97,15 @@ export default function PreviewScreen() {
   return (
     <View style={styles.page}>
       <View style={styles.phone}>
+        <Standby
+          hidden={mode === 'aim'}
+          remaining={15}
+          error={null}
+          onOpenLanguages={noop}
+          onOpenPaywall={noop}
+          onDismissError={noop}
+        />
+        {mode === 'aim' ? <AimHud scanning={scanning} error={null} /> : null}
         {showResult ? (
           <ResultSheet
             onDismiss={() => {
@@ -128,21 +137,7 @@ export default function PreviewScreen() {
               />
             )}
           </ResultSheet>
-        ) : (
-          <>
-            <Standby
-              hidden={mode === 'aim'}
-              remaining={15}
-              error={null}
-              onOpenLanguages={noop}
-              onOpenPaywall={noop}
-              onDismissError={noop}
-            />
-            {mode === 'aim' ? (
-              <AimHud scanning={scanning} error={null} />
-            ) : null}
-          </>
-        )}
+        ) : null}
 
         <ScanShutter
           active={pressing}

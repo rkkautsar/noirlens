@@ -182,6 +182,11 @@ export function ResultCard({
             onPress={onScanAgain}
           />
         )}
+        <ChipButton
+          label="LANGUAGE"
+          icon="language-outline"
+          onPress={onOpenLanguages}
+        />
         <SolidButton
           label={primaryLabel}
           icon={primaryIcon}

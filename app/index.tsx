@@ -1,6 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -37,6 +37,19 @@ export default function ScannerScreen() {
   const active = state === 'PREWARM' || state === 'SCANNING';
   const locked = state === 'LOCKED_READ' && result !== null;
   const exhausted = snapshot.remainingToday === 0;
+
+  const lastSourceRef = useRef(source.code);
+  useEffect(() => {
+    if (!locked) {
+      lastSourceRef.current = source.code;
+      return;
+    }
+    if (lastSourceRef.current === source.code) {
+      return;
+    }
+    lastSourceRef.current = source.code;
+    void scanner.rescan(source.code);
+  }, [locked, source.code, scanner]);
 
   useEffect(() => {
     let cancelled = false;
@@ -120,6 +133,7 @@ export default function ScannerScreen() {
                 setShowOriginal(false);
               }}
               onScanAgain={scanner.scanAgain}
+              onOpenLanguages={openLanguages}
             />
           ) : (
             <ResultCard

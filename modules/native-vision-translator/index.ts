@@ -62,6 +62,7 @@ export interface NativeVisionTranslatorModule extends NativeModule {
   startCamera(): Promise<void>;
   stopCamera(): Promise<void>;
   setTorch(enabled: boolean): Promise<void>;
+  recognizeLast(language: string): Promise<OcrPayload>;
   getCameraStatus(): Promise<CameraStatus>;
   captureFrame(sourceLanguage: string, crop?: OcrCrop): Promise<OcrPayload>;
   translate(params: {
@@ -77,6 +78,9 @@ const webMock = {
   startCamera: async () => {},
   stopCamera: async () => {},
   setTorch: async () => {},
+  recognizeLast: async () => {
+    throw new Error('Camera is not available in the web preview.');
+  },
   getCameraStatus: async () => ({
     authorized: false,
     running: false,

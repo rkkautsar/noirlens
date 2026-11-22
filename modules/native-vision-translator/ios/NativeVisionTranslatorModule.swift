@@ -34,6 +34,10 @@ public final class NativeVisionTranslatorModule: Module {
       CameraController.shared.setTorch(enabled)
     }
 
+    AsyncFunction("recognizeLast") { (language: String) throws -> [String: Any] in
+      try CameraController.shared.recognizeLast(language: language)
+    }
+
     AsyncFunction("getCameraStatus") { () async -> [String: Any] in
       await CameraController.shared.status()
     }

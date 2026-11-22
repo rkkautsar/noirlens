@@ -15,16 +15,18 @@ import vision from '../../modules/native-vision-translator';
 import { imageFitRect, mapBlockRect } from '@/scanner/geometry';
 import type { ScanResult } from '@/scanner/machine';
 import { colors, typography } from '@/theme';
-import { MicroLabel, SolidButton } from './ui';
+import { ChipButton, MicroLabel, SolidButton } from './ui';
 
 export function OriginalView({
   result,
   onClose,
   onScanAgain,
+  onOpenLanguages,
 }: {
   result: ScanResult;
   onClose: () => void;
   onScanAgain: () => void;
+  onOpenLanguages: () => void;
 }) {
   const insets = useSafeAreaInsets();
   const [stage, setStage] = useState({ width: 0, height: 0 });
@@ -186,6 +188,11 @@ export function OriginalView({
             icon="chevron-back"
             iconOnly
             onPress={onClose}
+          />
+          <ChipButton
+            label="LANGUAGE"
+            icon="language-outline"
+            onPress={onOpenLanguages}
           />
           <SolidButton
             label="SCAN AGAIN"

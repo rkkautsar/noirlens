@@ -37,6 +37,7 @@ export interface ScannerController {
   captureNow: () => void;
   stop: () => void;
   dismissError: () => void;
+  rescan: (language: string) => Promise<void>;
 }
 
 export function useScanner(): ScannerController {
@@ -529,6 +530,49 @@ export function useScanner(): ScannerController {
     store.send({ type: 'DISMISS_ERROR', timestampMs: Date.now() });
   }, [store]);
 
+  const rescan = useCallback(
+    async (language: string) => {
+      try {
+        const hint = language === 'auto' ? '' : language;
+        const ocr = await vision.recognizeLast(hint);
+        const resolvedLanguage =
+          ocr.sourceLanguage || (language === 'auto' ? 'und' : language);
+        const base = {
+          sourceText: ocr.text,
+          sourceLanguage: resolvedLanguage,
+          sourceHash: ocr.sourceHash,
+          blocks: ocr.blocks,
+          imageWidth: ocr.imageWidth,
+          imageHeight: ocr.imageHeight,
+          ...(ocr.previewJpegBase64
+            ? { previewJpegBase64: ocr.previewJpegBase64 }
+            : {}),
+        };
+        let translatedText = '';
+        let kind: 'translated' | 'english' | 'pack_missing' = 'translated';
+        let cached = false;
+        try {
+          const out = await vision.translate({
+            text: ocr.text,
+            sourceLanguage: resolvedLanguage,
+          });
+          translatedText = out.translatedText;
+          cached = out.cached;
+        } catch (error) {
+          kind = isLanguagePackFailure(error) ? 'pack_missing' : 'english';
+        }
+        store.send({
+          type: 'RESULT_REPLACED',
+          result: { ...base, kind, translatedText, cached },
+          timestampMs: Date.now(),
+        });
+      } catch {
+        // The frozen frame is gone; keep the current result.
+      }
+    },
+    [store],
+  );
+
   return {
     snapshot,
     beginHold,
@@ -537,5 +581,6 @@ export function useScanner(): ScannerController {
     captureNow,
     stop,
     dismissError,
+    rescan,
   };
 }

@@ -59,6 +59,7 @@ final class CameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDele
   private var startGeneration = 0
   private var wantsCamera = false
   private var torchEnabled = false
+  private var lastCapture: (buffer: CVPixelBuffer, crop: CGRect?, jpeg: String?)?
 
   private override init() {
     super.init()
@@ -349,13 +350,37 @@ final class CameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDele
     }
 
     let cropRect = imageCropRect(for: crop, pixelBuffer: pixelBuffer)
+    let jpeg = makePreviewJPEG(pixelBuffer: pixelBuffer, cropRect: cropRect)
+    stateLock.lock()
+    lastCapture = (pixelBuffer, cropRect, jpeg)
+    stateLock.unlock()
     // The frame is retained; power the sensor down before JPEG/OCR/translation
     // so the camera is not streaming after the user released.
     session.stopRunning()
     return CapturedFrame(
       sampleBuffer: sampleBuffer,
-      previewJpegBase64: makePreviewJPEG(pixelBuffer: pixelBuffer, cropRect: cropRect),
+      previewJpegBase64: jpeg,
       cropRect: cropRect
+    )
+  }
+
+  /// Re-run OCR on the frozen frame with a user-chosen source language.
+  func recognizeLast(language: String) throws -> [String: Any] {
+    stateLock.lock()
+    let capture = lastCapture
+    stateLock.unlock()
+    guard let capture else {
+      throw cameraException(
+        name: "NoFrame",
+        description: "No captured frame is available to re-read.",
+        code: "ERR_NO_FRAME"
+      )
+    }
+    return try TextRecognizer.recognize(
+      pixelBuffer: capture.buffer,
+      previewJpegBase64: capture.jpeg,
+      languageHint: language,
+      cropRect: capture.crop
     )
   }
 

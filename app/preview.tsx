@@ -121,6 +121,7 @@ export default function PreviewScreen() {
                 onScanAgain={() => {
                   setMode('standby');
                 }}
+                onOpenLanguages={noop}
               />
             ) : (
               <ResultCard

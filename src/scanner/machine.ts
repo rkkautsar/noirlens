@@ -191,6 +191,7 @@ export type ScannerEvent =
   | { type: 'CAMERA_SETTLED'; settled: boolean; timestampMs: number }
   | { type: 'CAMERA_FAILED'; error: ScanError; timestampMs: number }
   | { type: 'CAPTURE_SUCCEEDED'; result: ScanResult; timestampMs: number }
+  | { type: 'RESULT_REPLACED'; result: ScanResult; timestampMs: number }
   | { type: 'CAPTURE_FAILED'; error: ScanError; timestampMs: number }
   | { type: 'WAKE'; timestampMs: number }
   | { type: 'SCAN_AGAIN'; timestampMs: number }
@@ -825,6 +826,24 @@ export function reduceScanner(
           { clearResult: true },
           event.timestampMs,
         ),
+        effects,
+      };
+    }
+
+    case 'RESULT_REPLACED': {
+      if (context.state !== 'LOCKED_READ') {
+        return {
+          context: { ...context, nowMs: event.timestampMs },
+          effects,
+        };
+      }
+      return {
+        context: {
+          ...context,
+          result: event.result,
+          error: null,
+          nowMs: event.timestampMs,
+        },
         effects,
       };
     }

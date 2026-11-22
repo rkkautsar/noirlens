@@ -353,7 +353,7 @@ enum TextRecognizer {
         confidenceFloor: confidenceFloor
       ).filter({ !isUrlNoise($0.text) }),
         !candidate.isEmpty,
-        lineArea(candidate) >= 0.0015 {
+        candidate.contains { $0.text.count >= 4 && $0.box.height >= 0.02 } {
         return candidate
       }
     }

@@ -66,42 +66,61 @@ enum TextRecognizer {
     let forced = !hint.isEmpty
     let preferred = supportedPreferredLanguages()
     let english = preferred.first { $0.lowercased().hasPrefix("en") }
-    let traveler = preferred.filter { !$0.lowercased().hasPrefix("en") }
-    // AUTO keeps English available for the English-only notice but puts it
-    // last, so a watermark cannot outrank the actual traveler script.
-    let autoLanguages = english.map { traveler + [$0] } ?? traveler
-    let languages = forced
+    // Vision runs ONE recognition model per request, chosen by the first
+    // language. A single list therefore silently drops every script whose
+    // model is not first (Korean under the Thai/CJK/Latin model, etc.).
+    // AUTO must try each script group with its own model first.
+    let autoGroups = scriptGroups(preferred: preferred, english: english)
+    let forcedLanguagesList = forced
       ? forcedLanguages(hint: hint, preferred: preferred)
-      : autoLanguages
+      : []
     // Small foreign print is often below the conservative auto floor. When
     // the user has explicitly chosen the source language, keep it.
     let confidenceFloor: Float = forced ? 0.35 : 0.40
 
     var lines: [Line] = []
-    if !languages.isEmpty {
+    if forced, !forcedLanguagesList.isEmpty {
       do {
         lines = try runPass(
           image,
           automatic: false,
-          languages: languages,
+          languages: forcedLanguagesList,
           confidenceFloor: confidenceFloor
         ).filter { !isUrlNoise($0.text) }
       } catch {
-        NSLog("[NoirLens] OCR explicit pass failed: %@", error.localizedDescription)
+        NSLog("[NoirLens] OCR forced pass failed: %@", error.localizedDescription)
       }
+      // A forced hint that reads nothing in its own script (e.g. German
+      // selected at a Korean bottle) must not hide the sign.
+      if scriptScore(lines, for: forcedLanguagesList.first ?? "") < 4 {
+        lines = try autoPasses(
+          image,
+          groups: autoGroups,
+          confidenceFloor: confidenceFloor
+        )
+      }
+    } else {
+      lines = try autoPasses(
+        image,
+        groups: autoGroups,
+        confidenceFloor: confidenceFloor
+      )
     }
 
     if lines.isEmpty {
-      // The reticle crop can miss small, low-contrast print. Retry the full
-      // upright frame with a grayscale/contrast upscale before auto mode.
+      // The reticle crop can miss small, low-contrast print. Retry the same
+      // crop with a grayscale/contrast upscale before auto mode.
+      let retryLanguages = forced && !forcedLanguagesList.isEmpty
+        ? forcedLanguagesList
+        : (autoGroups.first ?? [])
       do {
-        if !languages.isEmpty,
+        if !retryLanguages.isEmpty,
            let enhanced = enhancedImage(cropped),
            let enhancedCG = ciContext.createCGImage(enhanced, from: enhanced.extent) {
           lines = try runPass(
             enhancedCG,
             automatic: false,
-            languages: languages,
+            languages: retryLanguages,
             confidenceFloor: confidenceFloor
           ).filter { !isUrlNoise($0.text) }
         }
@@ -243,6 +262,84 @@ enum TextRecognizer {
 
   /// A forced source language must also lead OCR, not only label the result.
   /// English is kept as a secondary model for embedded Latin text.
+  private static func scriptGroups(
+    preferred: [String],
+    english: String?
+  ) -> [[String]] {
+    let en = english.map { [$0] } ?? []
+    let groups: [[String]] = [
+      ["ko-KR"] + en,
+      ["ja-JP", "zh-Hans", "zh-Hant"] + en,
+      ["th-TH"] + en,
+      ["de-DE", "fr-FR", "es-ES", "vi-VN", "id-ID"] + en,
+    ]
+    return groups
+      .map { group in group.filter { preferred.contains($0) } }
+      .filter { !$0.isEmpty }
+  }
+
+  /// Number of characters in the script of `language`, used to reject a pass
+  /// that only read incidental Latin text (a model that drops the sign's
+  /// actual script).
+  private static func scriptScore(_ lines: [Line], for language: String) -> Int {
+    let prefix = String(language.lowercased().prefix(2))
+    let ranges: [ClosedRange<UInt32>]
+    switch prefix {
+    case "ko":
+      ranges = [0xAC00...0xD7AF, 0x1100...0x11FF, 0x3130...0x318F]
+    case "ja":
+      ranges = [0x3040...0x30FF, 0x4E00...0x9FFF]
+    case "zh":
+      ranges = [0x4E00...0x9FFF, 0x3400...0x4DBF]
+    case "th":
+      ranges = [0x0E00...0x0E7F]
+    default:
+      ranges = [0x0041...0x024F]
+    }
+    return lines.reduce(0) { total, line in
+      total + line.text.unicodeScalars.reduce(0) { sum, scalar in
+        ranges.contains { $0.contains(scalar.value) } ? sum + 1 : sum
+      }
+    }
+  }
+
+  private static func autoPasses(
+    _ image: CGImage,
+    groups: [[String]],
+    confidenceFloor: Float
+  ) throws -> [Line] {
+    var fallback: [Line] = []
+    for group in groups {
+      guard let primary = group.first else {
+        continue
+      }
+      do {
+        let candidate = try runPass(
+          image,
+          automatic: false,
+          languages: group,
+          confidenceFloor: confidenceFloor
+        ).filter { !isUrlNoise($0.text) }
+        if candidate.isEmpty {
+          continue
+        }
+        if scriptScore(candidate, for: primary) >= 4 {
+          return candidate
+        }
+        if fallback.isEmpty {
+          fallback = candidate
+        }
+      } catch {
+        NSLog(
+          "[NoirLens] OCR group pass failed (%@): %@",
+          primary,
+          error.localizedDescription
+        )
+      }
+    }
+    return fallback
+  }
+
   private static func forcedLanguages(hint: String, preferred: [String]) -> [String] {
     let normalized = hint.lowercased()
     let prefix = normalized.contains("-")

@@ -94,7 +94,7 @@ export default function ScannerScreen() {
       <EcoCameraView style={StyleSheet.absoluteFill} ecoMode={ecoMode} />
 
       {locked ? (
-        <ResultSheet onDismiss={scanner.scanAgain}>
+        <ResultSheet onDismiss={scanner.stop}>
             {showOriginal ? (
               <OriginalView
                 result={result}

@@ -30,9 +30,13 @@ export function ResultSheet({
       onMoveShouldSetPanResponder: (_, gesture) =>
         gesture.dy > 6 && Math.abs(gesture.dy) > Math.abs(gesture.dx),
       onPanResponderMove: (_, gesture) => {
-        if (gesture.dy > 0) {
-          translateY.setValue(gesture.dy);
-        }
+        translateY.setValue(Math.max(0, gesture.dy));
+      },
+      onPanResponderTerminate: () => {
+        Animated.spring(translateY, {
+          toValue: 0,
+          useNativeDriver: false,
+        }).start();
       },
       onPanResponderRelease: (_, gesture) => {
         if (gesture.dy > 110 || gesture.vy > 0.8) {

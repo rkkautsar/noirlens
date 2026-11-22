@@ -151,9 +151,13 @@ export default function PreviewScreen() {
           onStart={start}
           onCapture={capture}
           onCancel={() => {
+            setPressing(false);
+            setScanning(false);
             setMode('standby');
           }}
           onLanguages={() => {
+            setPressing(false);
+            setScanning(false);
             router.push('/languages');
           }}
         />
@@ -185,7 +189,7 @@ export default function PreviewScreen() {
             accessibilityRole="button"
             accessibilityLabel="Recent scans"
             onPress={() => {
-              router.push('/history');
+              router.push('/history?demo=1');
             }}
             style={({ pressed }) => [
               styles.historyButton,

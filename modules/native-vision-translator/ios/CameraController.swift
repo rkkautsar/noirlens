@@ -25,7 +25,16 @@ struct CapturedFrame {
 final class CameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, @unchecked Sendable {
   static let shared = CameraController()
 
-  var session = AVCaptureSession()
+  private var _session = AVCaptureSession()
+  private let sessionLock = NSLock()
+
+  var session: AVCaptureSession {
+    sessionLock.lock()
+    defer { sessionLock.unlock() }
+    return _session
+  }
+
+  func currentSession() -> AVCaptureSession { session }
 
   private let sessionQueue = DispatchQueue(label: "app.noirlens.camera.session")
   private let videoQueue = DispatchQueue(
@@ -105,11 +114,16 @@ final class CameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDele
   /// Replaces the capture session when it is unrecoverable. The preview layer
   /// must be re-pointed at the new session on the main thread.
   private func rebuildSession() {
-    if session.isRunning {
-      session.stopRunning()
+    sessionLock.lock()
+    let old = _session
+    sessionLock.unlock()
+    if old.isRunning {
+      old.stopRunning()
     }
     let next = AVCaptureSession()
-    session = next
+    sessionLock.lock()
+    _session = next
+    sessionLock.unlock()
     configured = false
     device = nil
     videoOutput = nil

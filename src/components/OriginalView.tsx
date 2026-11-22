@@ -8,6 +8,7 @@ import {
   View,
   type GestureResponderEvent,
 } from 'react-native';
+import { Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { imageFitRect, mapBlockRect } from '@/scanner/geometry';
@@ -41,14 +42,35 @@ export function OriginalView({
     if (!uri || stage.width <= 0) {
       return;
     }
-    const { locationX, locationY } = event.nativeEvent;
+    const native = event.nativeEvent as unknown as {
+      locationX: number;
+      locationY: number;
+      clientX?: number;
+      clientY?: number;
+    };
+    let x = native.locationX;
+    let y = native.locationY;
+    if (Platform.OS === 'web') {
+      const target = event.currentTarget as unknown as {
+        getBoundingClientRect?: () => { left: number; top: number };
+      };
+      const rect = target.getBoundingClientRect?.();
+      if (
+        rect &&
+        native.clientX !== undefined &&
+        native.clientY !== undefined
+      ) {
+        x = native.clientX - rect.left;
+        y = native.clientY - rect.top;
+      }
+    }
     let best = -1;
     let bestDistance = Number.POSITIVE_INFINITY;
     result.blocks.forEach((block, index) => {
       const rect = mapBlockRect(block, imageRect);
       const distance = Math.hypot(
-        rect.x + rect.width / 2 - locationX,
-        rect.y + rect.height / 2 - locationY,
+        rect.x + rect.width / 2 - x,
+        rect.y + rect.height / 2 - y,
       );
       if (distance < bestDistance) {
         bestDistance = distance;

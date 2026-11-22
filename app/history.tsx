@@ -1,9 +1,8 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Clipboard from 'expo-clipboard';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -63,23 +62,18 @@ function formatTime(at: number): string {
 export default function HistoryScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const params = useLocalSearchParams<{ demo?: string }>();
+  const demo = params.demo === '1';
   const [entries, setEntries] = useState<ScanHistoryEntry[]>([]);
   const [copied, setCopied] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let active = true;
-    const timeout = new Promise<ScanHistoryEntry[]>((resolve) => {
-      setTimeout(() => {
-        resolve([]);
-      }, 700);
-    });
-    void Promise.race([readScanHistory(), timeout])
+    void readScanHistory()
       .then((rows) => {
         if (active) {
-          setEntries(
-            rows.length === 0 && Platform.OS === 'web' ? MOCK_HISTORY : rows,
-          );
+          setEntries(rows.length === 0 && demo ? MOCK_HISTORY : rows);
         }
       })
       .finally(() => {
@@ -90,7 +84,7 @@ export default function HistoryScreen() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [demo]);
 
   const copy = async (entry: ScanHistoryEntry) => {
     await Clipboard.setStringAsync(entry.translatedText || entry.sourceText);

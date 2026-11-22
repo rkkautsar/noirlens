@@ -24,7 +24,7 @@ class EcoCameraView: ExpoView {
   }
 
   required init(appContext: AppContext? = nil) {
-    previewLayer = AVCaptureVideoPreviewLayer(session: CameraController.shared.session)
+    previewLayer = AVCaptureVideoPreviewLayer(session: CameraController.shared.currentSession())
     super.init(appContext: appContext)
 
     backgroundColor = .black

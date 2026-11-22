@@ -100,13 +100,11 @@ const webMock = {
   checkLanguagePackStatus: async (language: string) => ({
     language,
     targetLanguage: 'en',
-    status: 'supported' as const,
+    status: 'unsupported' as const,
   }),
-  prepareLanguagePack: async (language: string) => ({
-    language,
-    targetLanguage: 'en',
-    status: 'supported' as const,
-  }),
+  prepareLanguagePack: async () => {
+    throw new Error('Language packs are unavailable in the web preview.');
+  },
   getSupportedLanguages: async () => [],
 } as unknown as NativeVisionTranslatorModule;
 

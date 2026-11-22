@@ -30,6 +30,7 @@ export default function RootLayout() {
           options={{
             presentation: 'transparentModal',
             animation: 'fade',
+            contentStyle: { backgroundColor: 'transparent' },
           }}
         />
         <Stack.Screen
@@ -37,6 +38,7 @@ export default function RootLayout() {
           options={{
             presentation: 'transparentModal',
             animation: 'fade',
+            contentStyle: { backgroundColor: 'transparent' },
           }}
         />
         <Stack.Screen

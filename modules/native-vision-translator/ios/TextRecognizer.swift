@@ -93,14 +93,14 @@ enum TextRecognizer {
       // A forced hint that reads nothing in its own script (e.g. German
       // selected at a Korean bottle) must not hide the sign.
       if scriptScore(lines, for: forcedLanguagesList.first ?? "") < 4 {
-        lines = try autoPasses(
+        lines = try autoWithSticky(
           image,
           groups: autoGroups,
           confidenceFloor: confidenceFloor
         )
       }
     } else {
-      lines = try autoPasses(
+      lines = try autoWithSticky(
         image,
         groups: autoGroups,
         confidenceFloor: confidenceFloor
@@ -319,11 +319,63 @@ enum TextRecognizer {
     }
   }
 
-  private static func autoPasses(
+  private static let stickyLock = NSLock()
+  private static var lastScriptPrimary: String?
+
+  private static func lineArea(_ lines: [Line]) -> CGFloat {
+    lines.reduce(0) { total, line in
+      total + line.box.width * line.box.height
+    }
+  }
+
+  /// The last script that produced a scan is the most likely one for the next
+  /// scan (same restaurant, same sign). Try it alone first; only fan out to
+  /// every model when it cannot cover the frame.
+  private static func autoWithSticky(
     _ image: CGImage,
     groups: [[String]],
     confidenceFloor: Float
   ) throws -> [Line] {
+    stickyLock.lock()
+    let sticky = lastScriptPrimary
+    stickyLock.unlock()
+
+    if let sticky,
+       let group = groups.first(where: {
+         ($0.first ?? "").lowercased().hasPrefix(
+           String(sticky.lowercased().prefix(2))
+         )
+       }) {
+      if let candidate = try? runPass(
+        image,
+        automatic: false,
+        languages: group,
+        confidenceFloor: confidenceFloor
+      ).filter({ !isUrlNoise($0.text) }),
+        !candidate.isEmpty,
+        lineArea(candidate) >= 0.0015 {
+        return candidate
+      }
+    }
+
+    let (lines, primary) = try autoPasses(
+      image,
+      groups: groups,
+      confidenceFloor: confidenceFloor
+    )
+    if let primary {
+      stickyLock.lock()
+      lastScriptPrimary = primary
+      stickyLock.unlock()
+    }
+    return lines
+  }
+
+  private static func autoPasses(
+    _ image: CGImage,
+    groups: [[String]],
+    confidenceFloor: Float
+  ) throws -> ([Line], String?) {
     // AUTO runs the script models side by side: latency is one pass instead
     // of four, and the energy is a short ANE burst on a single frame, far
     // below the camera/display cost. The first group whose pass actually
@@ -354,40 +406,22 @@ enum TextRecognizer {
       }
     }
 
-    let nonLatin = ["ko", "ja", "zh", "th", "ru", "uk", "ar"]
-    var bestNonLatin: (score: Int, lines: [Line])?
-    var bestLatin: (score: Int, lines: [Line])?
-    var fallback: [Line] = []
-
+    // The pass covering the most pixel area is the actual sign; a tiny
+    // footnote or sticker can no longer outrank the large text.
+    var best: (area: CGFloat, primary: String, lines: [Line])?
     for (index, group) in groups.enumerated() {
       guard let candidate = results[index], !candidate.isEmpty else {
         continue
       }
-      if fallback.isEmpty {
-        fallback = candidate
-      }
-      let primary = group.first ?? ""
-      let score = scriptScore(candidate, for: primary)
-      let prefix = String(primary.lowercased().prefix(2))
-      if nonLatin.contains(prefix) {
-        // A foreign sign that happens to carry Latin branding must not lose
-        // to the Latin fragment: any real foreign-script read wins.
-        if score >= 2, bestNonLatin == nil || score > bestNonLatin!.score {
-          bestNonLatin = (score, candidate)
-        }
-      } else if score >= 4 {
-        if bestLatin == nil || score > bestLatin!.score {
-          bestLatin = (score, candidate)
-        }
+      let area = lineArea(candidate)
+      if best == nil || area > best!.area {
+        best = (area, group.first ?? "", candidate)
       }
     }
-    if let bestNonLatin {
-      return bestNonLatin.lines
+    guard let best else {
+      return ([], nil)
     }
-    if let bestLatin {
-      return bestLatin.lines
-    }
-    return fallback
+    return (best.lines, best.primary)
   }
 
   private static func forcedLanguages(hint: String, preferred: [String]) -> [String] {

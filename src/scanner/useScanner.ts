@@ -21,6 +21,7 @@ import {
   isLanguagePackFailure,
 } from '@/services/nativeErrors';
 import { readScanCount, writeScanCount } from '@/services/scanLedger';
+import { addScanHistory } from '@/services/scanHistory';
 import { sourceLanguage } from '@/services/sourceLanguage';
 import {
   readCachedTranslation,
@@ -185,6 +186,14 @@ export function useScanner(): ScannerController {
             result: { ...base, sourceLanguage, kind, translatedText, cached },
             timestampMs: Date.now(),
           });
+          if (kind !== 'pack_missing') {
+            void addScanHistory({
+              sourceLanguage,
+              sourceText: base.sourceText,
+              translatedText,
+              kind: kind === 'english' ? 'english' : 'translated',
+            }).catch(() => {});
+          }
         };
 
         // AUTO must never claim English as the source language. Show the

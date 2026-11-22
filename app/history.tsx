@@ -1,0 +1,212 @@
+import Ionicons from '@expo/vector-icons/Ionicons';
+import * as Clipboard from 'expo-clipboard';
+import { useRouter } from 'expo-router';
+import { useEffect, useState } from 'react';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+import { SheetHeader } from '@/components/SheetHeader';
+import { ChipButton, MicroLabel } from '@/components/ui';
+import { languageLabel } from '@/constants/languages';
+import {
+  clearScanHistory,
+  readScanHistory,
+  type ScanHistoryEntry,
+} from '@/services/scanHistory';
+import { colors, typography } from '@/theme';
+
+function formatTime(at: number): string {
+  return new Date(at).toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+export default function HistoryScreen() {
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const [entries, setEntries] = useState<ScanHistoryEntry[]>([]);
+  const [copied, setCopied] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    void readScanHistory()
+      .then((rows) => {
+        if (active) {
+          setEntries(rows);
+        }
+      })
+      .finally(() => {
+        if (active) {
+          setLoading(false);
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const copy = async (entry: ScanHistoryEntry) => {
+    await Clipboard.setStringAsync(entry.translatedText || entry.sourceText);
+    setCopied(entry.id);
+    setTimeout(() => {
+      setCopied((current) => (current === entry.id ? null : current));
+    }, 1200);
+  };
+
+  const clear = async () => {
+    await clearScanHistory();
+    setEntries([]);
+  };
+
+  return (
+    <View style={styles.container}>
+      <SheetHeader
+        title="RECENT SCANS"
+        subtitle="LAST 50 · ON-DEVICE"
+        onClose={() => {
+          router.back();
+        }}
+      />
+
+      <ScrollView
+        contentContainerStyle={[
+          styles.content,
+          { paddingBottom: insets.bottom + 28 },
+        ]}
+      >
+        {loading ? (
+          <MicroLabel tone="dim">LOADING…</MicroLabel>
+        ) : entries.length === 0 ? (
+          <View style={styles.empty}>
+            <MicroLabel tone="dim">NO RECENT SCANS</MicroLabel>
+            <Text style={styles.emptyText}>
+              Hold to scan a sign. Finished scans appear here.
+            </Text>
+          </View>
+        ) : (
+          <>
+            <View style={styles.listHeader}>
+              <MicroLabel tone="dim">
+                {entries.length} SCAN{entries.length === 1 ? '' : 'S'}
+              </MicroLabel>
+              <ChipButton
+                label="CLEAR"
+                icon="trash-outline"
+                onPress={() => {
+                  void clear();
+                }}
+              />
+            </View>
+
+            {entries.map((entry) => {
+              const isCopied = copied === entry.id;
+              return (
+                <Pressable
+                  key={entry.id}
+                  accessibilityRole="button"
+                  accessibilityLabel="Copy scan result"
+                  onPress={() => {
+                    void copy(entry);
+                  }}
+                  style={({ pressed }) => [
+                    styles.entry,
+                    pressed && styles.pressed,
+                  ]}
+                >
+                  <View style={styles.entryTop}>
+                    <MicroLabel
+                      tone={entry.kind === 'translated' ? 'accent' : 'dim'}
+                    >
+                      {entry.kind === 'translated'
+                        ? `${languageLabel(entry.sourceLanguage)} → ENGLISH`
+                        : entry.sourceLanguage === 'und'
+                          ? 'NO LANGUAGE DETECTED'
+                          : 'ENGLISH'}
+                    </MicroLabel>
+                    <MicroLabel tone="dim">{formatTime(entry.at)}</MicroLabel>
+                  </View>
+                  <Text style={styles.entryText} numberOfLines={3} selectable>
+                    {entry.translatedText || entry.sourceText}
+                  </Text>
+                  {entry.translatedText ? (
+                    <Text style={styles.entrySource} numberOfLines={1}>
+                      {entry.sourceText}
+                    </Text>
+                  ) : null}
+                  <Ionicons
+                    name={isCopied ? 'checkmark' : 'copy-outline'}
+                    size={15}
+                    color={isCopied ? colors.success : colors.muted}
+                    style={styles.copyIcon}
+                  />
+                </Pressable>
+              );
+            })}
+          </>
+        )}
+      </ScrollView>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
+  content: {
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    gap: 12,
+  },
+  empty: {
+    marginTop: 40,
+    gap: 8,
+  },
+  emptyText: {
+    ...typography.body,
+    color: colors.muted,
+  },
+  listHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
+  entry: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 14,
+    backgroundColor: colors.surface,
+    padding: 14,
+    gap: 8,
+  },
+  pressed: {
+    opacity: 0.7,
+  },
+  entryTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    paddingRight: 20,
+  },
+  entryText: {
+    ...typography.body,
+    color: colors.foreground,
+  },
+  entrySource: {
+    ...typography.body,
+    fontSize: 13,
+    color: colors.muted,
+  },
+  copyIcon: {
+    position: 'absolute',
+    right: 14,
+    bottom: 14,
+  },
+});

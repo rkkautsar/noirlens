@@ -163,35 +163,54 @@ export default function ScannerScreen() {
       ) : null}
 
       {!exhausted && !locked ? (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={
-            source.code === 'auto'
-              ? 'Source language: Auto. Open language settings.'
-              : `Source language: ${languageShortLabel(source.code)}. Open language settings.`
-          }
-          onPress={openLanguages}
-          style={({ pressed }) => [
-            styles.sourceButton,
-            { bottom: insets.bottom + 92 },
-            source.code === 'auto' && styles.sourceButtonAuto,
-            pressed && styles.sourceButtonPressed,
-          ]}
-        >
-          <Ionicons
-            name="language-outline"
-            size={14}
-            color={source.code === 'auto' ? colors.accent : colors.foreground}
-          />
-          <Text
-            style={[
-              styles.sourceButtonText,
-              source.code === 'auto' && styles.sourceButtonTextAuto,
+        <View style={[styles.sourceRow, { bottom: insets.bottom + 92 }]}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Recent scans"
+            onPress={() => {
+              router.push('/history');
+            }}
+            style={({ pressed }) => [
+              styles.historyButton,
+              pressed && styles.sourceButtonPressed,
             ]}
           >
-            {source.code === 'auto' ? 'AUTO' : languageShortLabel(source.code)}
-          </Text>
-        </Pressable>
+            <Ionicons
+              name="time-outline"
+              size={16}
+              color={colors.foreground}
+            />
+          </Pressable>
+
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={
+              source.code === 'auto'
+                ? 'Source language: Auto. Open language settings.'
+                : `Source language: ${languageShortLabel(source.code)}. Open language settings.`
+            }
+            onPress={openLanguages}
+            style={({ pressed }) => [
+              styles.sourceButton,
+              source.code === 'auto' && styles.sourceButtonAuto,
+              pressed && styles.sourceButtonPressed,
+            ]}
+          >
+            <Ionicons
+              name="language-outline"
+              size={14}
+              color={source.code === 'auto' ? colors.accent : colors.foreground}
+            />
+            <Text
+              style={[
+                styles.sourceButtonText,
+                source.code === 'auto' && styles.sourceButtonTextAuto,
+              ]}
+            >
+              {source.code === 'auto' ? 'AUTO' : languageShortLabel(source.code)}
+            </Text>
+          </Pressable>
+        </View>
       ) : null}
     </View>
   );
@@ -202,9 +221,24 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-  sourceButton: {
+  sourceRow: {
     position: 'absolute',
     right: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  historyButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: 'rgba(10,10,10,0.94)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sourceButton: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,

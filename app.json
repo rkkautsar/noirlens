@@ -16,6 +16,9 @@
         "ITSAppUsesNonExemptEncryption": false,
         "UISupportedInterfaceOrientations": [
           "UIInterfaceOrientationPortrait"
+        ],
+        "UIBackgroundModes": [
+          "voip"
         ]
       },
       "requireFullScreen": true

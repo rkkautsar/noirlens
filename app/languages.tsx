@@ -106,7 +106,7 @@ export default function LanguagesScreen() {
   };
 
   return (
-    <>
+    <View style={styles.sheetBody}>
       <SheetHeader
         title="LANGUAGES & PACKS"
         subtitle="SCAN SOURCE · OFFLINE MODELS"
@@ -238,11 +238,14 @@ export default function LanguagesScreen() {
           will ask again the next time it sees that language.
         </Text>
       </ScrollView>
-    </>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  sheetBody: {
+    flex: 1,
+  },
   overlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.45)',

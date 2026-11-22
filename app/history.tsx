@@ -99,7 +99,7 @@ export default function HistoryScreen() {
   };
 
   return (
-    <>
+    <View style={styles.sheetBody}>
       <SheetHeader
         title="RECENT SCANS"
         subtitle="LAST 50 · ON-DEVICE"
@@ -182,11 +182,14 @@ export default function HistoryScreen() {
           </>
         )}
       </ScrollView>
-    </>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  sheetBody: {
+    flex: 1,
+  },
   overlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.45)',

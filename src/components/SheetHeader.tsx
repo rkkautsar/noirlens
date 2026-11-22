@@ -1,5 +1,4 @@
 import { StyleSheet, Text, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { colors, typography } from '@/theme';
 import { ChipButton, MicroLabel } from './ui';
@@ -13,10 +12,8 @@ export function SheetHeader({
   subtitle: string;
   onClose?: () => void;
 }) {
-  const insets = useSafeAreaInsets();
-
   return (
-    <View style={[styles.container, { paddingTop: 12 }]}>
+    <View style={[styles.container, { paddingTop: 22 }]}>
       <View style={styles.row}>
         <View style={styles.titles}>
           <Text style={styles.title}>{title}</Text>

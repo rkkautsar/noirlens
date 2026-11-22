@@ -57,6 +57,7 @@ final class CameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDele
   private var sessionObservers: [NSObjectProtocol] = []
   private let generationLock = NSLock()
   private var startGeneration = 0
+  private var wantsCamera = false
 
   private override init() {
     super.init()
@@ -103,14 +104,11 @@ final class CameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDele
             }
             self.replaceLatestSampleBuffer(nil)
             guard try self.startRunning(generation) else {
-              throw cameraException(
-                name: "CameraUnavailable",
-                description: self.startFailureDescription(),
-                code: "ERR_CAMERA_UNAVAILABLE"
-              )
+              throw self.startFailureError(generation)
             }
           }
           try self.checkStart(generation)
+          self.wantsCamera = true
           self.notifyPreviewRotation()
           continuation.resume()
         } catch {
@@ -118,6 +116,21 @@ final class CameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDele
         }
       }
     }
+  }
+
+  private func startFailureError(_ generation: Int) -> Error {
+    if !isCurrentStart(generation) || !appIsActive() {
+      return cameraException(
+        name: "CameraCancelled",
+        description: "The camera start was cancelled.",
+        code: "ERR_CAMERA_CANCELLED"
+      )
+    }
+    return cameraException(
+      name: "CameraUnavailable",
+      description: self.startFailureDescription(),
+      code: "ERR_CAMERA_UNAVAILABLE"
+    )
   }
 
   private func startFailureDescription() -> String {
@@ -135,6 +148,8 @@ final class CameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDele
     for observer in sessionObservers {
       NotificationCenter.default.removeObserver(observer)
     }
+    lastRuntimeError = nil
+    lastInterruptionReason = nil
     sessionObservers = [
       NotificationCenter.default.addObserver(
         forName: .AVCaptureSessionRuntimeError,
@@ -244,9 +259,8 @@ final class CameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDele
     invalidateStartGeneration()
     await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
       sessionQueue.async {
-        if self.session.isRunning {
-          self.session.stopRunning()
-        }
+        self.wantsCamera = false
+        self.session.stopRunning()
         self.replaceLatestSampleBuffer(nil)
         continuation.resume()
       }

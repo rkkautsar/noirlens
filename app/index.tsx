@@ -67,25 +67,25 @@ export default function ScannerScreen() {
 
   const { snapshot } = scanner;
   const { state, result } = snapshot;
-  const inspectState = useInspect(result);
+  const inspectState = useInspect(result, undefined, result?.sourceHash);
   const active = state === 'PREWARM' || state === 'SCANNING';
   const locked = state === 'LOCKED_READ' && result !== null;
   const exhausted =
     snapshot.remainingToday === 0 && snapshot.captureMode === 'read';
 
   const routeParams = useLocalSearchParams<{ history?: string }>();
+  const historyParam = useRef(routeParams.history);
+  historyParam.current = routeParams.history;
   useFocusEffect(
     useCallback(() => {
+      const value = historyParam.current;
       const tab =
-        routeParams.history === 'captures' ||
-        routeParams.history === 'translations'
-          ? routeParams.history
-          : null;
+        value === 'captures' || value === 'translations' ? value : null;
       if (tab) {
         openSheet({ kind: 'history', initialTab: tab });
         router.setParams({ history: '' });
       }
-    }, [openSheet, routeParams.history, router]),
+    }, [openSheet, router]),
   );
 
   useEffect(() => {
@@ -226,7 +226,10 @@ export default function ScannerScreen() {
           showOriginal && result ? (
             <InspectActions
               controller={inspectState}
-              onClose={() => setShowOriginal(false)}
+              onClose={() => {
+                inspectState.reset();
+                setShowOriginal(false);
+              }}
               onScanAgain={scanner.scanAgain}
               onOpenLanguages={openLanguages}
               onLookUp={openLookup}

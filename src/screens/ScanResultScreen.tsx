@@ -295,6 +295,7 @@ export function ScanResultScreen({
   const inspectState = useInspect(
     inspectSource,
     captureId && record ? captures.uriFor(record.thumb) : undefined,
+    record ? `${record.id}:${record.ocrRevision}` : result?.sourceHash,
   );
   const captureText = record?.text.trim() ?? '';
   const pending = record
@@ -325,7 +326,10 @@ export function ScanResultScreen({
           inspect ? (
             <InspectActions
               controller={inspectState}
-              onClose={() => setInspect(false)}
+              onClose={() => {
+                inspectState.reset();
+                setInspect(false);
+              }}
               onScanAgain={newScan}
               onOpenLanguages={openOcrPicker}
               onLookUp={(phrase, alt) => {

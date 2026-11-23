@@ -50,47 +50,74 @@ export function useSheet(): SheetContextValue {
 /** One presentation owner for every app sheet, mounted above the navigator. */
 export function SheetHost({ children }: { children: ReactNode }) {
   const router = useRouter();
-  const [sheet, setSheet] = useState<SheetRequest | null>(null);
-  const [pendingHref, setPendingHref] = useState<Href | null>(null);
   const pathname = usePathname();
+  const [sheet, setSheet] = useState<{
+    request: SheetRequest;
+    origin: string;
+  } | null>(null);
+  const [pendingHref, setPendingHref] = useState<Href | null>(null);
+  const pendingRef = useRef<Href | null>(null);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastPath = useRef(pathname);
 
-  useEffect(() => {
-    if (lastPath.current !== pathname) {
-      lastPath.current = pathname;
-      setSheet(null);
-      setPendingHref(null);
+  const takePending = useCallback(() => {
+    const href = pendingRef.current;
+    pendingRef.current = null;
+    setPendingHref(null);
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
     }
-  }, [pathname]);
+    return href;
+  }, []);
+
+  const finishPending = useCallback(() => {
+    const href = takePending();
+    if (href) {
+      router.push(href);
+    }
+  }, [router, takePending]);
+
+  useEffect(() => {
+    if (lastPath.current === pathname) {
+      return;
+    }
+    lastPath.current = pathname;
+    // Only a sheet from another screen is stale; a sheet the newly focused
+    // screen opened is not.
+    setSheet((current) =>
+      current && current.origin !== pathname ? null : current,
+    );
+    takePending();
+  }, [pathname, takePending]);
 
   useEffect(() => {
     if (!pendingHref) {
       return;
     }
-    const href = pendingHref;
-    const timer = setTimeout(() => {
-      setPendingHref(null);
-      router.push(href);
-    }, 250);
-    return () => clearTimeout(timer);
-  }, [pendingHref, router]);
+    timerRef.current = setTimeout(finishPending, 250);
+    return () => {
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
+        timerRef.current = null;
+      }
+    };
+  }, [pendingHref, finishPending]);
+
   const closeSheet = useCallback(() => setSheet(null), []);
   const openSheet = useCallback(
-    (request: SheetRequest) => setSheet(request),
-    [],
+    (request: SheetRequest) => setSheet({ request, origin: pathname }),
+    [pathname],
   );
   const navigateAfterClose = useCallback((href: Href) => {
+    pendingRef.current = href;
     setPendingHref(href);
     setSheet(null);
   }, []);
   const handleDismiss = useCallback(() => {
     setSheet(null);
-    if (pendingHref) {
-      const href = pendingHref;
-      setPendingHref(null);
-      router.push(href);
-    }
-  }, [pendingHref, router]);
+    finishPending();
+  }, [finishPending]);
   const value = useMemo(
     () => ({
       openSheet,
@@ -101,27 +128,34 @@ export function SheetHost({ children }: { children: ReactNode }) {
     [openSheet, closeSheet, navigateAfterClose, sheet],
   );
 
+  const languageRequest =
+    sheet?.request.kind === 'languagePicker' ? sheet.request : null;
+
   return (
     <SheetContext.Provider value={value}>
       {children}
       <AppSheet visible={sheet !== null} onClose={handleDismiss}>
-        {sheet?.kind === 'lookup' ? (
-          <LookupSheet q={sheet.q} alt={sheet.alt} onClose={closeSheet} />
-        ) : sheet?.kind === 'languages' ? (
+        {sheet?.request.kind === 'lookup' ? (
+          <LookupSheet
+            q={sheet.request.q}
+            alt={sheet.request.alt}
+            onClose={closeSheet}
+          />
+        ) : sheet?.request.kind === 'languages' ? (
           <LanguagesSheet onClose={closeSheet} />
-        ) : sheet?.kind === 'languagePicker' ? (
+        ) : languageRequest ? (
           <LanguagePickerSheet
-            title={sheet.title}
-            selected={sheet.selected}
-            allowAuto={sheet.allowAuto}
+            title={languageRequest.title}
+            selected={languageRequest.selected}
+            allowAuto={languageRequest.allowAuto}
             onSelect={(code) => {
               closeSheet();
-              sheet.onSelect(code);
+              languageRequest.onSelect(code);
             }}
           />
-        ) : sheet?.kind === 'history' ? (
+        ) : sheet?.request.kind === 'history' ? (
           <HistorySheet
-            initialTab={sheet.initialTab}
+            initialTab={sheet.request.initialTab}
             onClose={closeSheet}
           />
         ) : null}

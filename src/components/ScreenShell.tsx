@@ -5,6 +5,7 @@ import {
   type ReactNode,
 } from 'react';
 import { StyleSheet, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ChromeHeader } from './ChromeHeader';
 import type { AppMode } from './ModeTabs';
@@ -55,6 +56,7 @@ export function ScreenShell({
   overlay?: ReactNode;
   children: ReactNode;
 }) {
+  const insets = useSafeAreaInsets();
   const [headerHeight, setHeaderHeight] = useState(0);
   const [footerHeight, setFooterHeight] = useState(0);
   const header = (
@@ -77,7 +79,7 @@ export function ScreenShell({
   const footer =
     actions || dock ? (
       <View
-        style={styles.footer}
+        style={[styles.footer, dock ? null : { paddingBottom: insets.bottom }]}
         onLayout={(event) => {
           setFooterHeight(event.nativeEvent.layout.height);
         }}

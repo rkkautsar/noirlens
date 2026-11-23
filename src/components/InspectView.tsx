@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Image,
   Platform,
@@ -16,13 +16,30 @@ import { translateText } from '@/services/translationTask';
 import { colors, layout, typography } from '@/theme';
 import { ChipButton, MicroLabel, SolidButton } from './ui';
 
-export function useInspect(result: ScanResult | null, imageUri?: string) {
+export function useInspect(
+  result: ScanResult | null,
+  imageUri?: string,
+  resetKey?: string,
+) {
   const [stage, setStage] = useState({ width: 0, height: 0 });
   const [selected, setSelected] = useState<number | null>(null);
   const [translation, setTranslation] = useState<string | null>(null);
   const [translating, setTranslating] = useState(false);
   const [translationFailed, setTranslationFailed] = useState(false);
   const requestId = useRef(0);
+
+  const reset = useCallback(() => {
+    requestId.current += 1;
+    setSelected(null);
+    setTranslation(null);
+    setTranslationFailed(false);
+    setTranslating(false);
+  }, []);
+
+  // A new frame or OCR revision invalidates selection and any pending request.
+  useEffect(() => {
+    reset();
+  }, [reset, resetKey]);
 
   const imageRect = result
     ? imageFitRect(
@@ -115,6 +132,7 @@ export function useInspect(result: ScanResult | null, imageUri?: string) {
     uri,
     inspect,
     picked,
+    reset,
   };
 }
 

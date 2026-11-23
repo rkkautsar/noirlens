@@ -207,11 +207,10 @@ export function ScanShutter({
 
   return (
     <View
+      {...responder.panHandlers}
       style={[styles.wrap, { paddingBottom: insets.bottom + 12 }]}
-      pointerEvents="box-none"
     >
       <View
-        {...responder.panHandlers}
         accessibilityRole="button"
         accessibilityLabel={
           scanning

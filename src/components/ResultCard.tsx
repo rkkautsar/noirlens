@@ -168,7 +168,7 @@ export function ResultCard({
         contentContainerStyle={[
           styles.content,
           {
-            paddingTop: insets.top + 24,
+            paddingTop: insets.top + 56,
             paddingBottom: insets.bottom + 96,
           },
         ]}

@@ -73,10 +73,14 @@ export default function TranslateScreen() {
       return undefined;
     }
     const update = (event: { endCoordinates: { screenY: number } }) => {
+      const screenY = event.endCoordinates.screenY;
+      // With iOS Prefer Cross-Fade Transitions the payload can report a
+      // zero-origin frame; do not treat it as full-window occlusion.
+      if (!Number.isFinite(screenY) || screenY <= 0) {
+        return;
+      }
       const windowHeight = Dimensions.get('window').height;
-      setKeyboardHeight(
-        Math.max(0, windowHeight - event.endCoordinates.screenY),
-      );
+      setKeyboardHeight(Math.max(0, windowHeight - screenY));
     };
     const show = Keyboard.addListener('keyboardWillChangeFrame', update);
     const hide = Keyboard.addListener('keyboardWillHide', () =>

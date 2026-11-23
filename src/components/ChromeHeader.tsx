@@ -26,15 +26,22 @@ export function ChromeHeader({
   onTranslate: () => void;
 }) {
   const insets = useSafeAreaInsets();
-  const counter = unlimited ? 'PRO' : `${remaining ?? 0} LEFT`;
+  const counter = unlimited
+    ? 'PRO'
+    : remaining !== null
+      ? `${remaining} LEFT`
+      : null;
 
   return (
-    <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
-      <View style={styles.row}>
+    <View
+      pointerEvents="box-none"
+      style={[styles.header, { paddingTop: insets.top + 8 }]}
+    >
+      <View pointerEvents="box-none" style={styles.row}>
         <Text style={styles.brand}>NOIRLENS</Text>
-        <ChipButton label={counter} onPress={onOpenPaywall} />
+        {counter ? <ChipButton label={counter} onPress={onOpenPaywall} /> : null}
       </View>
-      <View style={styles.tabs}>
+      <View pointerEvents="box-none" style={styles.tabs}>
         <ModeTabs
           active={active}
           inline

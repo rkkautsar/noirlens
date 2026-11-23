@@ -82,3 +82,8 @@ export function isLanguagePackFailure(error: unknown): boolean {
     code === 'ERR_LANGUAGE_UNSUPPORTED'
   );
 }
+
+/** The pair itself is unsupported; installing a pack cannot help. */
+export function isUnsupportedLanguagePair(error: unknown): boolean {
+  return readString(error, 'code') === 'ERR_LANGUAGE_UNSUPPORTED';
+}

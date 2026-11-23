@@ -334,9 +334,13 @@ export function ResultCard({
         <MicroLabel tone="dim" style={styles.footer}>
           {unlimited
             ? 'PRO · UNLIMITED SCANS'
-            : translated
-              ? `${remaining ?? 0} OF 15 FREE SCANS LEFT TODAY`
-              : `NOT CHARGED · ${remaining ?? 0} OF 15 FREE SCANS LEFT TODAY`}
+            : remaining !== null
+              ? translated
+                ? `${remaining} OF 15 FREE SCANS LEFT TODAY`
+                : `NOT CHARGED · ${remaining} OF 15 FREE SCANS LEFT TODAY`
+              : translated
+                ? 'FREE SCANS LEFT TODAY'
+                : 'NOT CHARGED · FREE SCANS LEFT TODAY'}
         </MicroLabel>
     </>
   );

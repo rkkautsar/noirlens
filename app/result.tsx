@@ -21,17 +21,17 @@ import {
   languageShortLabel,
 } from '@/constants/languages';
 import type { ScanResult } from '@/scanner/machine';
-import { DEFAULT_TUNING } from '@/scanner/machine';
 import { captures, useCaptures } from '@/services/captures';
-import { localDayKey } from '@/services/day';
-import { entitlements, useEntitlementState } from '@/services/entitlements';
-import { readScanCount } from '@/services/scanLedger';
+import { resumeCaptureProcessing } from '@/services/captureProcessing';
+import { clearCaptureHistory } from '@/services/historyIntent';
+import { useScanAllowance } from '@/services/allowance';
 import type { CaptureRecord } from '@/services/captureModel';
 import { rerunCaptureOcr, retryCapture } from '@/services/captureProcessing';
 import { DEMO_HISTORY } from '@/services/demoHistory';
 import {
   describeNativeError,
   isLanguagePackFailure,
+  isUnsupportedLanguagePair,
 } from '@/services/nativeErrors';
 import { readScanHistory, type ScanHistoryEntry } from '@/services/scanHistory';
 import { colors, radius, spacing, typography } from '@/theme';
@@ -101,30 +101,20 @@ export default function ResultScreen() {
   const [languageBusy, setLanguageBusy] = useState(false);
   const [packBusy, setPackBusy] = useState(false);
   const [captureNonce, setCaptureNonce] = useState(0);
-  const [scansToday, setScansToday] = useState<number | null>(null);
-  const entitlement = useEntitlementState();
-  const unlimited = entitlement.loaded ? entitlements.isUnlimited() : false;
+  const [ocrError, setOcrError] = useState<string | null>(null);
+  const allowance = useScanAllowance();
+  const unlimited = allowance.unlimited;
+  const pendingHint = useRef<string | null>(null);
   const translatedKey = useRef<string | null>(null);
   const requestToken = useRef(0);
   const packBusyRef = useRef(false);
 
   useEffect(() => {
-    let active = true;
-    void readScanCount(localDayKey())
-      .then((count) => {
-        if (active) {
-          setScansToday(count);
-        }
-      })
-      .catch(() => {});
-    return () => {
-      active = false;
-    };
-  }, []);
-
-  useEffect(() => {
     if (captureId) {
-      void captures.hydrate();
+      void captures
+        .hydrate()
+        .then(() => resumeCaptureProcessing())
+        .catch(() => {});
       return;
     }
     let active = true;
@@ -208,7 +198,11 @@ export default function ResultScreen() {
           if (token !== requestToken.current) {
             return;
           }
-          if (isLanguagePackFailure(error)) {
+          if (isUnsupportedLanguagePair(error)) {
+          setCaptureError(
+            `${languageShortLabel(base.sourceLanguage)} to English is not supported on this device.`,
+          );
+        } else if (isLanguagePackFailure(error)) {
             setCaptureResult({ ...base, kind: 'pack_missing', translatedText: '' });
           } else {
             setCaptureError(describeNativeError(error).message);
@@ -231,6 +225,26 @@ export default function ResultScreen() {
     }
   };
 
+  const applyOcrLanguage = (next: string) => {
+    if (!record) {
+      return;
+    }
+    pendingHint.current = next;
+    setLanguageBusy(true);
+    setOcrError(null);
+    setCaptureResult(null);
+    setTranslating(false);
+    translatedKey.current = null;
+    requestToken.current += 1;
+    void rerunCaptureOcr(record.id, next)
+      .catch(() => {
+        setOcrError('Could not change the OCR language. Try again.');
+      })
+      .finally(() => {
+        setLanguageBusy(false);
+      });
+  };
+
   const chooseLanguage = (code: string) => {
     setOverlay(null);
     if (!record) {
@@ -240,19 +254,15 @@ export default function ResultScreen() {
     if (next === record.hint) {
       return;
     }
-    setLanguageBusy(true);
-    setCaptureError(null);
-    setCaptureResult(null);
-    setTranslating(false);
-    translatedKey.current = null;
-    requestToken.current += 1;
-    void rerunCaptureOcr(record.id, next)
-      .catch(() => {
-        setCaptureError('Could not change the OCR language. Try again.');
-      })
-      .finally(() => {
-        setLanguageBusy(false);
-      });
+    applyOcrLanguage(next);
+  };
+
+  const retryOcrLanguage = () => {
+    const next = pendingHint.current;
+    if (next === null || !record) {
+      return;
+    }
+    applyOcrLanguage(next);
   };
 
   const preparePack = async () => {
@@ -291,10 +301,11 @@ export default function ResultScreen() {
     setCaptureNonce((value) => value + 1);
   };
 
-  const remaining =
-    unlimited || scansToday === null
-      ? null
-      : Math.max(0, DEFAULT_TUNING.freeDailyLimit - scansToday);
+  const remaining = allowance.remaining;
+  const newScan = () => {
+    clearCaptureHistory();
+    close();
+  };
   const historyResult = entry ? resultFromEntry(entry) : null;
   const result = captureId ? captureResult : historyResult;
   const captureText = record?.text.trim() ?? '';
@@ -320,7 +331,7 @@ export default function ResultScreen() {
           result={result}
           remaining={remaining}
           unlimited={unlimited}
-          onScanAgain={close}
+          onScanAgain={newScan}
           onShowOriginal={captureId && record ? () => setInspect(true) : undefined}
           thumbnail={captureId && record ? captures.uriFor(record.thumb) : undefined}
           onPreparePack={captureId ? preparePack : undefined}
@@ -352,6 +363,18 @@ export default function ResultScreen() {
               <MicroLabel tone="dim">CAPTURE NOT FOUND</MicroLabel>
               <SolidButton label="BACK" icon="arrow-back" onPress={close} />
             </>
+          ) : ocrError ? (
+            <View style={styles.statePanel}>
+              <MicroLabel tone="danger">OCR LANGUAGE</MicroLabel>
+              <Text style={styles.stateText}>{ocrError}</Text>
+              <ChipButton
+                label="RETRY OCR LANGUAGE"
+                icon="refresh"
+                active
+                disabled={languageBusy}
+                onPress={retryOcrLanguage}
+              />
+            </View>
           ) : captureError ? (
             <View style={styles.statePanel}>
               <MicroLabel tone="danger">TRANSLATION FAILED</MicroLabel>
@@ -422,14 +445,14 @@ export default function ResultScreen() {
         remaining={remaining}
         unlimited={unlimited}
         onOpenPaywall={() => router.push('/paywall')}
-        onCamera={close}
+        onCamera={newScan}
         onTranslate={() => router.push('/translate')}
       />
       <ScanShutter
         next
         active={false}
         scanning={false}
-        onStart={close}
+        onStart={newScan}
         onCapture={() => {}}
         onCancel={close}
         onLanguages={() =>
@@ -444,7 +467,7 @@ export default function ResultScreen() {
           result={captureResult}
           imageUri={captures.uriFor(record.thumb)}
           onClose={() => setInspect(false)}
-          onScanAgain={close}
+          onScanAgain={newScan}
           onOpenLanguages={() => setOverlay({ kind: 'languagePicker' })}
           onLookUp={(phrase, alt) => {
             const q = phrase.trim();

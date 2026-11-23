@@ -64,7 +64,13 @@ export class CaptureQueue<T> {
 
   private async drain(): Promise<void> {
     while (!this.disposed && this.active < this.concurrency) {
-      const job = this.queued.shift();
+      const index = this.queued.findIndex(
+        (entry) => !this.activeRevisions.has(entry.id),
+      );
+      if (index < 0) {
+        return;
+      }
+      const [job] = this.queued.splice(index, 1);
       if (!job) {
         return;
       }

@@ -9,6 +9,10 @@ export function requestCaptureHistory(tab: HistoryTab): void {
   pending = tab;
 }
 
+export function clearCaptureHistory(): void {
+  pending = null;
+}
+
 export function consumeCaptureHistory(): HistoryTab | null {
   const value = pending;
   pending = null;

@@ -59,7 +59,11 @@ export function ModeTabs({
     </>
   );
   if (inline) {
-    return <View style={styles.inlineRow}>{tabs}</View>;
+    return (
+      <View pointerEvents="box-none" style={styles.inlineRow}>
+        {tabs}
+      </View>
+    );
   }
   return (
     <View pointerEvents="box-none" style={[styles.row, { top: insets.top + 44 }]}>

@@ -308,6 +308,7 @@ export default function ScannerScreen() {
           unlimited={snapshot.unlimited}
           onOpenPaywall={openPaywall}
         />
+      </View>
       {overlay ? (
         <OverlaySheet onClose={() => setOverlay(null)}>
           {overlay.kind === 'lookup' ? (
@@ -324,7 +325,6 @@ export default function ScannerScreen() {
           )}
         </OverlaySheet>
       ) : null}
-      </View>
     </View>
   );
 }

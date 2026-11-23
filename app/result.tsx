@@ -5,7 +5,6 @@ import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { LanguagesSheet } from '@/components/LanguagesSheet';
 import { LookupSheet } from '@/components/LookupSheet';
 import { OverlaySheet } from '@/components/OverlaySheet';
-import { PricesSheet } from '@/components/PricesSheet';
 import { ResultCard } from '@/components/ResultCard';
 import { SolidButton } from '@/components/ui';
 import { TopBar } from '@/components/TopBar';
@@ -16,7 +15,6 @@ import { colors } from '@/theme';
 
 type Overlay =
   | { kind: 'lookup'; q: string; alt?: string }
-  | { kind: 'prices'; rows: import('@/services/currency').PriceConversion[]; selectedStart?: number }
   | { kind: 'languages' }
   | null;
 
@@ -120,11 +118,6 @@ export default function ResultScreen() {
             setOverlay({ kind: 'lookup', q, alt });
           }
         }}
-        onOpenPrices={(rows, selectedStart) => {
-          if (rows.length > 0) {
-            setOverlay({ kind: 'prices', rows, selectedStart });
-          }
-        }}
       />
       <TopBar
         remaining={null}
@@ -140,13 +133,7 @@ export default function ResultScreen() {
               alt={overlay.alt}
               onClose={() => setOverlay(null)}
             />
-          ) : overlay.kind === 'prices' ? (
-            <PricesSheet
-              rows={overlay.rows}
-              selectedStart={overlay.selectedStart}
-              onClose={() => setOverlay(null)}
-            />
-          ) : (
+                    ) : (
             <LanguagesSheet onClose={() => setOverlay(null)} />
           )}
         </OverlaySheet>

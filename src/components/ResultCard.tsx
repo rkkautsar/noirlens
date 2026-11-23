@@ -15,7 +15,7 @@ import { termPattern, untranslatedTerms } from '@/services/lookup';
 import { romanize, romanTermSpans } from '@/services/romanize';
 import { romanizeNative } from '@/services/romanizeNative';
 import { colors, typography } from '@/theme';
-import { PriceEstimate } from './PriceEstimate';
+import { PriceTooltip } from './PriceTooltip';
 import { ChipButton, Hairline, MicroLabel, SolidButton } from './ui';
 
 export function ResultCard({
@@ -26,7 +26,6 @@ export function ResultCard({
   onShowOriginal,
   onOpenLanguages,
   onLookUp,
-  onOpenPrices,
 }: {
   result: ScanResult;
   remaining: number | null;
@@ -35,7 +34,6 @@ export function ResultCard({
   onShowOriginal?: () => void;
   onOpenLanguages: () => void;
   onLookUp: (phrase: string, alt?: string) => void;
-  onOpenPrices: (prices: PriceConversion[], selectedStart?: number) => void;
 }) {
   const insets = useSafeAreaInsets();
   const [copied, setCopied] = useState(false);
@@ -123,8 +121,11 @@ export function ResultCard({
     result.sourceLanguage,
     preferred.code,
   );
-  const sheetPrices =
-    translationPrices.length > 0 ? translationPrices : prices;
+  const [priceTip, setPriceTip] = useState<{
+    price: PriceConversion;
+    x: number;
+    y: number;
+  } | null>(null);
 
   const renderSource = () => {
     if (prices.length === 0) {
@@ -143,8 +144,12 @@ export function ResultCard({
         <Text
           key={`source-price-${price.start}`}
           style={styles.priceTerm}
-          onPress={() => {
-            onOpenPrices(prices, price.start);
+          onPress={(event) => {
+            setPriceTip({
+              price,
+              x: event.nativeEvent.pageX,
+              y: event.nativeEvent.pageY,
+            });
           }}
         >
           {result.sourceText.slice(price.start, price.end)}
@@ -189,6 +194,7 @@ export function ResultCard({
       start: number;
       end: number;
       kind: 'term' | 'price';
+      price?: PriceConversion;
     }> = [];
     if (lookupPattern) {
       for (const match of text.matchAll(lookupPattern)) {
@@ -197,7 +203,7 @@ export function ResultCard({
       }
     }
     for (const price of translationPrices) {
-      spans.push({ start: price.start, end: price.end, kind: 'price' });
+      spans.push({ start: price.start, end: price.end, kind: 'price', price });
     }
     // Romanized dish/brand names the translator kept as proper nouns.
     for (const match of text.matchAll(/[A-Z][a-z]+[ \t][A-Z][a-z]+/g)) {
@@ -230,9 +236,13 @@ export function ResultCard({
         <Text
           key={`${span.kind}-${span.start}`}
           style={span.kind === 'price' ? styles.priceTerm : styles.lookupTerm}
-          onPress={() => {
-            if (span.kind === 'price') {
-              onOpenPrices(sheetPrices, span.start);
+          onPress={(event) => {
+            if (span.kind === 'price' && span.price) {
+              setPriceTip({
+                price: span.price,
+                x: event.nativeEvent.pageX,
+                y: event.nativeEvent.pageY,
+              });
             } else {
               onLookUp(slice);
             }

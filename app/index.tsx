@@ -10,7 +10,6 @@ import { HistorySheet } from '@/components/HistorySheet';
 import { LanguagesSheet } from '@/components/LanguagesSheet';
 import { LookupSheet } from '@/components/LookupSheet';
 import { OverlaySheet } from '@/components/OverlaySheet';
-import { PricesSheet } from '@/components/PricesSheet';
 import { OriginalView } from '@/components/OriginalView';
 import { ResultCard } from '@/components/ResultCard';
 import { ScanShutter } from '@/components/ScanShutter';
@@ -38,11 +37,6 @@ export default function ScannerScreen() {
   const [showOriginal, setShowOriginal] = useState(false);
   const [overlay, setOverlay] = useState<
     | { kind: 'lookup'; q: string; alt?: string }
-    | {
-        kind: 'prices';
-        rows: import('@/services/currency').PriceConversion[];
-        selectedStart?: number;
-      }
     | { kind: 'languages' }
     | { kind: 'history' }
     | null
@@ -117,15 +111,6 @@ export default function ScannerScreen() {
     setOverlay({ kind: 'lookup', q: query, alt });
   };
 
-  const openPrices = (
-    prices: import('@/services/currency').PriceConversion[],
-    selectedStart?: number,
-  ) => {
-    if (prices.length === 0) {
-      return;
-    }
-    setOverlay({ kind: 'prices', rows: prices, selectedStart });
-  };
 
   const openPaywall = () => {
     router.push('/paywall');
@@ -189,8 +174,7 @@ export default function ScannerScreen() {
           }}
           onOpenLanguages={openLanguages}
           onLookUp={openLookup}
-          onOpenPrices={openPrices}
-        />
+                  />
       ) : null}
 
       {!exhausted ? (
@@ -328,13 +312,7 @@ export default function ScannerScreen() {
               alt={overlay.alt}
               onClose={() => setOverlay(null)}
             />
-          ) : overlay.kind === 'prices' ? (
-            <PricesSheet
-              rows={overlay.rows}
-              selectedStart={overlay.selectedStart}
-              onClose={() => setOverlay(null)}
-            />
-          ) : overlay.kind === 'languages' ? (
+                    ) : overlay.kind === 'languages' ? (
             <LanguagesSheet onClose={() => setOverlay(null)} />
           ) : (
             <HistorySheet onClose={() => setOverlay(null)} />

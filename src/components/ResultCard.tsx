@@ -1,6 +1,6 @@
 import * as Clipboard from 'expo-clipboard';
 import { useEffect, useRef, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { languageLabel, languageShortLabel } from '@/constants/languages';
@@ -127,9 +127,9 @@ export function ResultCard({
     y: number;
   } | null>(null);
 
-  const renderSource = () => {
+  const renderSource = (): React.ReactNode[] => {
     if (prices.length === 0) {
-      return result.sourceText;
+      return [result.sourceText];
     }
     const parts: React.ReactNode[] = [];
     let cursor = 0;
@@ -141,24 +141,18 @@ export function ResultCard({
         parts.push(result.sourceText.slice(cursor, price.start));
       }
       parts.push(
-        <Text
+        <Pressable
           key={`source-price-${price.start}`}
-          style={styles.priceTerm}
-          onPress={(event) => {
-            const native = (
-              event as
-                | { nativeEvent?: { pageX?: number; pageY?: number } }
-                | undefined
-            )?.nativeEvent;
-            setPriceTip({
-              price,
-              x: native?.pageX ?? Number.NaN,
-              y: native?.pageY ?? Number.NaN,
-            });
+          accessibilityRole="button"
+          accessibilityLabel={result.sourceText.slice(price.start, price.end)}
+          onPress={() => {
+            setPriceTip({ price, x: Number.NaN, y: Number.NaN });
           }}
         >
-          {result.sourceText.slice(price.start, price.end)}
-        </Text>,
+          <Text style={[styles.sourceText, styles.priceTerm]}>
+            {result.sourceText.slice(price.start, price.end)}
+          </Text>
+        </Pressable>,
       );
       cursor = price.end;
     }
@@ -238,28 +232,31 @@ export function ResultCard({
       }
       const slice = text.slice(span.start, span.end);
       parts.push(
-        <Text
+        <Pressable
           key={`${span.kind}-${span.start}`}
-          style={span.kind === 'price' ? styles.priceTerm : styles.lookupTerm}
-          onPress={(event) => {
+          accessibilityRole="button"
+          accessibilityLabel={slice}
+          onPress={() => {
             if (span.kind === 'price' && span.price) {
-              const native = (
-                event as
-                  | { nativeEvent?: { pageX?: number; pageY?: number } }
-                  | undefined
-              )?.nativeEvent;
               setPriceTip({
                 price: span.price,
-                x: native?.pageX ?? Number.NaN,
-                y: native?.pageY ?? Number.NaN,
+                x: Number.NaN,
+                y: Number.NaN,
               });
             } else {
               onLookUp(slice);
             }
           }}
         >
-          {slice}
-        </Text>,
+          <Text
+            style={[
+              styles.resultText,
+              span.kind === 'price' ? styles.priceTerm : styles.lookupTerm,
+            ]}
+          >
+            {slice}
+          </Text>
+        </Pressable>,
       );
       cursor = span.end;
     }
@@ -293,9 +290,17 @@ export function ResultCard({
         </View>
 
         {translated ? (
-          <Text style={styles.resultText} selectable>
-            {renderTranslation()}
-          </Text>
+          <View style={styles.translationWrap}>
+            {renderTranslation().map((part, index) =>
+              typeof part === 'string' ? (
+                <Text key={`part-${index}`} style={styles.resultText}>
+                  {part}
+                </Text>
+              ) : (
+                part
+              ),
+            )}
+          </View>
         ) : (
           <View style={styles.noticeBlock}>
             <Text style={styles.noticeText}>{notice}</Text>
@@ -315,13 +320,17 @@ export function ResultCard({
         <Hairline />
 
         <View style={styles.sourceBlock}>
-          <Text
-            style={styles.sourceText}
-            numberOfLines={prices.length > 0 ? undefined : translated ? 3 : 6}
-            selectable
-          >
-            {renderSource()}
-          </Text>
+          <View style={styles.translationWrap}>
+            {renderSource().map((part, index) =>
+              typeof part === 'string' ? (
+                <Text key={`source-part-${index}`} style={styles.sourceText}>
+                  {part}
+                </Text>
+              ) : (
+                part
+              ),
+            )}
+          </View>
         </View>
 
         <MicroLabel tone="dim" style={styles.footer}>
@@ -332,6 +341,16 @@ export function ResultCard({
               : `NOT CHARGED · ${remaining ?? 0} OF 15 FREE SCANS LEFT TODAY`}
         </MicroLabel>
       </ScrollView>
+
+      {priceTip ? (
+        <PriceTooltip
+          price={priceTip.price}
+          locale={preferred.locale}
+          x={priceTip.x}
+          y={priceTip.y}
+          onClose={() => setPriceTip(null)}
+        />
+      ) : null}
 
       <View
         style={[
@@ -404,6 +423,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+  },
+  translationWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
   },
   resultText: {
     ...typography.result,

@@ -9,6 +9,7 @@ import { AimHud } from '@/components/AimHud';
 import { HistorySheet } from '@/components/HistorySheet';
 import { LanguagesSheet } from '@/components/LanguagesSheet';
 import { LookupSheet } from '@/components/LookupSheet';
+import { MODE_TABS_HEIGHT, ModeTabs } from '@/components/ModeTabs';
 import { OverlaySheet } from '@/components/OverlaySheet';
 import { OriginalView } from '@/components/OriginalView';
 import { ResultCard } from '@/components/ResultCard';
@@ -186,12 +187,18 @@ export default function ScannerScreen() {
           onCapture={scanner.captureNow}
           onCancel={locked ? scanner.scanAgain : scanner.stop}
           onLanguages={openLanguages}
+          bottomOffset={MODE_TABS_HEIGHT}
         />
       ) : null}
 
 
       {!exhausted && !locked ? (
-        <View style={[styles.sourceRow, { bottom: insets.bottom + 92 }]}>
+        <View
+          style={[
+            styles.sourceRow,
+            { bottom: insets.bottom + 92 + MODE_TABS_HEIGHT },
+          ]}
+        >
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Recent scans"
@@ -285,7 +292,7 @@ export default function ScannerScreen() {
           }}
           style={({ pressed }) => [
             styles.filterButton,
-            { bottom: insets.bottom + 92 },
+            { bottom: insets.bottom + 92 + MODE_TABS_HEIGHT },
             pressed && styles.sourceButtonPressed,
           ]}
         >
@@ -304,6 +311,12 @@ export default function ScannerScreen() {
           onOpenPaywall={openPaywall}
         />
       </View>
+      <ModeTabs
+        active="camera"
+        onCamera={() => {}}
+        onTranslate={() => router.push('/translate')}
+      />
+
       {overlay ? (
         <OverlaySheet onClose={() => setOverlay(null)}>
           {overlay.kind === 'lookup' ? (

@@ -45,6 +45,7 @@ export function ScanShutter({
   onCapture,
   onCancel,
   onLanguages,
+  bottomOffset = 0,
 }: {
   active: boolean;
   scanning: boolean;
@@ -53,6 +54,7 @@ export function ScanShutter({
   onCapture: () => void;
   onCancel: () => void;
   onLanguages: () => void;
+  bottomOffset?: number;
 }) {
   const insets = useSafeAreaInsets();
   const [zone, setZone] = useState<Zone | null>(null);
@@ -208,7 +210,10 @@ export function ScanShutter({
   return (
     <View
       {...responder.panHandlers}
-      style={[styles.wrap, { paddingBottom: insets.bottom + 12 }]}
+      style={[
+        styles.wrap,
+        { paddingBottom: insets.bottom + 12 + bottomOffset },
+      ]}
     >
       <View
         accessibilityRole="button"

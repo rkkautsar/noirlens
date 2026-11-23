@@ -3,13 +3,22 @@ import ExpoModulesCore
 
 /**
  Minimal on-device speech synthesis. One synthesizer, one utterance at a
- time; starting a new request stops the previous one.
+ time. `speak` resolves when the utterance finishes or is stopped, so the
+ JS side can show a truthful speaking/stopped state.
  */
 @MainActor
-enum SpeechBridge {
-  private static let synthesizer = AVSpeechSynthesizer()
+final class SpeechBridge: NSObject, AVSpeechSynthesizerDelegate {
+  static let shared = SpeechBridge()
 
-  static func speak(text: String, language: String) -> Bool {
+  private let synthesizer = AVSpeechSynthesizer()
+  private var continuation: CheckedContinuation<Bool, Never>?
+
+  private override init() {
+    super.init()
+    synthesizer.delegate = self
+  }
+
+  func speak(text: String, language: String) async -> Bool {
     let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !trimmed.isEmpty else {
       return false
@@ -17,9 +26,13 @@ enum SpeechBridge {
     if synthesizer.isSpeaking {
       synthesizer.stopSpeaking(at: .immediate)
     }
+    finish(true)
+
     let utterance = AVSpeechUtterance(string: trimmed)
     utterance.voice = AVSpeechSynthesisVoice(language: language)
-      ?? AVSpeechSynthesisVoice(language: Locale.current.language.languageCode?.identifier)
+      ?? AVSpeechSynthesisVoice(
+        language: Locale.current.language.languageCode?.identifier ?? "en"
+      )
     utterance.rate = AVSpeechUtteranceDefaultSpeechRate
     do {
       try AVAudioSession.sharedInstance().setCategory(
@@ -29,15 +42,39 @@ enum SpeechBridge {
       )
       try AVAudioSession.sharedInstance().setActive(true)
     } catch {
-      // Audio session failures still let the synthesizer try.
+      // Playback may still work through the current session.
     }
-    synthesizer.speak(utterance)
-    return true
+
+    return await withCheckedContinuation { (continuation: CheckedContinuation<Bool, Never>) in
+      self.continuation = continuation
+      synthesizer.speak(utterance)
+    }
   }
 
-  static func stop() {
+  func stop() {
     if synthesizer.isSpeaking {
       synthesizer.stopSpeaking(at: .immediate)
     }
+    finish(true)
+  }
+
+  private func finish(_ spoke: Bool) {
+    let continuation = self.continuation
+    self.continuation = nil
+    continuation?.resume(returning: spoke)
+  }
+
+  nonisolated func speechSynthesizer(
+    _ synthesizer: AVSpeechSynthesizer,
+    didFinish utterance: AVSpeechUtterance
+  ) {
+    Task { @MainActor in self.finish(true) }
+  }
+
+  nonisolated func speechSynthesizer(
+    _ synthesizer: AVSpeechSynthesizer,
+    didCancel utterance: AVSpeechUtterance
+  ) {
+    Task { @MainActor in self.finish(true) }
   }
 }

@@ -123,15 +123,11 @@ public final class NativeVisionTranslatorModule: Module {
     }
 
     AsyncFunction("speak") { (text: String, language: String) async -> Bool in
-      await MainActor.run {
-        SpeechBridge.speak(text: text, language: language)
-      }
+      await SpeechBridge.shared.speak(text: text, language: language)
     }
 
     AsyncFunction("stopSpeaking") { () async -> Void in
-      await MainActor.run {
-        SpeechBridge.stop()
-      }
+      await SpeechBridge.shared.stop()
     }
 
     AsyncFunction("getSupportedLanguages") { () async -> [String] in

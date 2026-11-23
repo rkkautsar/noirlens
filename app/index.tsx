@@ -105,16 +105,6 @@ export default function ScannerScreen() {
     });
   };
 
-  const openTerms = (terms: string[]) => {
-    if (terms.length === 0) {
-      return;
-    }
-    router.push({
-      pathname: '/lookup',
-      params: { terms: JSON.stringify(terms) },
-    });
-  };
-
   const openPrices = (prices: import('@/services/currency').PriceConversion[]) => {
     if (prices.length === 0) {
       return;
@@ -189,7 +179,6 @@ export default function ScannerScreen() {
               }}
               onOpenLanguages={openLanguages}
               onLookUp={openLookup}
-              onLookUpTerms={openTerms}
               onOpenPrices={openPrices}
             />
           )}

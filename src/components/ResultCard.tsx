@@ -24,7 +24,6 @@ export function ResultCard({
   onShowOriginal,
   onOpenLanguages,
   onLookUp,
-  onLookUpTerms,
   onOpenPrices,
 }: {
   result: ScanResult;
@@ -34,7 +33,6 @@ export function ResultCard({
   onShowOriginal: () => void;
   onOpenLanguages: () => void;
   onLookUp: (phrase: string, alt?: string) => void;
-  onLookUpTerms: (terms: string[]) => void;
   onOpenPrices: (prices: PriceConversion[]) => void;
 }) {
   const insets = useSafeAreaInsets();
@@ -101,15 +99,6 @@ export function ResultCard({
       ? 'cloud-download-outline'
       : 'language-outline';
   const primaryAction = translated ? onScanAgain : onOpenLanguages;
-  const mainBlock = result.blocks.reduce<ScanResult['blocks'][number] | null>(
-    (best, block) =>
-      !best ||
-      block.width * block.height > best.width * best.height
-        ? block
-        : best,
-    null,
-  );
-  const lookupPhrase = mainBlock?.text.trim() || result.sourceText;
   const lookupTerms = translated ? untranslatedTerms(result) : [];
   const lookupPattern = termPattern(lookupTerms);
   const normalizedTerm = (value: string) =>
@@ -117,52 +106,59 @@ export function ResultCard({
       .normalize('NFD')
       .replace(/\p{Diacritic}/gu, '')
       .toLowerCase();
-  const lookupTermSet = new Set(lookupTerms.map(normalizedTerm));
-  const renderSource = () => {
-    if (prices.length === 0) {
-      return result.sourceText;
-    }
-    const segments: React.ReactNode[] = [];
-    let cursor = 0;
-    for (const price of prices) {
-      if (price.start > cursor) {
-        segments.push(result.sourceText.slice(cursor, price.start));
+  const translationPrices = priceConversions(
+    result.translatedText,
+    'en',
+    preferred.code,
+  );
+  const renderSource = () => result.sourceText;
+
+  const renderTranslation = () => {
+    const text = result.translatedText;
+    const spans: Array<{
+      start: number;
+      end: number;
+      kind: 'term' | 'price';
+    }> = [];
+    if (lookupPattern) {
+      for (const match of text.matchAll(lookupPattern)) {
+        const start = match.index ?? 0;
+        spans.push({ start, end: start + match[0].length, kind: 'term' });
       }
-      segments.push(
+    }
+    for (const price of translationPrices) {
+      spans.push({ start: price.start, end: price.end, kind: 'price' });
+    }
+    spans.sort((a, b) => a.start - b.start);
+    const parts: React.ReactNode[] = [];
+    let cursor = 0;
+    for (const span of spans) {
+      if (span.start < cursor) {
+        continue;
+      }
+      if (span.start > cursor) {
+        parts.push(text.slice(cursor, span.start));
+      }
+      const slice = text.slice(span.start, span.end);
+      parts.push(
         <Text
-          key={`${price.start}-${price.source}`}
-          style={styles.priceTerm}
+          key={`${span.kind}-${span.start}`}
+          style={span.kind === 'price' ? styles.priceTerm : styles.lookupTerm}
           onPress={() => {
-            onOpenPrices(prices);
+            if (span.kind === 'price') {
+              onOpenPrices(translationPrices);
+            } else {
+              onLookUp(slice);
+            }
           }}
         >
-          {result.sourceText.slice(price.start, price.end)}
+          {slice}
         </Text>,
       );
-      cursor = price.end;
+      cursor = span.end;
     }
-    segments.push(result.sourceText.slice(cursor));
-    return segments;
-  };
-  const renderTranslation = () => {
-    if (!lookupPattern) {
-      return result.translatedText;
-    }
-    return result.translatedText.split(lookupPattern).map((part, index) =>
-      lookupTermSet.has(normalizedTerm(part)) ? (
-        <Text
-          key={`${part}-${index}`}
-          style={styles.lookupTerm}
-          onPress={() => {
-            onLookUp(part);
-          }}
-        >
-          {part}
-        </Text>
-      ) : (
-        part
-      ),
-    );
+    parts.push(text.slice(cursor));
+    return parts;
   };
 
   return (
@@ -247,28 +243,6 @@ export function ResultCard({
             onPress={onScanAgain}
           />
         )}
-        {prices.length > 0 ? (
-          <ChipButton
-            label="Prices"
-            icon="cash-outline"
-            iconOnly
-            onPress={() => {
-              onOpenPrices(prices);
-            }}
-          />
-        ) : null}
-        <ChipButton
-          label="Look up"
-          icon="book-outline"
-          iconOnly
-          onPress={() => {
-            if (lookupTerms.length > 0) {
-              onLookUpTerms(lookupTerms);
-            } else {
-              onLookUp(lookupPhrase, result.translatedText);
-            }
-          }}
-        />
         <ChipButton
           label="Change language"
           icon="language-outline"

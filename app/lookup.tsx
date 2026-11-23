@@ -1,11 +1,9 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import Ionicons from '@expo/vector-icons/Ionicons';
 import {
   ActivityIndicator,
   Image,
   Linking,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -23,34 +21,12 @@ import { colors, typography } from '@/theme';
 
 export default function LookupScreen() {
   const router = useRouter();
-  const { q, alt, terms } = useLocalSearchParams<{
-    q?: string;
-    alt?: string;
-    terms?: string;
-  }>();
+  const { q, alt } = useLocalSearchParams<{ q?: string; alt?: string }>();
   const [result, setResult] = useState<LookupResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
 
-  const termList: string[] = (() => {
-    if (typeof terms !== 'string' || !terms) {
-      return [];
-    }
-    try {
-      const parsed: unknown = JSON.parse(terms);
-      return Array.isArray(parsed)
-        ? parsed.filter((term): term is string => typeof term === 'string')
-        : [];
-    } catch {
-      return [];
-    }
-  })();
-
   useEffect(() => {
-    if (termList.length > 0) {
-      setLoading(false);
-      return;
-    }
     let cancelled = false;
     const phrase = typeof q === 'string' ? q : '';
     const fallback = typeof alt === 'string' ? alt : '';
@@ -68,49 +44,15 @@ export default function LookupScreen() {
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [q, alt, terms]);
+  }, [q, alt]);
 
   const phrase = (typeof q === 'string' ? q : '') || (typeof alt === 'string' ? alt : '');
 
   return (
     <View style={styles.screen}>
-      <SheetHeader
-        title={termList.length > 0 ? 'TERMS' : 'LOOK UP'}
-        subtitle={
-          termList.length > 0
-            ? 'TAP A TERM TO EXPLAIN'
-            : 'WIKIPEDIA · DUCKDUCKGO'
-        }
-      />
+      <SheetHeader title="LOOK UP" subtitle="WIKIPEDIA · DUCKDUCKGO" />
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
-        {termList.length > 0 ? (
-          <View style={styles.block}>
-            {termList.map((term) => (
-              <Pressable
-                key={term}
-                accessibilityRole="button"
-                onPress={() => {
-                  router.push({
-                    pathname: '/lookup',
-                    params: { q: term },
-                  });
-                }}
-                style={({ pressed }) => [
-                  styles.termRow,
-                  pressed && styles.termRowPressed,
-                ]}
-              >
-                <Text style={styles.termText}>{term}</Text>
-                <Ionicons
-                  name="chevron-forward"
-                  size={16}
-                  color={colors.muted}
-                />
-              </Pressable>
-            ))}
-          </View>
-        ) : loading ? (
+        {loading ? (
           <View style={styles.center}>
             <ActivityIndicator size="small" color={colors.accent} />
             <MicroLabel tone="dim">SEARCHING…</MicroLabel>
@@ -228,24 +170,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 8,
     flexWrap: 'wrap',
-  },
-  termRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
-    paddingVertical: 14,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.borderSoft,
-  },
-  termRowPressed: {
-    opacity: 0.6,
-  },
-  termText: {
-    ...typography.title,
-    fontSize: 18,
-    color: colors.foreground,
-    flexShrink: 1,
   },
   footer: {
     paddingHorizontal: 20,

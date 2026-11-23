@@ -164,7 +164,7 @@ export function OriginalView({
         </Pressable>
       </View>
 
-      <View style={[styles.panel, { paddingBottom: insets.bottom + 112 }]}>
+      <View style={[styles.panel, { paddingBottom: insets.bottom + 94 }]}>
         <MicroLabel tone="accent">INSPECT · TAP THE TEXT</MicroLabel>
         {picked ? (
           <ScrollView style={styles.pickedScroll}>

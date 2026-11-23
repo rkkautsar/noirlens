@@ -220,7 +220,7 @@ export function ResultCard({
         style={[
           styles.actions,
           styles.fixedActions,
-          { bottom: insets.bottom + 94 },
+          { bottom: insets.bottom + 16 },
         ]}
       >
         <ChipButton

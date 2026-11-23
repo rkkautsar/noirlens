@@ -140,14 +140,14 @@ The table is an order-of-magnitude model, not a measurement, for an iPhone 13 (1
 | Flow | Camera/OCR live | Estimated energy | Share of battery |
 | --- | --- | --- | --- |
 | NoirLens, ten 3 s holds | 30 s | 60–80 J (0.017–0.022 Wh) | 0.14–0.18% |
-| Point-and-freeze, 30 s live + 30 s review, five times | 150 s | 400–500 J (0.11–0.14 Wh) | 0.9–1.1% |
-| Apple Translate camera screen left open for the whole 10 min | 600 s | 1.3–1.8 kJ (0.36–0.5 Wh) | 3–4% |
+| Point-and-freeze, 30 s live + 30 s review, ten times | 300 s | 0.75–1.2 kJ (0.21–0.33 Wh) | 1.7–2.7% |
+| Apple Translate camera screen left open for the whole 10 min | 600 s | 1.5–2.4 kJ (0.42–0.67 Wh) | 3.4–5.4% |
 
 Assumptions: rear camera + preview at about 1.2–1.8 W for our 720p session and 2–3 W for a higher-resolution preview plus a continuous Vision OCR loop; one OCR pass on a captured frame about 0.5 J; one translation about 1 J. A 2026 sensor-battery study found the rear camera to be the iPhone's most demanding sensor — about [six minutes of battery per percent](https://pmc.ncbi.nlm.nih.gov/articles/PMC13211051/) with no preview or recording at all — so the live-overlay rows are if anything conservative. Expect the real numbers to be off by a factor of two; the ordering is the point.
 
-The screen is a second saving the table does not count. The standby and result screens are almost entirely `#000000`, which an OLED panel renders with the pixels off, and the app never raises the display brightness — auto-brightness stays in charge. While aiming, the default eco mode hides the full-color preview and draws a low-luminance edge/scanline HUD at 15 fps on black, instead of a 30 fps full-color camera image.
+The screen is a second saving the table does not count, and the freeze frame makes it larger. The standby and result screens are almost entirely `#000000`, which an OLED panel renders with the pixels off, and the app never raises the display brightness — auto-brightness stays in charge. While aiming, the default eco mode hides the full-color preview and draws a low-luminance edge/scanline HUD at 15 fps on black. A point-and-freeze translator instead shows the full-color camera image while pointing and keeps the full-color still on screen while the user reads the translation.
 
-At typical indoor brightness a full-screen color preview costs roughly 0.5–1 W of display power; a mostly-black UI with thin warm-white lines costs roughly 0.05–0.2 W. Over the same ten minutes that is another 0.01–0.03 Wh (0.1–0.2% of the battery) for NoirLens versus 0.1–0.2 Wh (0.8–1.6%) for a full-preview flow. The two estimates are not additive with the table — the screen is on while the user reads either way — but both point the same direction.
+At typical indoor brightness a full-color image costs roughly 0.5–1 W of display power; a mostly-black UI with thin warm-white lines costs roughly 0.05–0.2 W. Over the same ten minutes the Apple-style flows keep full-color content on screen for essentially the whole session (live preview plus the frozen still), about 0.08–0.17 Wh (0.7–1.4% of the battery); NoirLens spends 0.01–0.02 Wh (0.1–0.2%). That is on top of the table — the screen is on while the user reads in both cases — and it is the largest design difference after the sensor itself.
 
 For a real number, run a fixed script on the phone and read Xcode's Energy Log or Settings → Battery per app. The model above is only a design argument: between scans there is no sensor, no OCR loop, no translation work, and almost no lit pixels.
 

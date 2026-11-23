@@ -16,7 +16,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { LanguagePickerSheet } from '@/components/LanguagePickerSheet';
-import { MODE_TABS_HEIGHT, ModeTabs } from '@/components/ModeTabs';
+import { ModeTabs } from '@/components/ModeTabs';
 import { OverlaySheet } from '@/components/OverlaySheet';
 import { ShowToLocal } from '@/components/ShowToLocal';
 import { TopBar } from '@/components/TopBar';
@@ -203,19 +203,7 @@ export default function TranslateScreen() {
         onOpenPaywall={() => router.push('/paywall')}
       />
 
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={0}
-      >
-        <ScrollView
-          style={styles.flex}
-          contentContainerStyle={[
-            styles.content,
-            { paddingBottom: MODE_TABS_HEIGHT + insets.bottom + 72 },
-          ]}
-          keyboardShouldPersistTaps="handled"
-        >
+      <View style={styles.languageBar}>
           <View style={styles.languageRow}>
             <Pressable
               accessibilityRole="button"
@@ -252,40 +240,20 @@ export default function TranslateScreen() {
               <Text style={styles.languageShort}>{languageShortLabel(target)}</Text>
             </Pressable>
           </View>
+      </View>
 
-          <TextInput
-            value={input}
-            onChangeText={setInput}
-            placeholder="Type or paste text"
-            placeholderTextColor={colors.dim}
-            selectionColor={colors.accent}
-            multiline
-            textAlignVertical="top"
-            style={styles.input}
-            accessibilityLabel="Text to translate"
-          />
+      <KeyboardAvoidingView
+        style={styles.flex}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={0}
+      >
+        <ScrollView
+          style={styles.flex}
+          contentContainerStyle={styles.content}
+          keyboardShouldPersistTaps="handled"
+        >
 
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Translate"
-            accessibilityState={{ disabled: !canTranslate }}
-            disabled={!canTranslate}
-            onPress={() => void run()}
-            style={({ pressed }) => [
-              styles.translate,
-              !canTranslate && styles.disabled,
-              pressed && styles.pressed,
-            ]}
-          >
-            {request.status === 'loading' ? (
-              <Text style={styles.translateText}>TRANSLATING…</Text>
-            ) : (
-              <>
-                <Ionicons name="language-outline" size={16} color={colors.background} />
-                <Text style={styles.translateText}>TRANSLATE</Text>
-              </>
-            )}
-          </Pressable>
+
 
           {source === target ? (
             <Text style={styles.hint}>Choose two different languages.</Text>
@@ -366,6 +334,43 @@ export default function TranslateScreen() {
             On-device translation. Works offline once the pack is installed.
           </Text>
         </ScrollView>
+
+        <View
+          style={[styles.composer, { paddingBottom: insets.bottom + 8 }]}
+        >
+          <TextInput
+            value={input}
+            onChangeText={setInput}
+            placeholder="Type or paste text"
+            placeholderTextColor={colors.dim}
+            selectionColor={colors.accent}
+            multiline
+            textAlignVertical="top"
+            style={styles.input}
+            accessibilityLabel="Text to translate"
+          />
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Translate"
+            accessibilityState={{ disabled: !canTranslate }}
+            disabled={!canTranslate}
+            onPress={() => void run()}
+            style={({ pressed }) => [
+              styles.translate,
+              !canTranslate && styles.disabled,
+              pressed && styles.pressed,
+            ]}
+          >
+            {request.status === 'loading' ? (
+              <Text style={styles.translateText}>TRANSLATING…</Text>
+            ) : (
+              <>
+                <Ionicons name="language-outline" size={16} color={colors.background} />
+                <Text style={styles.translateText}>TRANSLATE</Text>
+              </>
+            )}
+          </Pressable>
+        </View>
       </KeyboardAvoidingView>
 
       <ModeTabs
@@ -408,8 +413,22 @@ const styles = StyleSheet.create({
   },
   content: {
     paddingHorizontal: 18,
-    paddingTop: 30,
+    paddingTop: 16,
+    paddingBottom: 24,
     gap: 14,
+  },
+  languageBar: {
+    paddingHorizontal: 18,
+    paddingTop: 22,
+    paddingBottom: 10,
+  },
+  composer: {
+    paddingHorizontal: 18,
+    paddingTop: 10,
+    gap: 10,
+    backgroundColor: colors.background,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.borderSoft,
   },
   languageRow: {
     flexDirection: 'row',
@@ -448,8 +467,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.accentSoft,
   },
   input: {
-    minHeight: 132,
-    maxHeight: 240,
+    minHeight: 72,
+    maxHeight: 132,
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,

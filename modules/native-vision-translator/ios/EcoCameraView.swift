@@ -102,14 +102,8 @@ class EcoCameraView: ExpoView {
     } else {
       CameraController.shared.attach(self)
       updateSession(CameraController.shared.currentSession())
-      CameraController.shared.setEcoMode(false)
       updatePreviewRotation()
     }
-  }
-
-  func displayEdges(_: CGImage) {
-    // The edge HUD was replaced by a dim overlay; keep the bridge symbol for
-    // compatibility but do nothing with per-frame edge images.
   }
 
   private func applyScanlines() {
@@ -143,8 +137,5 @@ class EcoCameraView: ExpoView {
     previewLayer.isHidden = false
     dimLayer.isHidden = !ecoMode
     applyScanlines()
-    // The controller's CoreImage edge pass stays disabled: overlay mode needs
-    // no per-frame processing.
-    CameraController.shared.setEcoMode(false)
   }
 }

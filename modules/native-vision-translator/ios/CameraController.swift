@@ -49,9 +49,7 @@ final class CameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDele
   private var videoOutput: AVCaptureVideoDataOutput?
   private var configured = false
   private var latestSampleBuffer: CMSampleBuffer?
-  private weak var edgeSink: EcoCameraView?
-  private var ecoMode = false
-  private var lastEdgeFrameAt: CFTimeInterval = 0
+  private weak var previewSink: EcoCameraView?
   private var previewViewSize: CGSize = .zero
   private var lastRuntimeError: Error?
   private var lastInterruptionReason: AVCaptureSession.InterruptionReason?
@@ -616,31 +614,25 @@ final class CameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDele
     }
   }
 
-  // MARK: - Edge sink
+  // MARK: - Preview sink
 
   func attach(_ view: EcoCameraView) {
     stateLock.lock()
-    edgeSink = view
+    previewSink = view
     stateLock.unlock()
   }
 
   func detach(_ view: EcoCameraView) {
     stateLock.lock()
-    if edgeSink === view {
-      edgeSink = nil
+    if previewSink === view {
+      previewSink = nil
     }
-    stateLock.unlock()
-  }
-
-  func setEcoMode(_ enabled: Bool) {
-    stateLock.lock()
-    ecoMode = enabled
     stateLock.unlock()
   }
 
   private func notifyPreviewRotation() {
     stateLock.lock()
-    let sink = edgeSink
+    let sink = previewSink
     stateLock.unlock()
 
     guard let sink else {
@@ -659,7 +651,6 @@ final class CameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDele
     from connection: AVCaptureConnection
   ) {
     replaceLatestSampleBuffer(sampleBuffer)
-    renderEdgePreviewIfNeeded(sampleBuffer)
   }
 
   // MARK: - Session configuration
@@ -815,50 +806,6 @@ final class CameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDele
       try? await Task.sleep(nanoseconds: 25_000_000)
     }
     return currentSampleBuffer()
-  }
-
-  // MARK: - Edge HUD
-
-  private func renderEdgePreviewIfNeeded(_ sampleBuffer: CMSampleBuffer) {
-    stateLock.lock()
-    let eco = ecoMode
-    let sink = edgeSink
-    stateLock.unlock()
-
-    guard eco, let sink else {
-      return
-    }
-    guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else {
-      return
-    }
-
-    let now = CACurrentMediaTime()
-    guard now - lastEdgeFrameAt >= (1.0 / 15.0) else {
-      return
-    }
-    lastEdgeFrameAt = now
-
-    let upright = CIImage(cvPixelBuffer: pixelBuffer).oriented(.right)
-    let edges = upright.applyingFilter(
-      "CIEdges",
-      parameters: [kCIInputIntensityKey: 1.4]
-    )
-    let warmWhite = CIColor(red: 1.0, green: 0.973, blue: 0.906, alpha: 1.0)
-    let tinted = edges.applyingFilter(
-      "CIColorMonochrome",
-      parameters: [
-        kCIInputColorKey: warmWhite,
-        kCIInputIntensityKey: 1.0
-      ]
-    )
-
-    guard let image = ciContext.createCGImage(tinted, from: tinted.extent) else {
-      return
-    }
-
-    DispatchQueue.main.async {
-      sink.displayEdges(image)
-    }
   }
 
   private func makePreviewJPEG(

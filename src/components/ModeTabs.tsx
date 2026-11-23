@@ -39,20 +39,31 @@ export function ModeTabs({
   active,
   onCamera,
   onTranslate,
+  inline = false,
 }: {
   active: AppMode;
   onCamera: () => void;
   onTranslate: () => void;
+  /** Render in the flow (screen header) instead of over the content. */
+  inline?: boolean;
 }) {
   const insets = useSafeAreaInsets();
-  return (
-    <View pointerEvents="box-none" style={[styles.row, { top: insets.top + 44 }]}>
+  const tabs = (
+    <>
       <Tab label="CAMERA" active={active === 'camera'} onPress={onCamera} />
       <Tab
         label="TRANSLATE"
         active={active === 'translate'}
         onPress={onTranslate}
       />
+    </>
+  );
+  if (inline) {
+    return <View style={styles.inlineRow}>{tabs}</View>;
+  }
+  return (
+    <View pointerEvents="box-none" style={[styles.row, { top: insets.top + 44 }]}>
+      {tabs}
     </View>
   );
 }
@@ -66,6 +77,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 26,
     zIndex: 20,
+  },
+  inlineRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 26,
+    paddingTop: 10,
+    paddingBottom: 2,
   },
   tab: {
     alignItems: 'center',

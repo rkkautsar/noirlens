@@ -13,15 +13,40 @@ export function LanguagePickerSheet({
   title,
   selected,
   onSelect,
+  allowAuto = false,
 }: {
   title: string;
   selected: string;
   onSelect: (code: string) => void;
+  allowAuto?: boolean;
 }) {
   return (
     <View>
       <MicroLabel style={styles.heading}>{title}</MicroLabel>
       <ScrollView style={styles.list} contentContainerStyle={styles.listContent}>
+        {allowAuto ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityState={{ selected: selected === 'auto' }}
+            onPress={() => onSelect('auto')}
+            style={({ pressed }) => [
+              styles.row,
+              selected === 'auto' && styles.rowActive,
+              pressed && styles.pressed,
+            ]}
+          >
+            <Text
+              style={[styles.name, selected === 'auto' && styles.nameActive]}
+            >
+              Auto-detect
+            </Text>
+            <Text
+              style={[styles.native, selected === 'auto' && styles.nameActive]}
+            >
+              OCR's best guess
+            </Text>
+          </Pressable>
+        ) : null}
         {TRANSLATE_LANGUAGES.map((language) => {
           const active = language.code === selected;
           return (

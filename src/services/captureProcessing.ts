@@ -40,6 +40,22 @@ export function resumeCaptureProcessing(): void {
   }
 }
 
+/** Re-runs OCR for a stored capture with a different source hint ('' = auto). */
+export function rerunCaptureOcr(id: string, hint: string): void {
+  void captures
+    .patch(id, {
+      hint,
+      status: 'pending',
+      text: '',
+      language: '',
+      blocks: [],
+      confidence: 0,
+      error: null,
+      attempts: 0,
+    })
+    .then(() => enqueueCapture(id));
+}
+
 export function retryCapture(id: string): void {
   const record = captures.get(id);
   if (!record) {

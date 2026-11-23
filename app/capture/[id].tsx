@@ -15,11 +15,22 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { LanguagePickerSheet } from '@/components/LanguagePickerSheet';
 import { ModeTabs } from '@/components/ModeTabs';
+import { OverlaySheet } from '@/components/OverlaySheet';
+import { ScanlineOverlay } from '@/components/ScanlineOverlay';
 import { ChipButton, MicroLabel } from '@/components/ui';
-import { languageLabel } from '@/constants/languages';
+import {
+  languageLabel,
+  languageShortLabel,
+} from '@/constants/languages';
 import { captures, useCaptures } from '@/services/captures';
-import { retryCapture } from '@/services/captureProcessing';
+import {
+  rerunCaptureOcr,
+  retryCapture,
+} from '@/services/captureProcessing';
+import { romanize } from '@/services/romanize';
+import { romanizeNative } from '@/services/romanizeNative';
 import { describeTranslateFailure } from '@/services/translateRequest';
 import { colors, radius, typography } from '@/theme';
 import vision from '../../modules/native-vision-translator';
@@ -47,6 +58,38 @@ function formatTime(at: number): string {
   });
 }
 
+/** JS tables first, then the native ICU pass when it has a different answer. */
+function useRomanized(text: string, language: string): string {
+  const [state, setState] = useState({ text, language, value: '' });
+  useEffect(() => {
+    let active = true;
+    setState({ text, language, value: romanize(text) });
+    if (text.trim().length === 0) {
+      return;
+    }
+    void romanizeNative(text, language)
+      .then((value) => {
+        if (active) {
+          setState({ text, language, value });
+        }
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [text, language]);
+  return state.text === text && state.language === language
+    ? state.value
+    : romanize(text);
+}
+
+function isDifferentRomanization(value: string, source: string): boolean {
+  return (
+    value.trim().length > 0 &&
+    value.trim().toLowerCase() !== source.trim().toLowerCase()
+  );
+}
+
 export default function CaptureDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
@@ -60,6 +103,7 @@ export default function CaptureDetailScreen() {
   const [all, setAll] = useState<TranslationState>(IDLE);
   const [copied, setCopied] = useState<string | null>(null);
   const [imageFailed, setImageFailed] = useState(false);
+  const [picker, setPicker] = useState(false);
   const regionRequest = useRef(0);
   const allRequest = useRef(0);
   const reviewed = useRef(false);
@@ -76,7 +120,20 @@ export default function CaptureDetailScreen() {
     void captures.review(id);
   }, [id, record]);
 
-  const source = record?.language || record?.hint || 'en';
+  // A language change re-runs OCR; drop results tied to the previous pass.
+  useEffect(() => {
+    setSelected(null);
+    setRegion(IDLE);
+    setAll(IDLE);
+  }, [record?.hint, record?.text]);
+
+  const hint = record?.hint ?? '';
+  const source = record?.language || hint || 'en';
+  const busy =
+    record?.status === 'pending' || record?.status === 'processing';
+  const block = selected !== null ? record?.blocks[selected] : undefined;
+  const romanizedWhole = useRomanized(record?.text ?? '', source);
+  const romanizedBlock = useRomanized(block?.text ?? '', source);
 
   const copy = async (text: string, key: string) => {
     await Clipboard.setStringAsync(text);
@@ -177,10 +234,22 @@ export default function CaptureDetailScreen() {
       return;
     }
     setSelected(index);
-    const block = record.blocks[index];
-    if (block) {
-      void translate(block.text, setRegion, regionRequest);
+    const next = record.blocks[index];
+    if (next) {
+      void translate(next.text, setRegion, regionRequest);
     }
+  };
+
+  const chooseLanguage = (code: string) => {
+    setPicker(false);
+    if (!record) {
+      return;
+    }
+    const next = code === 'auto' ? '' : code;
+    if (next === record.hint) {
+      return;
+    }
+    rerunCaptureOcr(record.id, next);
   };
 
   const remove = () => {
@@ -204,19 +273,38 @@ export default function CaptureDetailScreen() {
   };
 
   const header = (
-    <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
-      <ChipButton
-        label="Back"
-        icon="chevron-back"
-        iconOnly
-        onPress={() => router.back()}
-      />
-      <View style={styles.headerTitle} />
-      <ChipButton
-        label="Delete capture"
-        icon="trash-outline"
-        iconOnly
-        onPress={remove}
+    <View
+      style={[
+        styles.headerWrap,
+        { paddingTop: insets.top + 8, paddingBottom: 8 },
+      ]}
+    >
+      <View style={styles.headerRow}>
+        <ChipButton
+          label="Back"
+          icon="chevron-back"
+          iconOnly
+          onPress={() => router.back()}
+        />
+        <MicroLabel tone="dim">
+          {record ? formatTime(record.at) : 'NOT FOUND'}
+        </MicroLabel>
+        {record ? (
+          <ChipButton
+            label="Delete capture"
+            icon="trash-outline"
+            iconOnly
+            onPress={remove}
+          />
+        ) : (
+          <View style={styles.headerSpacer} />
+        )}
+      </View>
+      <ModeTabs
+        inline
+        active="camera"
+        onCamera={() => router.back()}
+        onTranslate={() => router.push('/translate')}
       />
     </View>
   );
@@ -251,7 +339,13 @@ export default function CaptureDetailScreen() {
     120,
     imageWidth * (record.height / Math.max(1, record.width)),
   );
-  const block = selected !== null ? record.blocks[selected] : undefined;
+
+  const translated = (value: TranslationState) =>
+    value.status === 'loading'
+      ? 'Translating…'
+      : value.status === 'error'
+        ? value.error
+        : value.text;
 
   return (
     <View style={styles.root}>
@@ -262,7 +356,6 @@ export default function CaptureDetailScreen() {
           { paddingBottom: insets.bottom + 40 },
         ]}
       >
-        <MicroLabel tone="dim">{formatTime(record.at)}</MicroLabel>
         <View
           style={[
             styles.imageWrap,
@@ -275,6 +368,7 @@ export default function CaptureDetailScreen() {
             resizeMode="cover"
             onError={() => setImageFailed(true)}
           />
+          {!imageFailed ? <ScanlineOverlay /> : null}
           {imageFailed ? (
             <View style={styles.missingImage}>
               <Ionicons name="image-outline" size={22} color={colors.dim} />
@@ -302,7 +396,7 @@ export default function CaptureDetailScreen() {
                 />
               ))
             : null}
-          {record.status === 'pending' || record.status === 'processing' ? (
+          {busy ? (
             <View style={styles.processing}>
               <ActivityIndicator color={colors.accent} />
               <MicroLabel>READING TEXT ON-DEVICE…</MicroLabel>
@@ -316,8 +410,9 @@ export default function CaptureDetailScreen() {
               {record.error || 'Text recognition failed.'}
             </Text>
             <ChipButton
-              label="RETRY"
+              label="Retry text recognition"
               icon="refresh"
+              iconOnly
               onPress={() => retryCapture(record.id)}
             />
           </View>
@@ -332,49 +427,95 @@ export default function CaptureDetailScreen() {
         {record.text.length > 0 ? (
           <View style={styles.panel}>
             <View style={styles.panelHead}>
-              <MicroLabel tone="accent">
-                {languageLabel(record.language || record.hint || 'und')} ·
-                SELECT A REGION
-              </MicroLabel>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`OCR language: ${
+                  hint ? languageLabel(hint) : 'Auto-detect'
+                }. Change language and read again.`}
+                accessibilityState={{ disabled: busy }}
+                disabled={busy}
+                onPress={() => setPicker(true)}
+                style={({ pressed }) => [
+                  styles.languagePill,
+                  busy && styles.disabled,
+                  pressed && styles.pressed,
+                ]}
+              >
+                <Ionicons
+                  name="language-outline"
+                  size={14}
+                  color={colors.accent}
+                />
+                <Text style={styles.languagePillText}>
+                  {hint ? languageShortLabel(hint) : 'AUTO'}
+                </Text>
+                <Ionicons name="chevron-down" size={12} color={colors.muted} />
+              </Pressable>
               <ChipButton
-                label="TRANSLATE ALL"
+                label="Translate all text"
                 icon="language-outline"
+                iconOnly
                 onPress={() => void translate(record.text, setAll, allRequest)}
               />
             </View>
 
             {block ? (
               <View style={styles.region}>
+                <MicroLabel tone="accent">SELECTED REGION</MicroLabel>
+                <Text
+                  selectable
+                  style={[
+                    styles.translationText,
+                    region.status === 'error' && styles.errorText,
+                  ]}
+                >
+                  {translated(region)}
+                </Text>
+                {isDifferentRomanization(romanizedBlock, block.text) ? (
+                  <Text style={styles.romanizedText} selectable>
+                    {romanizedBlock}
+                  </Text>
+                ) : null}
                 <Text style={styles.sourceText} selectable>
                   {block.text}
                 </Text>
-                <Text style={styles.translationText} selectable>
-                  {region.status === 'loading'
-                    ? 'Translating…'
-                    : region.status === 'done'
-                      ? region.text
-                      : region.status === 'error'
-                        ? region.error
-                        : ''}
-                </Text>
                 <View style={styles.regionActions}>
-                  <ChipButton
-                    label={copied === 'region-src' ? 'COPIED' : 'COPY TEXT'}
-                    icon="copy-outline"
-                    onPress={() => void copy(block.text, 'region-src')}
-                  />
                   {region.status === 'done' ? (
                     <ChipButton
-                      label={copied === 'region-out' ? 'COPIED' : 'COPY TRANSLATION'}
-                      icon="copy-outline"
+                      label={
+                        copied === 'region-out'
+                          ? 'Copied translation'
+                          : 'Copy translation'
+                      }
+                      icon={copied === 'region-out' ? 'checkmark' : 'copy-outline'}
+                      iconOnly
+                      active={copied === 'region-out'}
                       onPress={() => void copy(region.text, 'region-out')}
                     />
                   ) : null}
+                  <ChipButton
+                    label={
+                      copied === 'region-src'
+                        ? 'Copied text'
+                        : 'Copy recognized text'
+                    }
+                    icon={
+                      copied === 'region-src'
+                        ? 'checkmark'
+                        : 'document-text-outline'
+                    }
+                    iconOnly
+                    active={copied === 'region-src'}
+                    onPress={() => void copy(block.text, 'region-src')}
+                  />
                   {region.status === 'error' && region.packGap ? (
                     <ChipButton
-                      label="DOWNLOAD PACK"
+                      label="Download language pack"
                       icon="download-outline"
-                      onPress={() => void preparePack(block.text, setRegion, regionRequest)}
+                      iconOnly
+                      onPress={() =>
+                        void preparePack(block.text, setRegion, regionRequest)
+                      }
                     />
                   ) : null}
                 </View>
@@ -389,26 +530,45 @@ export default function CaptureDetailScreen() {
             {all.status !== 'idle' ? (
               <View style={styles.region}>
                 <MicroLabel tone="accent">WHOLE CAPTURE</MicroLabel>
-                <Text style={styles.translationText} selectable>
-                  {all.status === 'loading'
-                    ? 'Translating…'
-                    : all.status === 'done'
-                      ? all.text
-                      : all.error}
+                <Text
+                  selectable
+                  style={[
+                    styles.translationText,
+                    all.status === 'error' && styles.errorText,
+                  ]}
+                >
+                  {translated(all)}
+                </Text>
+                {isDifferentRomanization(romanizedWhole, record.text) ? (
+                  <Text style={styles.romanizedText} selectable>
+                    {romanizedWhole}
+                  </Text>
+                ) : null}
+                <Text style={styles.sourceText} selectable>
+                  {record.text}
                 </Text>
                 <View style={styles.regionActions}>
                   {all.status === 'done' ? (
                     <ChipButton
-                      label={copied === 'all-out' ? 'COPIED' : 'COPY TRANSLATION'}
-                      icon="copy-outline"
+                      label={
+                        copied === 'all-out'
+                          ? 'Copied translation'
+                          : 'Copy translation'
+                      }
+                      icon={copied === 'all-out' ? 'checkmark' : 'copy-outline'}
+                      iconOnly
+                      active={copied === 'all-out'}
                       onPress={() => void copy(all.text, 'all-out')}
                     />
                   ) : null}
                   {all.status === 'error' && all.packGap ? (
                     <ChipButton
-                      label="DOWNLOAD PACK"
+                      label="Download language pack"
                       icon="download-outline"
-                      onPress={() => void preparePack(record.text, setAll, allRequest)}
+                      iconOnly
+                      onPress={() =>
+                        void preparePack(record.text, setAll, allRequest)
+                      }
                     />
                   ) : null}
                 </View>
@@ -417,11 +577,17 @@ export default function CaptureDetailScreen() {
           </View>
         ) : null}
       </ScrollView>
-      <ModeTabs
-        active="camera"
-        onCamera={() => router.back()}
-        onTranslate={() => router.push('/translate')}
-      />
+
+      {picker ? (
+        <OverlaySheet onClose={() => setPicker(false)}>
+          <LanguagePickerSheet
+            title="OCR LANGUAGE"
+            selected={hint || 'auto'}
+            allowAuto
+            onSelect={chooseLanguage}
+          />
+        </OverlaySheet>
+      ) : null}
     </View>
   );
 }
@@ -431,28 +597,22 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-  header: {
+  headerWrap: {
+    paddingHorizontal: 18,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.borderSoft,
+  },
+  headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 12,
-    paddingHorizontal: 18,
-    paddingBottom: 10,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.borderSoft,
   },
-  headerTitle: {
-    alignItems: 'center',
-    gap: 2,
-  },
-  title: {
-    ...typography.label,
-    color: colors.foreground,
-    letterSpacing: 1.6,
+  headerSpacer: {
+    width: 38,
   },
   content: {
     padding: 16,
-    paddingTop: 30,
     gap: 16,
   },
   center: {
@@ -484,12 +644,12 @@ const styles = StyleSheet.create({
     position: 'absolute',
     borderWidth: 1,
     borderColor: 'rgba(217,179,108,0.55)',
-    backgroundColor: 'rgba(217,179,108,0.08)',
+    backgroundColor: 'rgba(217,179,108,0.06)',
     borderRadius: 3,
   },
   blockActive: {
     borderColor: colors.accent,
-    backgroundColor: 'rgba(217,179,108,0.24)',
+    backgroundColor: 'rgba(217,179,108,0.22)',
   },
   processing: {
     ...StyleSheet.absoluteFill,
@@ -499,16 +659,20 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.45)',
   },
   notice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: radius.md,
     backgroundColor: colors.surface,
     padding: 14,
-    gap: 10,
   },
   noticeText: {
     ...typography.body,
     color: colors.muted,
+    flex: 1,
   },
   panel: {
     borderWidth: 1,
@@ -524,26 +688,57 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: 10,
   },
+  languagePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  languagePillText: {
+    ...typography.micro,
+    color: colors.foreground,
+  },
   region: {
     gap: 8,
   },
-  sourceText: {
-    ...typography.body,
-    color: colors.muted,
-  },
   translationText: {
     ...typography.title,
-    fontSize: 20,
-    lineHeight: 27,
+    fontSize: 24,
+    lineHeight: 31,
     color: colors.foreground,
+  },
+  errorText: {
+    color: colors.danger,
+    fontSize: 15,
+    lineHeight: 22,
+  },
+  romanizedText: {
+    ...typography.body,
+    color: colors.muted,
+    fontStyle: 'italic',
+  },
+  sourceText: {
+    ...typography.body,
+    fontSize: 13,
+    color: colors.dim,
   },
   regionActions: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
+    alignItems: 'center',
     gap: 8,
   },
   hint: {
     ...typography.body,
     color: colors.dim,
+  },
+  pressed: {
+    opacity: 0.7,
+  },
+  disabled: {
+    opacity: 0.4,
   },
 });

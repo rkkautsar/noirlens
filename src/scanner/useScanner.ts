@@ -10,6 +10,14 @@ import {
 import { AppState } from 'react-native';
 
 import vision, { type OcrCrop } from '../../modules/native-vision-translator';
+
+/** OCR rows arrive newline-separated; the translator sometimes doubles them. */
+function normalizeTranslated(text: string): string {
+  return text
+    .replace(/[ \t]*\n[ \t]*/g, '\n')
+    .replace(/\n{2,}/g, '\n')
+    .trim();
+}
 import {
   isEnglishLanguageCode,
   TRAVELER_LANGUAGES,
@@ -245,7 +253,7 @@ export function useScanner(): ScannerController {
               }
               sendResult(
                 'translated',
-                translation.translatedText,
+                normalizeTranslated(translation.translatedText),
                 false,
                 candidate,
               );
@@ -264,7 +272,11 @@ export function useScanner(): ScannerController {
           if (token !== captureToken) {
             return;
           }
-          sendResult('translated', translation.translatedText, false);
+          sendResult(
+            'translated',
+            normalizeTranslated(translation.translatedText),
+            false,
+          );
         } catch (error) {
           if (token !== captureToken) {
             return;
@@ -556,7 +568,7 @@ export function useScanner(): ScannerController {
             text: ocr.text,
             sourceLanguage: resolvedLanguage,
           });
-          translatedText = out.translatedText;
+          translatedText = normalizeTranslated(out.translatedText);
           cached = out.cached;
         } catch (error) {
           kind = isLanguagePackFailure(error) ? 'pack_missing' : 'english';

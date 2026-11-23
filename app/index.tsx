@@ -8,7 +8,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AimHud } from '@/components/AimHud';
 import { OriginalView } from '@/components/OriginalView';
 import { ResultCard } from '@/components/ResultCard';
-import { ResultSheet } from '@/components/ResultSheet';
 import { ScanShutter } from '@/components/ScanShutter';
 import { Standby } from '@/components/Standby';
 import { TopBar } from '@/components/TopBar';
@@ -156,36 +155,32 @@ export default function ScannerScreen() {
           onReticleFrame={scanner.setReticleFrame}
         />
       ) : null}
-      {locked ? (
-        <ResultSheet onDismiss={scanner.stop}>
-          {showOriginal ? (
-            <OriginalView
-              result={result}
-              onClose={() => {
-                setShowOriginal(false);
-              }}
-              onScanAgain={scanner.scanAgain}
-              onOpenLanguages={openLanguages}
-              onLookUp={openLookup}
-            />
-          ) : (
-            <ResultCard
-              result={result}
-              remaining={snapshot.remainingToday}
-              unlimited={snapshot.unlimited}
-              onScanAgain={scanner.scanAgain}
-              onShowOriginal={() => {
-                setShowOriginal(true);
-              }}
-              onOpenLanguages={openLanguages}
-              onLookUp={openLookup}
-              onOpenPrices={openPrices}
-            />
-          )}
-        </ResultSheet>
+      {locked && showOriginal ? (
+        <OriginalView
+          result={result}
+          onClose={() => {
+            setShowOriginal(false);
+          }}
+          onScanAgain={scanner.scanAgain}
+          onOpenLanguages={openLanguages}
+          onLookUp={openLookup}
+        />
+      ) : locked ? (
+        <ResultCard
+          result={result}
+          remaining={snapshot.remainingToday}
+          unlimited={snapshot.unlimited}
+          onScanAgain={scanner.scanAgain}
+          onShowOriginal={() => {
+            setShowOriginal(true);
+          }}
+          onOpenLanguages={openLanguages}
+          onLookUp={openLookup}
+          onOpenPrices={openPrices}
+        />
       ) : null}
 
-      {!exhausted ? (
+      {!exhausted && !locked ? (
         <ScanShutter
           next={locked}
           active={state === 'PREWARM'}

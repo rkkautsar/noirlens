@@ -167,7 +167,10 @@ export function ResultCard({
         style={styles.scroll}
         contentContainerStyle={[
           styles.content,
-          { paddingBottom: insets.bottom + 190 },
+          {
+            paddingTop: insets.top + 24,
+            paddingBottom: insets.bottom + 96,
+          },
         ]}
       >
         <View style={styles.kickerRow}>

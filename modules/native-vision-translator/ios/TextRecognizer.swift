@@ -158,7 +158,7 @@ enum TextRecognizer {
         : (autoGroups.first ?? [])
       do {
         if !retryLanguages.isEmpty,
-           let enhanced = enhancedImage(cropped),
+           let enhanced = enhancedImage(CIImage(cgImage: image)),
            let enhancedCG = ciContext.createCGImage(enhanced, from: enhanced.extent) {
           lines = try runPass(
             enhancedCG,

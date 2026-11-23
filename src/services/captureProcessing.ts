@@ -5,9 +5,13 @@ import { captures } from './captures';
 const processor = new CaptureQueue(
   {
     recognize: (job) => vision.recognizeCapture(job.image, job.hint),
-    start: (id) => captures.patch(id, { status: 'processing', error: null }),
-    finish: (id, ocr) =>
-      captures.patch(id, {
+    start: (job) =>
+      captures.patchForRevision(job.id, job.revision, {
+        status: 'processing',
+        error: null,
+      }),
+    finish: (job, ocr) =>
+      captures.patchForRevision(job.id, job.revision, {
         status: 'done',
         text: ocr.text,
         language: ocr.sourceLanguage,
@@ -15,7 +19,8 @@ const processor = new CaptureQueue(
         confidence: ocr.confidence,
         error: null,
       }),
-    fail: (id, message) => captures.fail(id, message),
+    fail: (job, message) =>
+      captures.failForRevision(job.id, job.revision, message),
     isDeleted: (id) => captures.get(id) === undefined,
   },
   2,
@@ -26,7 +31,12 @@ export function enqueueCapture(id: string): void {
   if (!record) {
     return;
   }
-  processor.enqueue({ id: record.id, hint: record.hint, image: record.image });
+  processor.enqueue({
+    id: record.id,
+    hint: record.hint,
+    image: record.image,
+    revision: record.ocrRevision,
+  });
 }
 
 /** Called after hydrate: unfinished captures resume without the camera. */
@@ -36,24 +46,18 @@ export function resumeCaptureProcessing(): void {
       id: record.id,
       hint: record.hint,
       image: record.image,
+      revision: record.ocrRevision,
     });
   }
 }
 
 /** Re-runs OCR for a stored capture with a different source hint ('' = auto). */
 export function rerunCaptureOcr(id: string, hint: string): void {
-  void captures
-    .patch(id, {
-      hint,
-      status: 'pending',
-      text: '',
-      language: '',
-      blocks: [],
-      confidence: 0,
-      error: null,
-      attempts: 0,
-    })
-    .then(() => enqueueCapture(id));
+  void captures.beginOcrRerun(id, hint).then((revision) => {
+    if (revision !== null) {
+      enqueueCapture(id);
+    }
+  });
 }
 
 export function retryCapture(id: string): void {

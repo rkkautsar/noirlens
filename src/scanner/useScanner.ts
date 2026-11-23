@@ -423,6 +423,7 @@ export function useScanner(options: {
           reviewedAt: null,
           error: null,
           attempts: 0,
+          ocrRevision: 0,
         };
         // Persistence gates the animation and the badge; OCR runs after.
         await captures.add(record);

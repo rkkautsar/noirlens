@@ -29,6 +29,8 @@ export interface CaptureRecord {
   reviewedAt: number | null;
   error: string | null;
   attempts: number;
+  /** Increments on every explicit re-read; stale OCR results are dropped. */
+  ocrRevision: number;
 }
 
 export const MAX_CAPTURES = 100;
@@ -49,7 +51,11 @@ function isBlock(value: unknown): value is CaptureBlock {
   );
 }
 
-function isRecord(value: unknown): value is CaptureRecord {
+type StoredRecord = Omit<CaptureRecord, 'ocrRevision'> & {
+  ocrRevision?: unknown;
+};
+
+function isRecord(value: unknown): value is StoredRecord {
   if (typeof value !== 'object' || value === null) {
     return false;
   }
@@ -99,8 +105,15 @@ export function parseCaptureStore(raw: string | null): {
     if (!Array.isArray(parsed)) {
       return { records: [], complete: false };
     }
-    const records = parsed.filter(isRecord).slice(0, MAX_CAPTURES);
-    return { records, complete: records.length === parsed.length };
+    const kept = parsed.filter(isRecord);
+    const records = kept
+      .map((record) => ({
+        ...record,
+        ocrRevision:
+          typeof record.ocrRevision === 'number' ? record.ocrRevision : 0,
+      }))
+      .slice(0, MAX_CAPTURES);
+    return { records, complete: kept.length === parsed.length };
   } catch {
     return { records: [], complete: false };
   }

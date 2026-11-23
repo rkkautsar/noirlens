@@ -192,6 +192,79 @@ class CaptureRepository {
     );
   }
 
+  /** Starts a re-read and returns the revision its result must match. */
+  beginOcrRerun(id: string, hint: string): Promise<number | null> {
+    return this.ensureAvailable().then(() =>
+      this.serialized(async () => {
+        const current = this.snapshot.records.find(
+          (record) => record.id === id,
+        );
+        if (!current) {
+          return null;
+        }
+        const revision = current.ocrRevision + 1;
+        const records = updateCapture(this.snapshot.records, id, {
+          hint,
+          ocrRevision: revision,
+          status: 'pending',
+          text: '',
+          language: '',
+          blocks: [],
+          confidence: 0,
+          error: null,
+          attempts: 0,
+        });
+        await this.persist(records);
+        this.set(records);
+        return revision;
+      }),
+    );
+  }
+
+  patchForRevision(
+    id: string,
+    revision: number,
+    patch: Partial<CaptureRecord>,
+  ): Promise<void> {
+    return this.ensureAvailable().then(() =>
+      this.serialized(async () => {
+        const current = this.snapshot.records.find(
+          (record) => record.id === id,
+        );
+        if (!current || current.ocrRevision !== revision) {
+          return;
+        }
+        const records = updateCapture(this.snapshot.records, id, patch);
+        await this.persist(records);
+        this.set(records);
+      }),
+    );
+  }
+
+  failForRevision(
+    id: string,
+    revision: number,
+    message: string,
+  ): Promise<void> {
+    return this.ensureAvailable().then(() =>
+      this.serialized(async () => {
+        const current = this.snapshot.records.find(
+          (record) => record.id === id,
+        );
+        if (!current || current.ocrRevision !== revision) {
+          return;
+        }
+        const records = updateCapture(this.snapshot.records, id, {
+          status: 'failed',
+          error: message,
+          attempts: current.attempts + 1,
+        });
+        await this.persist(records);
+        this.set(records);
+      }),
+    );
+  }
+
   fail(id: string, message: string): Promise<void> {
     return this.ensureAvailable().then(() =>
       this.serialized(async () => {

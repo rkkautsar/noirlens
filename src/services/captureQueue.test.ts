@@ -12,6 +12,10 @@ function delay(ms: number): Promise<void> {
   });
 }
 
+function job(id: string, revision = 0) {
+  return { id, hint: '', image: `${id}.jpg`, revision };
+}
+
 function harness(options: { deleted?: Set<string> } = {}) {
   const deleted = options.deleted ?? new Set<string>();
   const finished: string[] = [];
@@ -30,14 +34,14 @@ function harness(options: { deleted?: Set<string> } = {}) {
         active -= 1;
       }
     },
-    start: async (id) => {
-      started.push(id);
+    start: async (job) => {
+      started.push(job.id);
     },
-    finish: async (id) => {
-      finished.push(id);
+    finish: async (job) => {
+      finished.push(job.id);
     },
-    fail: async (id, message) => {
-      failed.push({ id, message });
+    fail: async (job, message) => {
+      failed.push({ id: job.id, message });
     },
     isDeleted: (id) => deleted.has(id),
   };
@@ -55,8 +59,8 @@ describe('CaptureQueue', () => {
   it('applies each result to its own capture regardless of order', async () => {
     const h = harness();
     const queue = new CaptureQueue(h.deps, 2);
-    queue.enqueue({ id: 'a', hint: '', image: 'a.jpg' });
-    queue.enqueue({ id: 'b', hint: '', image: 'b.jpg' });
+    queue.enqueue(job('a'));
+    queue.enqueue(job('b'));
     await delay(50);
     expect(h.finished.sort()).toEqual(['a', 'b']);
     expect(h.maxActive()).toBeLessThanOrEqual(2);
@@ -65,9 +69,9 @@ describe('CaptureQueue', () => {
   it('never exceeds the concurrency bound', async () => {
     const h = harness();
     const queue = new CaptureQueue(h.deps, 1);
-    queue.enqueue({ id: 'a', hint: '', image: 'a.jpg' });
-    queue.enqueue({ id: 'b', hint: '', image: 'b.jpg' });
-    queue.enqueue({ id: 'c', hint: '', image: 'c.jpg' });
+    queue.enqueue(job('a'));
+    queue.enqueue(job('b'));
+    queue.enqueue(job('c'));
     await delay(80);
     expect(h.maxActive()).toBe(1);
     expect(h.finished.sort()).toEqual(['a', 'b', 'c']);
@@ -87,8 +91,8 @@ describe('CaptureQueue', () => {
       },
       1,
     );
-    queue.enqueue({ id: 'a', hint: '', image: 'a.jpg' });
-    queue.enqueue({ id: 'b', hint: '', image: 'b.jpg' });
+    queue.enqueue(job('a'));
+    queue.enqueue(job('b'));
     await delay(60);
     expect(h.failed).toEqual([{ id: 'a', message: 'OCR exploded' }]);
     expect(h.finished).toEqual(['b']);
@@ -106,18 +110,19 @@ describe('CaptureQueue', () => {
       },
       1,
     );
-    queue.enqueue({ id: 'a', hint: '', image: 'a.jpg' });
+    queue.enqueue(job('a'));
     await delay(30);
     expect(h.finished).toEqual([]);
     expect(h.failed).toEqual([]);
   });
 
-  it('deduplicates repeated enqueues of the same capture', async () => {
+  it('queues a rerun behind an active job for the same capture', async () => {
     const h = harness();
     const queue = new CaptureQueue(h.deps, 1);
-    queue.enqueue({ id: 'a', hint: '', image: 'a.jpg' });
-    queue.enqueue({ id: 'a', hint: '', image: 'a.jpg' });
-    await delay(40);
-    expect(h.started).toEqual(['a']);
+    queue.enqueue(job('a', 1));
+    queue.enqueue(job('a', 2));
+    await delay(60);
+    // Both run; the revision guard in the deps decides which result wins.
+    expect(h.started).toEqual(['a', 'a']);
   });
 });

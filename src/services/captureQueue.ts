@@ -3,13 +3,15 @@ export interface CaptureQueueJob {
   /** Source language hint passed to the recognizer ('' for auto). */
   hint: string;
   image: string;
+  /** OCR revision; results are only applied while this is current. */
+  revision: number;
 }
 
 export interface CaptureQueueDeps<T> {
   recognize: (job: CaptureQueueJob) => Promise<T>;
-  start: (id: string) => Promise<void>;
-  finish: (id: string, result: T) => Promise<void>;
-  fail: (id: string, message: string) => Promise<void>;
+  start: (job: CaptureQueueJob) => Promise<void>;
+  finish: (job: CaptureQueueJob, result: T) => Promise<void>;
+  fail: (job: CaptureQueueJob, message: string) => Promise<void>;
   isDeleted: (id: string) => boolean;
 }
 
@@ -20,7 +22,6 @@ export interface CaptureQueueDeps<T> {
  */
 export class CaptureQueue<T> {
   private queued: CaptureQueueJob[] = [];
-  private inFlight = new Set<string>();
   private active = 0;
   private disposed = false;
 
@@ -30,14 +31,18 @@ export class CaptureQueue<T> {
   ) {}
 
   enqueue(job: CaptureQueueJob): void {
-    if (
-      this.disposed ||
-      this.inFlight.has(job.id) ||
-      this.queued.some((entry) => entry.id === job.id)
-    ) {
+    if (this.disposed) {
       return;
     }
-    this.queued.push(job);
+    // Coalesce reruns that have not started: the newest hint wins. A job
+    // already running for this capture is allowed to finish; its result is
+    // discarded by the revision check in the deps.
+    const queuedIndex = this.queued.findIndex((entry) => entry.id === job.id);
+    if (queuedIndex >= 0) {
+      this.queued[queuedIndex] = job;
+    } else {
+      this.queued.push(job);
+    }
     void this.drain();
   }
 
@@ -57,10 +62,8 @@ export class CaptureQueue<T> {
         return;
       }
       this.active += 1;
-      this.inFlight.add(job.id);
       void this.run(job).finally(() => {
         this.active -= 1;
-        this.inFlight.delete(job.id);
         void this.drain();
       });
     }
@@ -71,7 +74,7 @@ export class CaptureQueue<T> {
       return;
     }
     try {
-      await this.deps.start(job.id);
+      await this.deps.start(job);
       if (this.deps.isDeleted(job.id)) {
         return;
       }
@@ -79,7 +82,7 @@ export class CaptureQueue<T> {
       if (this.deps.isDeleted(job.id)) {
         return;
       }
-      await this.deps.finish(job.id, result);
+      await this.deps.finish(job, result);
     } catch (error) {
       if (this.deps.isDeleted(job.id)) {
         return;
@@ -90,7 +93,7 @@ export class CaptureQueue<T> {
         typeof (error as Record<string, unknown>).message === 'string'
           ? ((error as Record<string, unknown>).message as string)
           : 'Text recognition failed.';
-      await this.deps.fail(job.id, message).catch(() => {});
+      await this.deps.fail(job, message).catch(() => {});
     }
   }
 }

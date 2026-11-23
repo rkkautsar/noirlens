@@ -1,5 +1,4 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import * as Clipboard from 'expo-clipboard';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import {
@@ -20,34 +19,10 @@ import { ModeTabs } from '@/components/ModeTabs';
 import { OverlaySheet } from '@/components/OverlaySheet';
 import { ScanlineOverlay } from '@/components/ScanlineOverlay';
 import { ChipButton, MicroLabel } from '@/components/ui';
-import {
-  languageLabel,
-  languageShortLabel,
-} from '@/constants/languages';
+import { languageLabel, languageShortLabel } from '@/constants/languages';
 import { captures, useCaptures } from '@/services/captures';
-import {
-  rerunCaptureOcr,
-  retryCapture,
-} from '@/services/captureProcessing';
-import { romanize } from '@/services/romanize';
-import { romanizeNative } from '@/services/romanizeNative';
-import { describeTranslateFailure } from '@/services/translateRequest';
+import { rerunCaptureOcr, retryCapture } from '@/services/captureProcessing';
 import { colors, radius, typography } from '@/theme';
-import vision from '../../modules/native-vision-translator';
-
-interface TranslationState {
-  status: 'idle' | 'loading' | 'done' | 'error';
-  text: string;
-  error: string;
-  packGap: boolean;
-}
-
-const IDLE: TranslationState = {
-  status: 'idle',
-  text: '',
-  error: '',
-  packGap: false,
-};
 
 function formatTime(at: number): string {
   return new Date(at).toLocaleString(undefined, {
@@ -58,38 +33,11 @@ function formatTime(at: number): string {
   });
 }
 
-/** JS tables first, then the native ICU pass when it has a different answer. */
-function useRomanized(text: string, language: string): string {
-  const [state, setState] = useState({ text, language, value: '' });
-  useEffect(() => {
-    let active = true;
-    setState({ text, language, value: romanize(text) });
-    if (text.trim().length === 0) {
-      return;
-    }
-    void romanizeNative(text, language)
-      .then((value) => {
-        if (active) {
-          setState({ text, language, value });
-        }
-      })
-      .catch(() => {});
-    return () => {
-      active = false;
-    };
-  }, [text, language]);
-  return state.text === text && state.language === language
-    ? state.value
-    : romanize(text);
-}
-
-function isDifferentRomanization(value: string, source: string): boolean {
-  return (
-    value.trim().length > 0 &&
-    value.trim().toLowerCase() !== source.trim().toLowerCase()
-  );
-}
-
+/**
+ * Capture detail is only the image, the OCR boxes, the OCR language and
+ * deletion. Translation, lookup, romanization and copy live on the existing
+ * result screen so there is one result presentation in the app.
+ */
 export default function CaptureDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
@@ -98,14 +46,9 @@ export default function CaptureDetailScreen() {
   const state = useCaptures();
   const record = state.records.find((entry) => entry.id === id);
 
-  const [selected, setSelected] = useState<number | null>(null);
-  const [region, setRegion] = useState<TranslationState>(IDLE);
-  const [all, setAll] = useState<TranslationState>(IDLE);
-  const [copied, setCopied] = useState<string | null>(null);
   const [imageFailed, setImageFailed] = useState(false);
   const [picker, setPicker] = useState(false);
-  const regionRequest = useRef(0);
-  const allRequest = useRef(0);
+  const [languageBusy, setLanguageBusy] = useState(false);
   const reviewed = useRef(false);
 
   useEffect(() => {
@@ -120,125 +63,17 @@ export default function CaptureDetailScreen() {
     void captures.review(id);
   }, [id, record]);
 
-  // A language change re-runs OCR; drop results tied to the previous pass.
   useEffect(() => {
-    setSelected(null);
-    setRegion(IDLE);
-    setAll(IDLE);
-  }, [record?.hint, record?.text]);
+    if (record?.status === 'done' || record?.status === 'failed') {
+      setLanguageBusy(false);
+    }
+  }, [record?.status]);
 
   const hint = record?.hint ?? '';
-  const source = record?.language || hint || 'en';
   const busy =
-    record?.status === 'pending' || record?.status === 'processing';
-  const block = selected !== null ? record?.blocks[selected] : undefined;
-  const romanizedWhole = useRomanized(record?.text ?? '', source);
-  const romanizedBlock = useRomanized(block?.text ?? '', source);
-
-  const copy = async (text: string, key: string) => {
-    await Clipboard.setStringAsync(text);
-    setCopied(key);
-    setTimeout(() => {
-      setCopied((current) => (current === key ? null : current));
-    }, 1400);
-  };
-
-  const runTranslate = async (
-    text: string,
-    set: (value: TranslationState) => void,
-    requests: { current: number },
-    token: number,
-  ) => {
-    if (!record || text.trim().length === 0) {
-      return;
-    }
-    set({ status: 'loading', text: '', error: '', packGap: false });
-    try {
-      const out = await vision.translate({
-        text,
-        sourceLanguage: source,
-        targetLanguage: 'en',
-      });
-      if (token !== requests.current) {
-        return;
-      }
-      set({
-        status: 'done',
-        text: out.translatedText,
-        error: '',
-        packGap: false,
-      });
-    } catch (error) {
-      if (token !== requests.current) {
-        return;
-      }
-      const failure = describeTranslateFailure(error, source, 'en');
-      set({
-        status: 'error',
-        text: '',
-        error: failure.message,
-        packGap: failure.packGap,
-      });
-    }
-  };
-
-  const translate = (
-    text: string,
-    set: (value: TranslationState) => void,
-    requests: { current: number },
-  ) => {
-    const token = requests.current + 1;
-    requests.current = token;
-    return runTranslate(text, set, requests, token);
-  };
-
-  const preparePack = async (
-    text: string,
-    set: (value: TranslationState) => void,
-    requests: { current: number },
-  ) => {
-    const token = requests.current + 1;
-    requests.current = token;
-    set({ status: 'loading', text: '', error: '', packGap: false });
-    try {
-      const status = await vision.prepareLanguagePack(source, 'en');
-      if (token !== requests.current) {
-        return;
-      }
-      if (status.status === 'installed') {
-        await runTranslate(text, set, requests, token);
-        return;
-      }
-      set({
-        status: 'error',
-        text: '',
-        error: 'The offline pack did not finish installing. Try again.',
-        packGap: true,
-      });
-    } catch (error) {
-      if (token !== requests.current) {
-        return;
-      }
-      const failure = describeTranslateFailure(error, source, 'en');
-      set({
-        status: 'error',
-        text: '',
-        error: failure.message,
-        packGap: failure.packGap,
-      });
-    }
-  };
-
-  const selectBlock = (index: number) => {
-    if (!record) {
-      return;
-    }
-    setSelected(index);
-    const next = record.blocks[index];
-    if (next) {
-      void translate(next.text, setRegion, regionRequest);
-    }
-  };
+    languageBusy ||
+    record?.status === 'pending' ||
+    record?.status === 'processing';
 
   const chooseLanguage = (code: string) => {
     setPicker(false);
@@ -249,7 +84,30 @@ export default function CaptureDetailScreen() {
     if (next === record.hint) {
       return;
     }
+    // Lock the control before the async metadata write so a second choice
+    // cannot race the first one.
+    setLanguageBusy(true);
     rerunCaptureOcr(record.id, next);
+  };
+
+  const translateAll = () => {
+    if (!record) {
+      return;
+    }
+    router.push({
+      pathname: '/result',
+      params: { captureId: record.id },
+    });
+  };
+
+  const translateRegion = (index: number) => {
+    if (!record) {
+      return;
+    }
+    router.push({
+      pathname: '/result',
+      params: { captureId: record.id, block: String(index) },
+    });
   };
 
   const remove = () => {
@@ -339,13 +197,7 @@ export default function CaptureDetailScreen() {
     120,
     imageWidth * (record.height / Math.max(1, record.width)),
   );
-
-  const translated = (value: TranslationState) =>
-    value.status === 'loading'
-      ? 'Translating…'
-      : value.status === 'error'
-        ? value.error
-        : value.text;
+  const hasText = record.text.length > 0;
 
   return (
     <View style={styles.root}>
@@ -382,7 +234,7 @@ export default function CaptureDetailScreen() {
                   accessibilityRole="button"
                   accessibilityLabel={`Translate ${entry.text}`}
                   hitSlop={6}
-                  onPress={() => selectBlock(index)}
+                  onPress={() => translateRegion(index)}
                   style={[
                     styles.block,
                     {
@@ -391,7 +243,6 @@ export default function CaptureDetailScreen() {
                       width: Math.max(entry.width * imageWidth, 18),
                       height: Math.max(entry.height * imageHeight, 12),
                     },
-                    selected === index && styles.blockActive,
                   ]}
                 />
               ))
@@ -404,177 +255,69 @@ export default function CaptureDetailScreen() {
           ) : null}
         </View>
 
-        {record.status === 'failed' ? (
-          <View style={styles.notice}>
-            <Text style={styles.noticeText}>
-              {record.error || 'Text recognition failed.'}
-            </Text>
-            <ChipButton
-              label="Retry text recognition"
-              icon="refresh"
-              iconOnly
-              onPress={() => retryCapture(record.id)}
-            />
-          </View>
-        ) : null}
-
-        {record.status === 'done' && record.text.length === 0 ? (
-          <View style={styles.notice}>
-            <Text style={styles.noticeText}>No text was recognized.</Text>
-          </View>
-        ) : null}
-
-        {record.text.length > 0 ? (
-          <View style={styles.panel}>
-            <View style={styles.panelHead}>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={`OCR language: ${
-                  hint ? languageLabel(hint) : 'Auto-detect'
-                }. Change language and read again.`}
-                accessibilityState={{ disabled: busy }}
-                disabled={busy}
-                onPress={() => setPicker(true)}
-                style={({ pressed }) => [
-                  styles.languagePill,
-                  busy && styles.disabled,
-                  pressed && styles.pressed,
-                ]}
-              >
-                <Ionicons
-                  name="language-outline"
-                  size={14}
-                  color={colors.accent}
-                />
-                <Text style={styles.languagePillText}>
-                  {hint ? languageShortLabel(hint) : 'AUTO'}
-                </Text>
-                <Ionicons name="chevron-down" size={12} color={colors.muted} />
-              </Pressable>
+        <View style={styles.panel}>
+          <View style={styles.panelHead}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`OCR language: ${
+                hint ? languageLabel(hint) : 'Auto-detect'
+              }. Change language and read again.`}
+              accessibilityState={{ disabled: busy }}
+              disabled={busy}
+              onPress={() => setPicker(true)}
+              style={({ pressed }) => [
+                styles.languagePill,
+                busy && styles.disabled,
+                pressed && styles.pressed,
+              ]}
+            >
+              <Ionicons
+                name="language-outline"
+                size={14}
+                color={colors.accent}
+              />
+              <Text style={styles.languagePillText}>
+                {hint ? languageShortLabel(hint) : 'AUTO'}
+              </Text>
+              <Ionicons name="chevron-down" size={12} color={colors.muted} />
+            </Pressable>
+            {hasText ? (
               <ChipButton
                 label="TRANSLATE ALL"
                 icon="language-outline"
-                onPress={() => void translate(record.text, setAll, allRequest)}
+                onPress={translateAll}
               />
-            </View>
-
-            {block ? (
-              <View style={styles.region}>
-                <MicroLabel tone="accent">SELECTED REGION</MicroLabel>
-                <Text
-                  selectable
-                  style={[
-                    styles.translationText,
-                    region.status === 'error' && styles.errorText,
-                  ]}
-                >
-                  {translated(region)}
-                </Text>
-                {isDifferentRomanization(romanizedBlock, block.text) ? (
-                  <Text style={styles.romanizedText} selectable>
-                    {romanizedBlock}
-                  </Text>
-                ) : null}
-                <Text style={styles.sourceText} selectable>
-                  {block.text}
-                </Text>
-                <View style={styles.regionActions}>
-                  {region.status === 'done' ? (
-                    <ChipButton
-                      label={
-                        copied === 'region-out'
-                          ? 'Copied translation'
-                          : 'Copy translation'
-                      }
-                      icon={copied === 'region-out' ? 'checkmark' : 'copy-outline'}
-                      iconOnly
-                      active={copied === 'region-out'}
-                      onPress={() => void copy(region.text, 'region-out')}
-                    />
-                  ) : null}
-                  <ChipButton
-                    label={
-                      copied === 'region-src'
-                        ? 'Copied text'
-                        : 'Copy recognized text'
-                    }
-                    icon={
-                      copied === 'region-src'
-                        ? 'checkmark'
-                        : 'document-text-outline'
-                    }
-                    iconOnly
-                    active={copied === 'region-src'}
-                    onPress={() => void copy(block.text, 'region-src')}
-                  />
-                  {region.status === 'error' && region.packGap ? (
-                    <ChipButton
-                      label="Download language pack"
-                      icon="download-outline"
-                      iconOnly
-                      onPress={() =>
-                        void preparePack(block.text, setRegion, regionRequest)
-                      }
-                    />
-                  ) : null}
-                </View>
-              </View>
-            ) : (
-              <Text style={styles.hint}>
-                Tap a highlighted region on the image to translate it, or
-                translate the whole capture.
-              </Text>
-            )}
-
-            {all.status !== 'idle' ? (
-              <View style={styles.region}>
-                <MicroLabel tone="accent">WHOLE CAPTURE</MicroLabel>
-                <Text
-                  selectable
-                  style={[
-                    styles.translationText,
-                    all.status === 'error' && styles.errorText,
-                  ]}
-                >
-                  {translated(all)}
-                </Text>
-                {isDifferentRomanization(romanizedWhole, record.text) ? (
-                  <Text style={styles.romanizedText} selectable>
-                    {romanizedWhole}
-                  </Text>
-                ) : null}
-                <Text style={styles.sourceText} selectable>
-                  {record.text}
-                </Text>
-                <View style={styles.regionActions}>
-                  {all.status === 'done' ? (
-                    <ChipButton
-                      label={
-                        copied === 'all-out'
-                          ? 'Copied translation'
-                          : 'Copy translation'
-                      }
-                      icon={copied === 'all-out' ? 'checkmark' : 'copy-outline'}
-                      iconOnly
-                      active={copied === 'all-out'}
-                      onPress={() => void copy(all.text, 'all-out')}
-                    />
-                  ) : null}
-                  {all.status === 'error' && all.packGap ? (
-                    <ChipButton
-                      label="Download language pack"
-                      icon="download-outline"
-                      iconOnly
-                      onPress={() =>
-                        void preparePack(record.text, setAll, allRequest)
-                      }
-                    />
-                  ) : null}
-                </View>
-              </View>
             ) : null}
           </View>
-        ) : null}
+
+          {record.status === 'failed' ? (
+            <View style={styles.noticeRow}>
+              <Text style={styles.errorText}>
+                {record.error || 'Text recognition failed.'}
+              </Text>
+              <ChipButton
+                label="Retry text recognition"
+                icon="refresh"
+                iconOnly
+                onPress={() => retryCapture(record.id)}
+              />
+            </View>
+          ) : null}
+
+          {record.status === 'done' && !hasText ? (
+            <Text style={styles.hint}>
+              No text was recognized. Choose another OCR language and the image
+              will be read again.
+            </Text>
+          ) : null}
+
+          {hasText ? (
+            <Text style={styles.hint}>
+              Tap a highlighted region to translate it on the result screen,
+              or translate the whole capture.
+            </Text>
+          ) : null}
+        </View>
       </ScrollView>
 
       {picker ? (
@@ -646,10 +389,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(217,179,108,0.06)',
     borderRadius: 3,
   },
-  blockActive: {
-    borderColor: colors.accent,
-    backgroundColor: 'rgba(217,179,108,0.22)',
-  },
   processing: {
     ...StyleSheet.absoluteFill,
     alignItems: 'center',
@@ -657,29 +396,13 @@ const styles = StyleSheet.create({
     gap: 10,
     backgroundColor: 'rgba(0,0,0,0.45)',
   },
-  notice: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    backgroundColor: colors.surface,
-    padding: 14,
-  },
-  noticeText: {
-    ...typography.body,
-    color: colors.muted,
-    flex: 1,
-  },
   panel: {
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: radius.lg,
     backgroundColor: colors.surface,
     padding: 14,
-    gap: 14,
+    gap: 12,
   },
   panelHead: {
     flexDirection: 'row',
@@ -701,35 +424,16 @@ const styles = StyleSheet.create({
     ...typography.micro,
     color: colors.foreground,
   },
-  region: {
-    gap: 8,
-  },
-  translationText: {
-    ...typography.title,
-    fontSize: 24,
-    lineHeight: 31,
-    color: colors.foreground,
-  },
-  errorText: {
-    color: colors.danger,
-    fontSize: 15,
-    lineHeight: 22,
-  },
-  romanizedText: {
-    ...typography.body,
-    color: colors.muted,
-    fontStyle: 'italic',
-  },
-  sourceText: {
-    ...typography.body,
-    fontSize: 13,
-    color: colors.dim,
-  },
-  regionActions: {
+  noticeRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'flex-end',
-    gap: 8,
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  errorText: {
+    ...typography.body,
+    color: colors.danger,
+    flex: 1,
   },
   hint: {
     ...typography.body,

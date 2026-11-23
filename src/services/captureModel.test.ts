@@ -30,6 +30,7 @@ function record(id: string, overrides: Partial<CaptureRecord> = {}): CaptureReco
     reviewedAt: null,
     error: null,
     attempts: 0,
+    ocrRevision: 0,
     ...overrides,
   };
 }

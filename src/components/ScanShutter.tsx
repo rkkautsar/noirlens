@@ -113,6 +113,7 @@ export function ScanShutter({
         fired.current = false;
         clear();
         drag.setValue(0);
+        impact();
         latest.current.onStart();
       },
       onPanResponderMove: (_, gesture) => {

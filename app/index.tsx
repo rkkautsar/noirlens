@@ -2,7 +2,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AimHud } from '@/components/AimHud';
@@ -14,6 +14,7 @@ import { OverlaySheet } from '@/components/OverlaySheet';
 import { OriginalView } from '@/components/OriginalView';
 import { ResultCard } from '@/components/ResultCard';
 import { ScanShutter } from '@/components/ScanShutter';
+import { ShutterOverlay } from '@/components/ShutterOverlay';
 import { Standby } from '@/components/Standby';
 import { TopBar } from '@/components/TopBar';
 import { languageShortLabel } from '@/constants/languages';
@@ -127,6 +128,11 @@ export default function ScannerScreen() {
       style={styles.root}
       onStartShouldSetResponder={() => !locked}
       onResponderGrant={() => {
+        if (Platform.OS !== 'web') {
+          void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(
+            () => {},
+          );
+        }
         scanner.beginHold();
       }}
       onResponderRelease={() => {
@@ -138,6 +144,7 @@ export default function ScannerScreen() {
       onResponderTerminationRequest={() => false}
     >
       <EcoCameraView style={StyleSheet.absoluteFill} ecoMode={ecoMode} />
+      <ShutterOverlay open={state === 'PREWARM'} />
 
       <Standby
         hidden={active}

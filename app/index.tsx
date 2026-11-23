@@ -9,10 +9,8 @@ import { AimHud } from '@/components/AimHud';
 import { OriginalView } from '@/components/OriginalView';
 import { ResultCard } from '@/components/ResultCard';
 import { ResultSheet } from '@/components/ResultSheet';
-import { ScanlineSlider } from '@/components/ScanlineSlider';
 import { ScanShutter } from '@/components/ScanShutter';
 import { Standby } from '@/components/Standby';
-import { MicroLabel } from '@/components/ui';
 import { TopBar } from '@/components/TopBar';
 import { languageShortLabel } from '@/constants/languages';
 import { useScanner } from '@/scanner/useScanner';
@@ -30,7 +28,6 @@ export default function ScannerScreen() {
   const insets = useSafeAreaInsets();
   const source = useSourceLanguage();
   const [ecoMode, setEcoMode] = useState(true);
-  const [scanline, setScanline] = useState(0.5);
   // Torch is deliberately session-only: never persisted, off after relaunch,
   // and the native side only lights it while the camera session runs.
   const [torch, setTorch] = useState(false);
@@ -121,11 +118,7 @@ export default function ScannerScreen() {
       }}
       onResponderTerminationRequest={() => false}
     >
-      <EcoCameraView
-        style={StyleSheet.absoluteFill}
-        ecoMode={ecoMode}
-        scanlineLevel={scanline}
-      />
+      <EcoCameraView style={StyleSheet.absoluteFill} ecoMode={ecoMode} />
 
       <Standby
         hidden={active}
@@ -262,15 +255,6 @@ export default function ScannerScreen() {
       ) : null}
 
       {!exhausted && !locked ? (
-        <View
-          style={[styles.scanlineWrap, { bottom: insets.bottom + 148 }]}
-        >
-          <MicroLabel tone="dim">SCAN</MicroLabel>
-          <ScanlineSlider value={scanline} onChange={setScanline} />
-        </View>
-      ) : null}
-
-      {!exhausted && !locked ? (
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={
@@ -325,12 +309,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-  },
-  scanlineWrap: {
-    position: 'absolute',
-    left: 16,
-    alignItems: 'center',
-    gap: 6,
   },
   torchButton: {
     position: 'absolute',

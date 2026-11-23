@@ -121,11 +121,25 @@ export function ResultCard({
     result.sourceLanguage,
     preferred.code,
   );
+  const containerRef = useRef<React.ComponentRef<typeof View>>(null);
+  const [cardBox, setCardBox] = useState({ x: 0, y: 0, width: 0, height: 0 });
   const [priceTip, setPriceTip] = useState<{
     price: PriceConversion;
     x: number;
     y: number;
   } | null>(null);
+  const measureCard = () => {
+    containerRef.current?.measureInWindow((x, y, width, height) => {
+      setCardBox({ x, y, width, height });
+    });
+  };
+  const tipAt = (price: PriceConversion, pageX?: number, pageY?: number) => {
+    setPriceTip({
+      price,
+      x: pageX === undefined ? Number.NaN : pageX - cardBox.x,
+      y: pageY === undefined ? Number.NaN : pageY - cardBox.y,
+    });
+  };
 
   const renderSource = () => {
     if (prices.length === 0) {
@@ -150,11 +164,7 @@ export function ResultCard({
                 | { nativeEvent?: { pageX?: number; pageY?: number } }
                 | undefined
             )?.nativeEvent;
-            setPriceTip({
-              price,
-              x: native?.pageX ?? Number.NaN,
-              y: native?.pageY ?? Number.NaN,
-            });
+            tipAt(price, native?.pageX, native?.pageY);
           }}
         >
           {result.sourceText.slice(price.start, price.end)}
@@ -251,11 +261,7 @@ export function ResultCard({
                   | { nativeEvent?: { pageX?: number; pageY?: number } }
                   | undefined
               )?.nativeEvent;
-              setPriceTip({
-                price: span.price,
-                x: native?.pageX ?? Number.NaN,
-                y: native?.pageY ?? Number.NaN,
-              });
+              tipAt(span.price, native?.pageX, native?.pageY);
             } else {
               onLookUp(slice);
             }
@@ -271,7 +277,7 @@ export function ResultCard({
   };
 
   return (
-    <View style={styles.container}>
+    <View style={styles.container} ref={containerRef} onLayout={measureCard}>
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={[
@@ -279,7 +285,7 @@ export function ResultCard({
           {
             flexGrow: 1,
             justifyContent: 'center',
-            paddingTop: insets.top + 8,
+            paddingTop: insets.top + 56,
             paddingBottom: insets.bottom + 190,
           },
         ]}
@@ -336,16 +342,6 @@ export function ResultCard({
         </MicroLabel>
       </ScrollView>
 
-      {priceTip ? (
-        <PriceTooltip
-          price={priceTip.price}
-          locale={preferred.locale}
-          x={priceTip.x}
-          y={priceTip.y}
-          onClose={() => setPriceTip(null)}
-        />
-      ) : null}
-
       <View
         style={[
           styles.actions,
@@ -392,6 +388,18 @@ export function ResultCard({
           primary
         />
       </View>
+
+      {priceTip ? (
+        <PriceTooltip
+          price={priceTip.price}
+          locale={preferred.locale}
+          x={priceTip.x}
+          y={priceTip.y}
+          width={cardBox.width}
+          height={cardBox.height}
+          onClose={() => setPriceTip(null)}
+        />
+      ) : null}
     </View>
   );
 }

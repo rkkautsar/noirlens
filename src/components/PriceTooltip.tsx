@@ -1,10 +1,4 @@
-import {
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-  useWindowDimensions,
-} from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import {
   formatCurrency,
@@ -21,22 +15,27 @@ export function PriceTooltip({
   locale,
   x,
   y,
+  width,
+  height,
   onClose,
 }: {
   price: PriceConversion;
   locale: string;
   x: number;
   y: number;
+  width: number;
+  height: number;
   onClose: () => void;
 }) {
-  const { width, height } = useWindowDimensions();
+  // Local to the ResultCard; the caller converts page coords by the card origin.
   const cx = Number.isFinite(x) ? x : width / 2;
   const cy = Number.isFinite(y) ? y : height / 2;
   const left = Math.max(
     12,
-    Math.min(cx - CARD_WIDTH / 2, width - CARD_WIDTH - 12),
+    Math.min(cx - CARD_WIDTH / 2, Math.max(width - CARD_WIDTH - 12, 12)),
   );
-  const below = cy + 110 < height;
+  // Clear the fixed action band near the bottom.
+  const below = cy + 110 < height - 190;
   const top = below ? cy + 18 : cy - 96;
 
   return (

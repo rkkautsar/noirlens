@@ -3,6 +3,7 @@ import ExpoModulesCore
 struct TranslateParams: Record {
   @Field var text: String = ""
   @Field var sourceLanguage: String = ""
+  @Field var targetLanguage: String = "en"
 }
 
 struct CropRect: Record {
@@ -100,16 +101,37 @@ public final class NativeVisionTranslatorModule: Module {
     AsyncFunction("translate") { (params: TranslateParams) async throws -> [String: Any] in
       try await TranslationBridge.translate(
         text: params.text,
-        sourceLanguage: params.sourceLanguage
+        sourceLanguage: params.sourceLanguage,
+        targetLanguage: params.targetLanguage
       )
     }
 
-    AsyncFunction("checkLanguagePackStatus") { (langCode: String) async -> [String: Any] in
-      await TranslationBridge.status(for: langCode)
+    AsyncFunction("checkLanguagePackStatus") {
+      (langCode: String, targetLanguage: String?) async -> [String: Any] in
+      await TranslationBridge.status(
+        for: langCode,
+        targetLanguage: targetLanguage ?? "en"
+      )
     }
 
-    AsyncFunction("prepareLanguagePack") { (langCode: String) async throws -> [String: Any] in
-      try await TranslationBridge.prepare(languageCode: langCode)
+    AsyncFunction("prepareLanguagePack") {
+      (langCode: String, targetLanguage: String?) async throws -> [String: Any] in
+      try await TranslationBridge.prepare(
+        languageCode: langCode,
+        targetLanguage: targetLanguage ?? "en"
+      )
+    }
+
+    AsyncFunction("speak") { (text: String, language: String) async -> Bool in
+      await MainActor.run {
+        SpeechBridge.speak(text: text, language: language)
+      }
+    }
+
+    AsyncFunction("stopSpeaking") { () async -> Void in
+      await MainActor.run {
+        SpeechBridge.stop()
+      }
     }
 
     AsyncFunction("getSupportedLanguages") { () async -> [String] in

@@ -14,15 +14,19 @@ import UIKit
  */
 @MainActor
 enum TranslationBridge {
-  private static let target = Locale.Language(identifier: "en")
+  private static let defaultTarget = Locale.Language(identifier: "en")
 
-  static func status(for languageCode: String) async -> [String: Any] {
+  static func status(
+    for languageCode: String,
+    targetLanguage: String = "en"
+  ) async -> [String: Any] {
     let source = language(from: languageCode)
+    let target = language(from: targetLanguage)
     let availability = LanguageAvailability()
     let status = await availability.status(from: source, to: target)
     return [
       "language": languageCode,
-      "targetLanguage": "en",
+      "targetLanguage": normalizedCode(targetLanguage),
       "status": statusString(status)
     ]
   }
@@ -35,19 +39,22 @@ enum TranslationBridge {
 
   static func translate(
     text: String,
-    sourceLanguage: String
+    sourceLanguage: String,
+    targetLanguage: String = "en"
   ) async throws -> [String: Any] {
     let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !trimmed.isEmpty else {
-      return identity(trimmed, language: sourceLanguage)
+      return identity(trimmed, language: sourceLanguage, target: targetLanguage)
     }
 
     let code = normalizedCode(sourceLanguage)
-    if code.hasPrefix("en") || code == "und" {
-      return identity(trimmed, language: code)
+    let targetCode = normalizedCode(targetLanguage)
+    let source = language(from: code)
+    let target = language(from: targetCode)
+    if code.hasPrefix("en") && targetCode.hasPrefix("en") || code == "und" {
+      return identity(trimmed, language: code, target: targetCode)
     }
 
-    let source = Locale.Language(identifier: code)
     let availability = LanguageAvailability()
     let status = await availability.status(from: source, to: target)
 
@@ -57,13 +64,13 @@ enum TranslationBridge {
     case .supported:
       throw Exception(
         name: "LanguagePackNotInstalled",
-        description: "The \(code) to English offline pack is not installed.",
+        description: "The \(code) to \(targetCode) offline pack is not installed.",
         code: "ERR_LANGUAGE_PACK_MISSING"
       )
     case .unsupported:
       throw Exception(
         name: "LanguagePairUnsupported",
-        description: "on-device translation from \(code) to English is not supported.",
+        description: "on-device translation from \(code) to \(targetCode) is not supported.",
         code: "ERR_LANGUAGE_UNSUPPORTED"
       )
     @unknown default:
@@ -91,7 +98,7 @@ enum TranslationBridge {
       return [
         "translatedText": translated,
         "sourceLanguage": code,
-        "targetLanguage": "en",
+        "targetLanguage": targetCode,
         "cached": false
       ]
     } catch let error as Exception {
@@ -105,9 +112,14 @@ enum TranslationBridge {
     }
   }
 
-  static func prepare(languageCode: String) async throws -> [String: Any] {
+  static func prepare(
+    languageCode: String,
+    targetLanguage: String = "en"
+  ) async throws -> [String: Any] {
     let code = normalizedCode(languageCode)
-    let source = Locale.Language(identifier: code)
+    let targetCode = normalizedCode(targetLanguage)
+    let source = language(from: code)
+    let target = language(from: targetCode)
 
     let availability = LanguageAvailability()
     let before = await availability.status(from: source, to: target)
@@ -116,13 +128,13 @@ enum TranslationBridge {
     case .installed:
       return [
         "language": code,
-        "targetLanguage": "en",
+        "targetLanguage": targetCode,
         "status": "installed"
       ]
     case .unsupported:
       throw Exception(
         name: "LanguagePairUnsupported",
-        description: "on-device translation from \(code) to English is not supported.",
+        description: "on-device translation from \(code) to \(targetCode) is not supported.",
         code: "ERR_LANGUAGE_UNSUPPORTED"
       )
     case .supported:
@@ -140,7 +152,7 @@ enum TranslationBridge {
     let after = await availability.status(from: source, to: target)
     return [
       "language": code,
-      "targetLanguage": "en",
+      "targetLanguage": targetCode,
       "status": statusString(after)
     ]
   }
@@ -149,12 +161,13 @@ enum TranslationBridge {
 
   private static func identity(
     _ text: String,
-    language: String
+    language: String,
+    target: String
   ) -> [String: Any] {
     [
       "translatedText": text,
       "sourceLanguage": language,
-      "targetLanguage": "en",
+      "targetLanguage": normalizedCode(target),
       "cached": false
     ]
   }

@@ -69,10 +69,19 @@ export interface NativeVisionTranslatorModule extends NativeModule {
   translate(params: {
     text: string;
     sourceLanguage: string;
+    targetLanguage?: string;
   }): Promise<TranslatePayload>;
   romanize(text: string, language: string): Promise<string>;
-  checkLanguagePackStatus(langCode: string): Promise<LanguagePackStatusPayload>;
-  prepareLanguagePack(langCode: string): Promise<LanguagePackStatusPayload>;
+  speak(text: string, language: string): Promise<boolean>;
+  stopSpeaking(): Promise<void>;
+  checkLanguagePackStatus(
+    langCode: string,
+    targetLanguage?: string,
+  ): Promise<LanguagePackStatusPayload>;
+  prepareLanguagePack(
+    langCode: string,
+    targetLanguage?: string,
+  ): Promise<LanguagePackStatusPayload>;
   getSupportedLanguages(): Promise<string[]>;
 }
 
@@ -134,11 +143,14 @@ const webMock = {
     return WEB_MOCK_OCR;
   },
   romanize: async (text: string, _language: string) => text,
+  speak: async (_text: string, _language: string) => false,
+  stopSpeaking: async () => {},
   translate: async ({
     sourceLanguage,
   }: {
     text: string;
     sourceLanguage: string;
+    targetLanguage?: string;
   }) => ({
     translatedText: WEB_MOCK_TRANSLATION,
     sourceLanguage,

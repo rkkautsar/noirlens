@@ -2,7 +2,7 @@ Pod::Spec.new do |s|
   s.name           = 'NativeVisionTranslator'
   s.version        = '0.1.0'
   s.summary        = 'Battery-first camera OCR and on-device translation for NoirLens'
-  s.description    = 'AVCaptureSession lifecycle, CoreImage luma-edge HUD, Vision OCR and Apple Translation bridging.'
+  s.description    = 'AVCaptureSession lifecycle, Noir preview overlay (dim + scanlines), Vision OCR and Apple Translation bridging.'
   s.author         = 'NoirLens'
   s.homepage       = 'https://github.com/noirlens/noirlens'
   s.platforms      = { :ios => '18.0' }

@@ -84,7 +84,7 @@ export interface NativeVisionTranslatorModule extends NativeModule {
   captureStill(cameraToken?: number): Promise<CaptureStillPayload>;
   capturesDirectory(): Promise<string>;
   captureFileUri(name: string): Promise<string>;
-  listCaptureFiles(minAgeSeconds?: number): Promise<string[]>;
+  listCaptureFiles(minAgeSeconds: number): Promise<string[]>;
   recognizeCapture(image: string, language: string): Promise<OcrPayload>;
   deleteCaptureFiles(names: string[]): Promise<void>;
   translate(params: {

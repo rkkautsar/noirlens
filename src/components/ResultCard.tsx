@@ -125,14 +125,18 @@ export function ResultCard({
   );
   const sheetPrices =
     translationPrices.length > 0 ? translationPrices : prices;
-  const missingSourcePrices = prices.filter(
-    (price) =>
-      !translationPrices.some(
-        (translated) =>
-          translated.amount === price.amount &&
-          translated.source === price.source,
-      ),
+  const translatedKeys = translationPrices.map(
+    (price) => `${price.amount}/${price.source}`,
   );
+  const missingSourcePrices = prices.filter((price) => {
+    const key = `${price.amount}/${price.source}`;
+    const index = translatedKeys.indexOf(key);
+    if (index === -1) {
+      return true;
+    }
+    translatedKeys.splice(index, 1);
+    return false;
+  });
   const renderSource = () => {
     if (missingSourcePrices.length === 0) {
       return result.sourceText;

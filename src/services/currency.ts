@@ -240,8 +240,10 @@ export function detectPrices(
   // English "won" is only a currency cue for a Korean source. Whole-word,
   // suffix-only, and the amount may use spaces (12 500 won).
   if (language === 'ko') {
+    const wonAmount =
+      '(?:\\d{1,3}(?:[ ,]\\d{3})+|\\d+)';
     const wonSuffix = new RegExp(
-      `(?<![\\d.,])(${NUMBER_PATTERN})(?![\\d.,])\\s+won\\b`,
+      `(?<![\\d.,])(${wonAmount})(?![\\d.,])\\s+won\\b`,
       'gi',
     );
     while ((match = wonSuffix.exec(normalized)) !== null) {

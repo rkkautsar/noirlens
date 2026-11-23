@@ -1,6 +1,13 @@
 import * as Clipboard from 'expo-clipboard';
 import { useEffect, useRef, useState } from 'react';
-import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  Image,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { languageLabel, languageShortLabel } from '@/constants/languages';
@@ -18,65 +25,34 @@ import { colors, typography } from '@/theme';
 import { PriceTooltip } from './PriceTooltip';
 import { ChipButton, Hairline, MicroLabel, SolidButton } from './ui';
 
-export function ResultCard({
+/** Reading surface: kicker, translation with lookup/price spans, romanization, source, footer. */
+export function ResultBody({
   result,
   remaining,
   unlimited,
-  onScanAgain,
-  onShowOriginal,
-  thumbnail,
-  onOpenLanguages,
   onLookUp,
-  onPreparePack,
 }: {
   result: ScanResult;
   remaining: number | null;
   unlimited: boolean;
-  onScanAgain: () => void;
-  onShowOriginal?: () => void;
-  /** Small frame preview; tapping it opens the inspect view. */
-  thumbnail?: string;
-  onOpenLanguages: () => void;
   onLookUp: (phrase: string, alt?: string) => void;
-  /** Capture card: install the missing pack and retry this result. */
-  onPreparePack?: () => void;
 }) {
-  const insets = useSafeAreaInsets();
-  const [copied, setCopied] = useState(false);
-  const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [priceTip, setPriceTip] = useState<{
+    price: PriceConversion;
+    x: number;
+    y: number;
+  } | null>(null);
 
   const translated = result.kind === 'translated';
   const englishOnly = result.kind === 'english';
   const packMissing = result.kind === 'pack_missing';
   const language = languageLabel(result.sourceLanguage);
-  const shortLanguage = languageShortLabel(result.sourceLanguage);
   const preferred = preferredCurrency();
   const prices = priceConversions(
     result.sourceText,
     result.sourceLanguage,
     preferred.code,
   );
-  const copyText = translated ? result.translatedText : result.sourceText;
-  const priceLines = prices.map(
-    (price) =>
-      `${price.raw} ≈ ${formatCurrency(price.converted, price.target, preferred.locale)}`,
-  );
-
-  useEffect(() => {
-    return () => {
-      clearTimeout(copyTimer.current ?? undefined);
-    };
-  }, []);
-
-  const copy = async () => {
-    const parts = [copyText, ...priceLines].filter(Boolean);
-    await Clipboard.setStringAsync(parts.join('\n\n'));
-    setCopied(true);
-    clearTimeout(copyTimer.current ?? undefined);
-    copyTimer.current = setTimeout(() => {
-      setCopied(false);
-    }, 1400);
-  };
 
   const kicker = translated
     ? `${language} → ENGLISH`
@@ -94,61 +70,56 @@ export function ResultCard({
       ? `The ${language} offline pack is not installed. Download it once, then scan again. You can still read the source below.`
       : '';
 
-  const primaryLabel =
-    packMissing && onPreparePack
-      ? `GET ${shortLanguage} PACK`
-      : translated
-        ? 'SCAN AGAIN'
-        : packMissing
-          ? `GET ${shortLanguage} PACK`
-          : 'CHOOSE LANGUAGE';
-  const primaryIcon =
-    packMissing && onPreparePack
-      ? 'cloud-download-outline'
-      : translated
-        ? 'refresh'
-        : packMissing
-          ? 'cloud-download-outline'
-          : 'language-outline';
-  const primaryAction =
-    packMissing && onPreparePack
-      ? onPreparePack
-      : translated
-        ? onScanAgain
-        : onOpenLanguages;
   const lookupTerms = translated ? untranslatedTerms(result) : [];
   const lookupPattern = termPattern(lookupTerms);
   const sourceTerms = [
     ...result.blocks
       .map((block) => block.text.trim())
-      .filter(
-        (text) => text.length > 0 && text.split(/\s+/).length <= 4,
-      ),
+      .filter((text) => text.length > 0 && text.split(/\s+/).length <= 4),
     ...result.sourceText
       .split(/[^\p{L}\p{N}]+/u)
       .filter((word) => word.length >= 2),
   ];
-  const normalizedTerm = (value: string) =>
-    value
-      .normalize('NFD')
-      .replace(/\p{Diacritic}/gu, '')
-      .toLowerCase();
   const translationPrices = priceConversions(
     result.translatedText,
     result.sourceLanguage,
     preferred.code,
   );
-  const [priceTip, setPriceTip] = useState<{
-    price: PriceConversion;
-    x: number;
-    y: number;
-  } | null>(null);
-  const tipAt = (price: PriceConversion, pageX?: number, pageY?: number) => {
-    setPriceTip({
-      price,
-      x: pageX ?? Number.NaN,
-      y: pageY ?? Number.NaN,
-    });
+
+  const [romanizedState, setRomanizedState] = useState(() => ({
+    input: result.sourceText,
+    language: result.sourceLanguage,
+    value: romanize(result.sourceText),
+  }));
+  useEffect(() => {
+    let active = true;
+    void romanizeNative(result.sourceText, result.sourceLanguage).then(
+      (value) => {
+        if (active) {
+          setRomanizedState({
+            input: result.sourceText,
+            language: result.sourceLanguage,
+            value,
+          });
+        }
+      },
+    );
+    return () => {
+      active = false;
+    };
+  }, [result.sourceText, result.sourceLanguage]);
+  const romanizedSource =
+    romanizedState.input === result.sourceText &&
+    romanizedState.language === result.sourceLanguage
+      ? romanizedState.value
+      : romanize(result.sourceText);
+
+  const tipAt = (
+    price: PriceConversion,
+    pageX?: number,
+    pageY?: number,
+  ) => {
+    setPriceTip({ price, x: pageX ?? Number.NaN, y: pageY ?? Number.NaN });
   };
 
   const renderSource = () => {
@@ -185,33 +156,6 @@ export function ResultCard({
     parts.push(result.sourceText.slice(cursor));
     return parts;
   };
-  const [romanizedState, setRomanizedState] = useState(() => ({
-    input: result.sourceText,
-    language: result.sourceLanguage,
-    value: romanize(result.sourceText),
-  }));
-  useEffect(() => {
-    let active = true;
-    void romanizeNative(result.sourceText, result.sourceLanguage).then(
-      (value) => {
-        if (active) {
-          setRomanizedState({
-            input: result.sourceText,
-            language: result.sourceLanguage,
-            value,
-          });
-        }
-      },
-    );
-    return () => {
-      active = false;
-    };
-  }, [result.sourceText, result.sourceLanguage]);
-  const romanizedSource =
-    romanizedState.input === result.sourceText &&
-    romanizedState.language === result.sourceLanguage
-      ? romanizedState.value
-      : romanize(result.sourceText);
 
   const renderTranslation = () => {
     const text = result.translatedText;
@@ -230,7 +174,6 @@ export function ResultCard({
     for (const price of translationPrices) {
       spans.push({ start: price.start, end: price.end, kind: 'price', price });
     }
-    // Romanized dish/brand names the translator kept as proper nouns.
     for (const match of text.matchAll(/[A-Z][a-z]+[ \t][A-Z][a-z]+/g)) {
       const start = match.index ?? 0;
       spans.push({ start, end: start + match[0].length, kind: 'term' });
@@ -286,125 +229,215 @@ export function ResultCard({
     return parts;
   };
 
-  const bodyContent = (
+  return (
     <>
-        <View style={styles.kickerRow}>
-          <MicroLabel
-            tone={translated ? 'accent' : packMissing ? 'warning' : 'dim'}
-          >
-            {kicker}
-          </MicroLabel>
-          {translated && result.cached ? (
-            <MicroLabel tone="dim">LOCAL CACHE</MicroLabel>
-          ) : null}
-        </View>
-
-        {translated ? (
-          <Text style={styles.resultText} selectable>
-            {renderTranslation()}
-          </Text>
-        ) : (
-          <View style={styles.noticeBlock}>
-            <Text style={styles.noticeText}>{notice}</Text>
-            <MicroLabel tone="dim">NOT CHARGED AS A SCAN</MicroLabel>
-          </View>
-        )}
-
-        {translated &&
-        romanizedSource &&
-        romanizedSource !== result.sourceText ? (
-          <View style={styles.romanizedBlock}>
-            <MicroLabel tone="dim">ROMANIZED · APPROX.</MicroLabel>
-            <Text style={styles.romanizedText}>{romanizedSource}</Text>
-          </View>
-        ) : null}
-
-        <Hairline />
-
-        <View style={styles.sourceBlock}>
-          <Text
-            style={styles.sourceText}
-            numberOfLines={prices.length > 0 ? undefined : translated ? 3 : 6}
-            selectable
-          >
-            {renderSource()}
-          </Text>
-        </View>
-
-        <MicroLabel tone="dim" style={styles.footer}>
-          {unlimited
-            ? 'PRO · UNLIMITED SCANS'
-            : remaining !== null
-              ? translated
-                ? `${remaining} OF 15 FREE SCANS LEFT TODAY`
-                : `NOT CHARGED · ${remaining} OF 15 FREE SCANS LEFT TODAY`
-              : translated
-                ? 'FREE SCANS LEFT TODAY'
-                : 'NOT CHARGED · FREE SCANS LEFT TODAY'}
+      <View style={styles.kickerRow}>
+        <MicroLabel
+          tone={translated ? 'accent' : packMissing ? 'warning' : 'dim'}
+        >
+          {kicker}
         </MicroLabel>
+        {translated && result.cached ? (
+          <MicroLabel tone="dim">LOCAL CACHE</MicroLabel>
+        ) : null}
+      </View>
+
+      {translated ? (
+        <Text style={styles.resultText} selectable>
+          {renderTranslation()}
+        </Text>
+      ) : (
+        <View style={styles.noticeBlock}>
+          <Text style={styles.noticeText}>{notice}</Text>
+          <MicroLabel tone="dim">NOT CHARGED AS A SCAN</MicroLabel>
+        </View>
+      )}
+
+      {translated && romanizedSource && romanizedSource !== result.sourceText ? (
+        <View style={styles.romanizedBlock}>
+          <MicroLabel tone="dim">ROMANIZED · APPROX.</MicroLabel>
+          <Text style={styles.romanizedText}>{romanizedSource}</Text>
+        </View>
+      ) : null}
+
+      <Hairline />
+
+      <View style={styles.sourceBlock}>
+        <Text
+          style={styles.sourceText}
+          numberOfLines={prices.length > 0 ? undefined : translated ? 3 : 6}
+          selectable
+        >
+          {renderSource()}
+        </Text>
+      </View>
+
+      <MicroLabel tone="dim" style={styles.footer}>
+        {unlimited
+          ? 'PRO · UNLIMITED SCANS'
+          : remaining !== null
+            ? translated
+              ? `${remaining} OF 15 FREE SCANS LEFT TODAY`
+              : `NOT CHARGED · ${remaining} OF 15 FREE SCANS LEFT TODAY`
+            : translated
+              ? 'FREE SCANS LEFT TODAY'
+              : 'NOT CHARGED · FREE SCANS LEFT TODAY'}
+      </MicroLabel>
+
+      {priceTip ? (
+        <PriceTooltip
+          price={priceTip.price}
+          locale={preferred.locale}
+          x={priceTip.x}
+          y={priceTip.y}
+          onClose={() => setPriceTip(null)}
+        />
+      ) : null}
     </>
   );
-  const actionButtons = (
-    <>
-        {thumbnail ? (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Inspect original frame"
-            onPress={onShowOriginal}
-            style={styles.thumbnailButton}
-          >
-            <Image source={{ uri: thumbnail }} style={styles.thumbnail} />
-          </Pressable>
-        ) : onShowOriginal ? (
-          <ChipButton
-            label="INSPECT"
-            icon="search-outline"
-            iconOnly
-            onPress={onShowOriginal}
-          />
-        ) : null}
-        <ChipButton
-          label={copied ? 'COPIED' : 'COPY'}
-          icon={copied ? 'checkmark' : 'copy-outline'}
-          iconOnly
-          active={copied}
-          onPress={() => {
-            void copy();
-          }}
-        />
-        {translated ? (
-          <ChipButton
-            label="SCAN AGAIN"
-            icon="refresh"
-            iconOnly
-            onPress={onScanAgain}
-          />
-        ) : null}
-        <ChipButton
-          label="Change language"
-          icon="language-outline"
-          iconOnly
-          onPress={onOpenLanguages}
-        />
-        <SolidButton
-          label={primaryLabel}
-          icon={primaryIcon}
-          iconOnly
-          onPress={primaryAction}
-          primary
-        />
-      
-    </>
+}
+
+/** Action row: inspect thumbnail, copy, scan-again/language, primary action. */
+export function ResultActions({
+  result,
+  onScanAgain,
+  onShowOriginal,
+  thumbnail,
+  onOpenLanguages,
+  onPreparePack,
+}: {
+  result: ScanResult;
+  onScanAgain: () => void;
+  onShowOriginal?: () => void;
+  thumbnail?: string;
+  onOpenLanguages: () => void;
+  onPreparePack?: () => void;
+}) {
+  const [copied, setCopied] = useState(false);
+  const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const translated = result.kind === 'translated';
+  const packMissing = result.kind === 'pack_missing';
+  const shortLanguage = languageShortLabel(result.sourceLanguage);
+  const preferred = preferredCurrency();
+  const prices = priceConversions(
+    result.sourceText,
+    result.sourceLanguage,
+    preferred.code,
   );
-  const tooltip = priceTip ? (
-    <PriceTooltip
-      price={priceTip.price}
-      locale={preferred.locale}
-      x={priceTip.x}
-      y={priceTip.y}
-      onClose={() => setPriceTip(null)}
-    />
-  ) : null;
+  const copyText = translated ? result.translatedText : result.sourceText;
+  const priceLines = prices.map(
+    (price) =>
+      `${price.raw} ≈ ${formatCurrency(price.converted, price.target, preferred.locale)}`,
+  );
+
+  useEffect(() => {
+    return () => {
+      clearTimeout(copyTimer.current ?? undefined);
+    };
+  }, []);
+
+  const copy = async () => {
+    const parts = [copyText, ...priceLines].filter(Boolean);
+    await Clipboard.setStringAsync(parts.join('\n\n'));
+    setCopied(true);
+    clearTimeout(copyTimer.current ?? undefined);
+    copyTimer.current = setTimeout(() => {
+      setCopied(false);
+    }, 1400);
+  };
+
+  const primaryLabel =
+    packMissing && onPreparePack
+      ? `GET ${shortLanguage} PACK`
+      : translated
+        ? 'SCAN AGAIN'
+        : packMissing
+          ? `GET ${shortLanguage} PACK`
+          : 'CHOOSE LANGUAGE';
+  const primaryIcon =
+    packMissing && onPreparePack
+      ? 'cloud-download-outline'
+      : translated
+        ? 'refresh'
+        : packMissing
+          ? 'cloud-download-outline'
+          : 'language-outline';
+  const primaryAction =
+    packMissing && onPreparePack
+      ? onPreparePack
+      : translated
+        ? onScanAgain
+        : onOpenLanguages;
+
+  return (
+    <View style={styles.actions}>
+      {thumbnail ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Inspect original frame"
+          onPress={onShowOriginal}
+          style={styles.thumbnailButton}
+        >
+          <Image source={{ uri: thumbnail }} style={styles.thumbnail} />
+        </Pressable>
+      ) : onShowOriginal ? (
+        <ChipButton
+          label="INSPECT"
+          icon="search-outline"
+          iconOnly
+          onPress={onShowOriginal}
+        />
+      ) : null}
+      <ChipButton
+        label={copied ? 'COPIED' : 'COPY'}
+        icon={copied ? 'checkmark' : 'copy-outline'}
+        iconOnly
+        active={copied}
+        onPress={() => {
+          void copy();
+        }}
+      />
+      <ChipButton
+        label="Change language"
+        icon="language-outline"
+        iconOnly
+        onPress={onOpenLanguages}
+      />
+      <SolidButton
+        label={primaryLabel}
+        icon={primaryIcon}
+        iconOnly
+        onPress={primaryAction}
+        primary
+      />
+    </View>
+  );
+}
+
+/** Full-screen result (live scan): body scroll plus a fixed action row. */
+export function ResultCard({
+  result,
+  remaining,
+  unlimited,
+  onScanAgain,
+  onShowOriginal,
+  thumbnail,
+  onOpenLanguages,
+  onLookUp,
+  onPreparePack,
+}: {
+  result: ScanResult;
+  remaining: number | null;
+  unlimited: boolean;
+  onScanAgain: () => void;
+  onShowOriginal?: () => void;
+  thumbnail?: string;
+  onOpenLanguages: () => void;
+  onLookUp: (phrase: string, alt?: string) => void;
+  onPreparePack?: () => void;
+}) {
+  const insets = useSafeAreaInsets();
 
   return (
     <View style={styles.container}>
@@ -420,7 +453,12 @@ export function ResultCard({
           },
         ]}
       >
-        {bodyContent}
+        <ResultBody
+          result={result}
+          remaining={remaining}
+          unlimited={unlimited}
+          onLookUp={onLookUp}
+        />
       </ScrollView>
 
       <View
@@ -430,10 +468,15 @@ export function ResultCard({
           { bottom: insets.bottom + 94 },
         ]}
       >
-        {actionButtons}
+        <ResultActions
+          result={result}
+          onScanAgain={onScanAgain}
+          onShowOriginal={onShowOriginal}
+          thumbnail={thumbnail}
+          onOpenLanguages={onOpenLanguages}
+          onPreparePack={onPreparePack}
+        />
       </View>
-
-      {tooltip}
     </View>
   );
 }

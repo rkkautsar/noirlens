@@ -55,11 +55,6 @@ export function ChromeHeader({
 
 const styles = StyleSheet.create({
   header: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    left: 0,
-    zIndex: 20,
     paddingHorizontal: 18,
     gap: 8,
   },

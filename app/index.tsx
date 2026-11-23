@@ -252,6 +252,7 @@ export default function ScannerScreen() {
       ) : null}
 
       {!exhausted ? (
+        <View style={styles.shutterDock}>
         <ScanShutter
           next={locked}
           active={state === 'PREWARM'}
@@ -262,6 +263,7 @@ export default function ScannerScreen() {
           onLanguages={openLanguages}
           collect={snapshot.captureMode === 'collect'}
         />
+        </View>
       ) : null}
 
 
@@ -436,14 +438,16 @@ export default function ScannerScreen() {
         </Pressable>
       ) : null}
 
-      <ChromeHeader
-        active="camera"
-        remaining={snapshot.remainingToday}
-        unlimited={snapshot.unlimited}
-        onOpenPaywall={openPaywall}
-        onCamera={() => {}}
-        onTranslate={() => router.push('/translate')}
-      />
+      <View style={styles.chromeHeader}>
+        <ChromeHeader
+          active="camera"
+          remaining={snapshot.remainingToday}
+          unlimited={snapshot.unlimited}
+          onOpenPaywall={openPaywall}
+          onCamera={() => {}}
+          onTranslate={() => router.push('/translate')}
+        />
+      </View>
 
       {flight && flightTarget ? (
         <View pointerEvents="none" style={styles.flightLayer}>
@@ -489,6 +493,19 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: colors.background,
+  },
+  chromeHeader: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    left: 0,
+    zIndex: 20,
+  },
+  shutterDock: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
   },
   sourceRow: {
     position: 'absolute',

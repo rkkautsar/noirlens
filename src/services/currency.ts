@@ -97,7 +97,6 @@ const SYMBOLS: SymbolDef[] = [
   { symbol: '円', code: 'JPY' },
   { symbol: '元', code: 'CNY' },
   { symbol: '원', code: 'KRW' },
-  { symbol: 'won', code: 'KRW' },
   { symbol: 'บาท', code: 'THB' },
   { symbol: 'đ', code: 'VND' },
   { symbol: '￥', code: 'JPY', byLanguage: { ja: 'JPY', zh: 'CNY' } },
@@ -238,6 +237,11 @@ export function detectPrices(
   );
 
   let match: RegExpExecArray | null;
+  // "3,500 won" (suffix only, whole word) — a bare `won` in prose is English.
+  const wonSuffix = /(\d[\d.,]*)\s+won\b/gi;
+  while ((match = wonSuffix.exec(normalized)) !== null) {
+    push(match[0] ?? '', match[1] ?? '', 'KRW', match.index);
+  }
   while ((match = codePrefix.exec(normalized)) !== null) {
     push(match[0] ?? '', match[2] ?? '', match[1] ?? '', match.index);
   }

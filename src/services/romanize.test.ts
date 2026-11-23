@@ -50,6 +50,8 @@ describe('other scripts', () => {
   });
   it('romanizes kana and leaves kanji', () => {
     expect(romanize('こんにちは')).toBe('konnichiha');
+    expect(romanize('きっぷ')).toBe('kippu');
+    expect(romanize('まっちゃ')).toBe('matcha');
     expect(romanize('カタカナ')).toBe('katakana');
     expect(romanize('東京')).toBe('東京');
   });

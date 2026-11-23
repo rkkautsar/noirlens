@@ -111,7 +111,7 @@ export function ResultCard({
       ),
     ...result.sourceText
       .split(/[^\p{L}\p{N}]+/u)
-      .filter((word) => word.length >= 4),
+      .filter((word) => word.length >= 2),
   ];
   const normalizedTerm = (value: string) =>
     value
@@ -125,21 +125,56 @@ export function ResultCard({
   );
   const sheetPrices =
     translationPrices.length > 0 ? translationPrices : prices;
-  const renderSource = () => result.sourceText;
-  const [romanizedSource, setRomanizedSource] = useState(() =>
-    romanize(result.sourceText),
-  );
+  const renderSource = () => {
+    if (translationPrices.length > 0 || prices.length === 0) {
+      return result.sourceText;
+    }
+    const parts: React.ReactNode[] = [];
+    let cursor = 0;
+    for (const price of prices) {
+      if (price.start < cursor) {
+        continue;
+      }
+      if (price.start > cursor) {
+        parts.push(result.sourceText.slice(cursor, price.start));
+      }
+      parts.push(
+        <Text
+          key={`source-price-${price.start}`}
+          style={styles.priceTerm}
+          onPress={() => {
+            onOpenPrices(prices);
+          }}
+        >
+          {result.sourceText.slice(price.start, price.end)}
+        </Text>,
+      );
+      cursor = price.end;
+    }
+    parts.push(result.sourceText.slice(cursor));
+    return parts;
+  };
+  const [romanizedState, setRomanizedState] = useState(() => ({
+    input: result.sourceText,
+    value: romanize(result.sourceText),
+  }));
   useEffect(() => {
     let active = true;
-    void romanizeNative(result.sourceText).then((value) => {
-      if (active) {
-        setRomanizedSource(value);
-      }
-    });
+    void romanizeNative(result.sourceText, result.sourceLanguage).then(
+      (value) => {
+        if (active) {
+          setRomanizedState({ input: result.sourceText, value });
+        }
+      },
+    );
     return () => {
       active = false;
     };
-  }, [result.sourceText]);
+  }, [result.sourceText, result.sourceLanguage]);
+  const romanizedSource =
+    romanizedState.input === result.sourceText
+      ? romanizedState.value
+      : romanize(result.sourceText);
 
   const renderTranslation = () => {
     const text = result.translatedText;
@@ -165,10 +200,18 @@ export function ResultCard({
     for (const span of romanTermSpans(text, sourceTerms)) {
       spans.push({ start: span.start, end: span.end, kind: 'term' });
     }
-    spans.sort((a, b) => a.start - b.start);
+    const priceSpans = spans.filter((span) => span.kind === 'price');
+    const kept = spans.filter(
+      (span) =>
+        span.kind === 'price' ||
+        !priceSpans.some(
+          (price) => span.start < price.end && span.end > price.start,
+        ),
+    );
+    kept.sort((a, b) => a.start - b.start);
     const parts: React.ReactNode[] = [];
     let cursor = 0;
-    for (const span of spans) {
+    for (const span of kept) {
       if (span.start < cursor) {
         continue;
       }

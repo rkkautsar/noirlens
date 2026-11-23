@@ -124,13 +124,34 @@ describe('conversion', () => {
 });
 
 describe('won detection', () => {
-  it('finds romanized won prices', () => {
+  it('matches only a whole-word won suffix', () => {
+    const rows = detectPrices('3,500 won', 'en');
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      raw: '3,500 won',
+      amount: 3500,
+      currency: 'KRW',
+      start: 0,
+      end: 9,
+    });
+  });
+
+  it('does not treat English prose as KRW', () => {
+    expect(detectPrices('We won 3 games', 'en')).toHaveLength(0);
+    expect(detectPrices('40 wonderful dishes', 'en')).toHaveLength(0);
+  });
+
+  it('finds the run-on translation prices exactly', () => {
     const rows = detectPrices(
       'tteokbokki deokbokki 3,500 won Sundae 4,500 won 6,000 fish cake gimbap 2,500 won 1/2,000 won',
       'en',
     );
-    expect(rows.map((row) => row.currency)).toEqual(['KRW', 'KRW', 'KRW', 'KRW'].slice(0, rows.length));
-    expect(rows.length).toBeGreaterThanOrEqual(3);
+    expect(rows.map((row) => row.raw)).toEqual([
+      '3,500 won',
+      '4,500 won',
+      '2,500 won',
+      '2,000 won',
+    ]);
   });
 
   it('converts KRW to SGD through USD', () => {

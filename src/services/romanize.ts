@@ -122,7 +122,14 @@ export function romanize(text: string): string {
   const chars = Array.from(text);
   let out = '';
   for (let i = 0; i < chars.length; i += 1) {
-    const result = romanizeChar(chars[i] ?? '', chars[i + 1] ?? '');
+    const char = chars[i] ?? '';
+    if (char === 'っ' || char === 'ッ') {
+      const next = romanizeChar(chars[i + 1] ?? '', chars[i + 2] ?? '').text;
+      const consonant = /^(ch|sh|ts|.)/.exec(next)?.[0] ?? '';
+      out += consonant === 'ch' ? 't' : consonant;
+      continue;
+    }
+    const result = romanizeChar(char, chars[i + 1] ?? '');
     out += result.text;
     if (result.skipNext) {
       i += 1;

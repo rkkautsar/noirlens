@@ -63,8 +63,22 @@ public final class NativeVisionTranslatorModule: Module {
     }
 
     // ICU transliteration bundled with iOS: kana/Cyrillic/Arabic/Thai to
-    // Latin, Han to Mandarin pinyin. No model download.
-    AsyncFunction("romanize") { (text: String) async -> String in
+    // Latin, Han to Mandarin pinyin. No model download. Already-Latin text is
+    // returned untouched so Vietnamese accents are not stripped, and Japanese
+    // only romanizes kana (kanji readings need a dictionary, not pinyin).
+    AsyncFunction("romanize") { (text: String, language: String) async -> String in
+      let hasNonLatin = text.unicodeScalars.contains { $0.value >= 0x0370 }
+      if !hasNonLatin {
+        return text
+      }
+      let lang = language.lowercased()
+      if lang.hasPrefix("ja") {
+        var s = text
+        for name in ["Hiragana-Latin", "Katakana-Latin"] {
+          s = s.applyingTransform(StringTransform(name), reverse: false) ?? s
+        }
+        return s.applyingTransform(.stripDiacritics, reverse: false) ?? s
+      }
       let latin = text.applyingTransform(.toLatin, reverse: false) ?? text
       return latin.applyingTransform(.stripDiacritics, reverse: false) ?? latin
     }

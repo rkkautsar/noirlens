@@ -277,7 +277,9 @@ export function ResultCard({
         contentContainerStyle={[
           styles.content,
           {
-            paddingTop: insets.top + 56,
+            flexGrow: 1,
+            justifyContent: 'center',
+            paddingTop: insets.top + 8,
             paddingBottom: insets.bottom + 190,
           },
         ]}

@@ -22,7 +22,6 @@ import { OverlaySheet } from '@/components/OverlaySheet';
 import { OriginalView } from '@/components/OriginalView';
 import { ResultCard } from '@/components/ResultCard';
 import { ScanShutter } from '@/components/ScanShutter';
-import { ShutterOverlay } from '@/components/ShutterOverlay';
 import { Standby } from '@/components/Standby';
 import { TopBar } from '@/components/TopBar';
 import { languageShortLabel } from '@/constants/languages';
@@ -193,7 +192,6 @@ export default function ScannerScreen() {
       onResponderTerminationRequest={() => false}
     >
       <EcoCameraView style={StyleSheet.absoluteFill} ecoMode={ecoMode} />
-      <ShutterOverlay open={state === 'PREWARM'} />
 
       <Standby
         hidden={active}

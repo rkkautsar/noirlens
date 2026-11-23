@@ -45,7 +45,10 @@ export function AimHud({
   return (
     <View style={styles.container} pointerEvents="box-none">
       <View
-        style={styles.reticleArea}
+        style={[
+          styles.reticleArea,
+          { top: insets.top + 64, bottom: insets.bottom + 116 },
+        ]}
         pointerEvents="none"
         onLayout={reportReticle}
       >
@@ -101,7 +104,9 @@ const styles = StyleSheet.create({
     left: 0,
   },
   reticleArea: {
-    flex: 1,
+    position: 'absolute',
+    left: 0,
+    right: 0,
     alignItems: 'center',
     justifyContent: 'center',
   },

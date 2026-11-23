@@ -125,25 +125,14 @@ export function ResultCard({
   );
   const sheetPrices =
     translationPrices.length > 0 ? translationPrices : prices;
-  const translatedKeys = translationPrices.map(
-    (price) => `${price.amount}/${price.source}`,
-  );
-  const missingSourcePrices = prices.filter((price) => {
-    const key = `${price.amount}/${price.source}`;
-    const index = translatedKeys.indexOf(key);
-    if (index === -1) {
-      return true;
-    }
-    translatedKeys.splice(index, 1);
-    return false;
-  });
+
   const renderSource = () => {
-    if (missingSourcePrices.length === 0) {
+    if (prices.length === 0) {
       return result.sourceText;
     }
     const parts: React.ReactNode[] = [];
     let cursor = 0;
-    for (const price of missingSourcePrices) {
+    for (const price of prices) {
       if (price.start < cursor) {
         continue;
       }
@@ -308,9 +297,7 @@ export function ResultCard({
         <View style={styles.sourceBlock}>
           <Text
             style={styles.sourceText}
-            numberOfLines={
-              missingSourcePrices.length > 0 ? undefined : translated ? 3 : 6
-            }
+            numberOfLines={prices.length > 0 ? undefined : translated ? 3 : 6}
             selectable
           >
             {renderSource()}

@@ -142,6 +142,7 @@ describe('won detection', () => {
     expect(detectPrices('12 500 won', 'ko')[0]?.amount).toBe(12500);
     expect(detectPrices('1 000 won', 'ko')[0]?.amount).toBe(1000);
     expect(detectPrices('Set 2 3,500 won', 'ko')[0]?.amount).toBe(3500);
+    expect(detectPrices('Set 2 500,000 won', 'ko')[0]?.amount).toBe(500000);
   });
 
   it('finds the run-on translation prices exactly', () => {

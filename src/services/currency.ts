@@ -241,7 +241,7 @@ export function detectPrices(
   // suffix-only, and the amount may use spaces (12 500 won).
   if (language === 'ko') {
     const wonAmount =
-      '(?:\\d{1,3}(?:[ ,]\\d{3})+|\\d+)';
+      '(?:\\d{1,3}(?:,\\d{3})+|\\d{1,3}(?: \\d{3})+|\\d+)';
     const wonSuffix = new RegExp(
       `(?<![\\d.,])(${wonAmount})(?![\\d.,])\\s+won\\b`,
       'gi',

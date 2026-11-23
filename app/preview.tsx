@@ -149,6 +149,7 @@ export default function PreviewScreen() {
             ) : overlay.kind === 'prices' ? (
               <PricesSheet
                 rows={overlay.rows}
+                selectedStart={overlay.selectedStart}
                 onClose={() => setOverlay(null)}
               />
             ) : overlay.kind === 'languages' ? (

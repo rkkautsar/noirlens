@@ -11,18 +11,21 @@ import { AppSheet } from '@/components/AppSheet';
 import { LanguagePickerSheet } from '@/components/LanguagePickerSheet';
 import { LanguagesSheet } from '@/components/LanguagesSheet';
 import { LookupSheet } from '@/components/LookupSheet';
-import { ModeTabs } from '@/components/ModeTabs';
 import { ResultCard } from '@/components/ResultCard';
 import { ScanShutter } from '@/components/ScanShutter';
 import { OriginalView } from '@/components/OriginalView';
 import { ChipButton, MicroLabel, SolidButton } from '@/components/ui';
-import { TopBar } from '@/components/TopBar';
+import { ChromeHeader } from '@/components/ChromeHeader';
 import {
   isEnglishLanguageCode,
   languageShortLabel,
 } from '@/constants/languages';
 import type { ScanResult } from '@/scanner/machine';
+import { DEFAULT_TUNING } from '@/scanner/machine';
 import { captures, useCaptures } from '@/services/captures';
+import { localDayKey } from '@/services/day';
+import { entitlements, useEntitlementState } from '@/services/entitlements';
+import { readScanCount } from '@/services/scanLedger';
 import type { CaptureRecord } from '@/services/captureModel';
 import { rerunCaptureOcr, retryCapture } from '@/services/captureProcessing';
 import { DEMO_HISTORY } from '@/services/demoHistory';
@@ -98,9 +101,26 @@ export default function ResultScreen() {
   const [languageBusy, setLanguageBusy] = useState(false);
   const [packBusy, setPackBusy] = useState(false);
   const [captureNonce, setCaptureNonce] = useState(0);
+  const [scansToday, setScansToday] = useState<number | null>(null);
+  const entitlement = useEntitlementState();
+  const unlimited = entitlement.loaded ? entitlements.isUnlimited() : false;
   const translatedKey = useRef<string | null>(null);
   const requestToken = useRef(0);
   const packBusyRef = useRef(false);
+
+  useEffect(() => {
+    let active = true;
+    void readScanCount(localDayKey())
+      .then((count) => {
+        if (active) {
+          setScansToday(count);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (captureId) {
@@ -271,6 +291,10 @@ export default function ResultScreen() {
     setCaptureNonce((value) => value + 1);
   };
 
+  const remaining =
+    unlimited || scansToday === null
+      ? null
+      : Math.max(0, DEFAULT_TUNING.freeDailyLimit - scansToday);
   const historyResult = entry ? resultFromEntry(entry) : null;
   const result = captureId ? captureResult : historyResult;
   const captureText = record?.text.trim() ?? '';
@@ -294,8 +318,8 @@ export default function ResultScreen() {
       {result ? (
         <ResultCard
           result={result}
-          remaining={null}
-          unlimited
+          remaining={remaining}
+          unlimited={unlimited}
           onScanAgain={close}
           onShowOriginal={captureId && record ? () => setInspect(true) : undefined}
           thumbnail={captureId && record ? captures.uriFor(record.thumb) : undefined}
@@ -393,11 +417,13 @@ export default function ResultScreen() {
         </View>
       )}
 
-      <TopBar
-        remaining={null}
-        unlimited
-        onOpenPaywall={() => {}}
-        showNavigation={false}
+      <ChromeHeader
+        active="camera"
+        remaining={remaining}
+        unlimited={unlimited}
+        onOpenPaywall={() => router.push('/paywall')}
+        onCamera={close}
+        onTranslate={() => router.push('/translate')}
       />
       <ScanShutter
         next
@@ -411,11 +437,6 @@ export default function ResultScreen() {
             captureId ? { kind: 'languagePicker' } : { kind: 'languages' },
           )
         }
-      />
-      <ModeTabs
-        active="camera"
-        onCamera={close}
-        onTranslate={() => router.push('/translate')}
       />
 
       {inspect && record && captureResult ? (

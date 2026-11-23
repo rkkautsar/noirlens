@@ -17,13 +17,13 @@ import { CaptureFlight } from '@/components/CaptureFlight';
 import { HistorySheet } from '@/components/HistorySheet';
 import { LanguagesSheet } from '@/components/LanguagesSheet';
 import { LookupSheet } from '@/components/LookupSheet';
-import { ModeTabs } from '@/components/ModeTabs';
+import { ChromeHeader } from '@/components/ChromeHeader';
 import { AppSheet } from '@/components/AppSheet';
 import { OriginalView } from '@/components/OriginalView';
 import { ResultCard } from '@/components/ResultCard';
 import { ScanShutter } from '@/components/ScanShutter';
 import { Standby } from '@/components/Standby';
-import { TopBar } from '@/components/TopBar';
+
 import { languageShortLabel } from '@/constants/languages';
 import { useScanner } from '@/scanner/useScanner';
 import {
@@ -436,15 +436,11 @@ export default function ScannerScreen() {
         </Pressable>
       ) : null}
 
-      <View style={styles.topBar}>
-        <TopBar
-          remaining={snapshot.remainingToday}
-          unlimited={snapshot.unlimited}
-          onOpenPaywall={openPaywall}
-        />
-      </View>
-      <ModeTabs
+      <ChromeHeader
         active="camera"
+        remaining={snapshot.remainingToday}
+        unlimited={snapshot.unlimited}
+        onOpenPaywall={openPaywall}
         onCamera={() => {}}
         onTranslate={() => router.push('/translate')}
       />
@@ -493,13 +489,6 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: colors.background,
-  },
-  topBar: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    left: 0,
-    zIndex: 10,
   },
   sourceRow: {
     position: 'absolute',

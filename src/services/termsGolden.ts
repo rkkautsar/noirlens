@@ -320,8 +320,11 @@ export const TERMS_GOLDEN: TermsGoldenCase[] = [
       'The old café — Kaffeehaus Central — reopened last spring after repairs.',
     expected: ['Kaffeehaus Central'],
   },
+  // Synthetic cases: real ja->en output for kanji names must be recorded on
+  // device (exact input, iOS/model). Ichiran is a known recall miss until a
+  // reliable reading source is in scope.
   {
-    id: 'ichiran-cjk-mid',
+    id: 'ichiran-kanji-retained-synthetic',
     language: 'ja',
     blocks: ['一蘭'],
     translatedText:
@@ -419,6 +422,14 @@ export const TERMS_GOLDEN: TermsGoldenCase[] = [
     blocks: ['Highlands Coffee 24'],
     translatedText: 'Highlands Coffee 24 is near the lake.',
     expected: ['Highlands Coffee 24'],
+  },
+  {
+    id: 'ichiran-romanized-synthetic',
+    language: 'ja',
+    blocks: ['一蘭'],
+    translatedText:
+      'At midnight we joined the queue at Ichiran in Shinjuku for a bowl.',
+    expected: ['Ichiran'],
   },
   {
     id: 'ichiran-punctuated',

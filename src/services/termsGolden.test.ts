@@ -51,6 +51,18 @@ describe('lookup term boundaries', () => {
     }
   });
 
+  it('keeps offsets aligned after a supplementary character', () => {
+    const translatedText = '🙂 Cafe Central is open.';
+    const span = exact(['Café Central'], translatedText).find(
+      (entry) => entry.text === 'Cafe Central',
+    );
+    expect(span).toBeDefined();
+    expect(span?.start).toBe(translatedText.indexOf('Cafe Central'));
+    expect(span?.end).toBe(
+      translatedText.indexOf('Cafe Central') + 'Cafe Central'.length,
+    );
+  });
+
   it('covers a decomposed accent in the tappable range', () => {
     const translatedText = 'We ate at Cafe\u0301 Central.';
     const span = exact(['Café Central'], translatedText).find((entry) =>

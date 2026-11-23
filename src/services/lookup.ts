@@ -234,12 +234,28 @@ function codePointBefore(text: string, index: number): string | undefined {
   if (index <= 0) {
     return undefined;
   }
-  const points = Array.from(text.slice(0, index));
-  return points[points.length - 1];
+  const low = text.charCodeAt(index - 1);
+  if (low >= 0xdc00 && low <= 0xdfff && index >= 2) {
+    const high = text.charCodeAt(index - 2);
+    if (high >= 0xd800 && high <= 0xdbff) {
+      return text.slice(index - 2, index);
+    }
+  }
+  return text[index - 1];
 }
 
 function codePointAfter(text: string, index: number): string | undefined {
-  return Array.from(text.slice(index))[0];
+  if (index >= text.length) {
+    return undefined;
+  }
+  const high = text.charCodeAt(index);
+  if (high >= 0xd800 && high <= 0xdbff && index + 1 < text.length) {
+    const low = text.charCodeAt(index + 1);
+    if (low >= 0xdc00 && low <= 0xdfff) {
+      return text.slice(index, index + 2);
+    }
+  }
+  return text[index];
 }
 
 interface NormalizedText {
@@ -277,8 +293,8 @@ function normalizeWithMap(text: string): NormalizedText {
         endMap[endMap.length - 1] = index + character.length;
       }
     } else {
-      for (const emitted of base) {
-        normalized += emitted;
+      for (let unit = 0; unit < base.length; unit += 1) {
+        normalized += base[unit];
         startMap.push(index);
         endMap.push(index + character.length);
       }
@@ -298,6 +314,7 @@ function normalizedSpans(
     if (needle.length < 3) {
       continue;
     }
+    const cjk = isCjkTerm(candidate);
     let from = 0;
     for (;;) {
       const at = translated.text.indexOf(needle, from);
@@ -306,7 +323,6 @@ function normalizedSpans(
       }
       const before = codePointBefore(translated.text, at);
       const after = codePointAfter(translated.text, at + needle.length);
-      const cjk = isCjkTerm(candidate);
       if (cjk || (!isWordCharacter(before) && !isWordCharacter(after))) {
         spans.push({
           start: translated.startMap[at]!,

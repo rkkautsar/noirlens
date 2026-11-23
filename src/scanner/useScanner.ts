@@ -31,14 +31,22 @@ import {
 } from '@/services/nativeErrors';
 import { readScanCount, writeScanCount } from '@/services/scanLedger';
 import { addScanHistory } from '@/services/scanHistory';
+import { captureMode } from '@/services/captureMode';
+import type { CaptureRecord } from '@/services/captureModel';
+import { captures } from '@/services/captures';
+import {
+  enqueueCapture,
+  resumeCaptureProcessing,
+} from '@/services/captureProcessing';
 import { sourceLanguage } from '@/services/sourceLanguage';
-import type { ScannerEffect } from './machine';
+import type { CaptureMode, ScannerEffect } from './machine';
 import { ScannerStore, type ScannerSnapshot } from './store';
 
 const CAPTURE_TIMEOUT_MS = 12_000;
 
 export interface ScannerController {
   snapshot: ScannerSnapshot;
+  setCaptureMode: (mode: CaptureMode) => void;
   beginHold: () => void;
   setReticleFrame: (crop: OcrCrop | null) => void;
   scanAgain: () => void;
@@ -48,10 +56,14 @@ export interface ScannerController {
   rescan: (language: string) => Promise<void>;
 }
 
-export function useScanner(): ScannerController {
+export function useScanner(options: {
+  onCaptureSaved?: (record: CaptureRecord) => void;
+} = {}): ScannerController {
   const router = useRouter();
   const routerRef = useRef(router);
   routerRef.current = router;
+  const onCaptureSavedRef = useRef(options.onCaptureSaved);
+  onCaptureSavedRef.current = options.onCaptureSaved;
 
   const storeRef = useRef<ScannerStore | null>(null);
   if (storeRef.current === null) {
@@ -60,6 +72,7 @@ export function useScanner(): ScannerController {
       scansUsedToday: 0,
       unlimited: false,
       nowMs: Date.now(),
+      captureMode: captureMode.current(),
     });
   }
   const store = storeRef.current;
@@ -74,6 +87,17 @@ export function useScanner(): ScannerController {
   const reticleCropRef = useRef<OcrCrop | null>(null);
 
   useKeepAwake();
+
+  useEffect(() => {
+    void captureMode.hydrate();
+    return captureMode.subscribe(() => {
+      store.send({
+        type: 'SET_CAPTURE_MODE',
+        mode: captureMode.current(),
+        timestampMs: Date.now(),
+      });
+    });
+  }, [store]);
 
   // Leaving the scanner (paywall, pack sheet, incoming call) must never leave
   // the camera armed in the background. A frozen result is not interrupted.
@@ -325,6 +349,85 @@ export function useScanner(): ScannerController {
       }
     };
 
+    const captureToCollection = async () => {
+      if (capturing || disposed || !focusedRef.current) {
+        return;
+      }
+      capturing = true;
+      const token = ++captureToken;
+      const hint = sourceLanguage.current();
+
+      const watchdog = setTimeout(() => {
+        if (token !== captureToken) {
+          return;
+        }
+        captureToken += 1;
+        capturing = false;
+        if (store.getSnapshot().state === 'SCANNING') {
+          store.send({
+            type: 'CAPTURE_FAILED',
+            error: {
+              code: 'capture_failed',
+              message: 'Capture timed out. Hold steady.',
+              fatal: true,
+            },
+            timestampMs: Date.now(),
+          });
+        }
+      }, CAPTURE_TIMEOUT_MS);
+      captureWatchdog = watchdog;
+
+      let savedFiles: string[] | null = null;
+      try {
+        const still = await vision.captureStill();
+        savedFiles = [still.image, still.thumb];
+        if (token !== captureToken) {
+          return;
+        }
+        const at = Date.now();
+        const record: CaptureRecord = {
+          id: `cap-${at}-${Math.random().toString(36).slice(2, 8)}`,
+          at,
+          image: still.image,
+          thumb: still.thumb,
+          width: still.width,
+          height: still.height,
+          status: 'pending',
+          hint: hint === 'auto' ? '' : hint,
+          language: '',
+          text: '',
+          blocks: [],
+          confidence: 0,
+          reviewedAt: null,
+          error: null,
+          attempts: 0,
+        };
+        // Persistence gates the animation and the badge; OCR runs after.
+        await captures.add(record);
+        savedFiles = null;
+        enqueueCapture(record.id);
+        if (token !== captureToken) {
+          return;
+        }
+        onCaptureSavedRef.current?.(record);
+        store.send({ type: 'CAPTURE_SAVED', timestampMs: Date.now() });
+      } catch (error) {
+        if (savedFiles) {
+          void vision.deleteCaptureFiles(savedFiles).catch(() => {});
+        }
+        if (token !== captureToken) {
+          return;
+        }
+        store.send({
+          type: 'CAPTURE_FAILED',
+          error: describeNativeError(error),
+          timestampMs: Date.now(),
+        });
+      } finally {
+        clearTimeout(watchdog);
+      }
+    };
+
     const pollCameraStatus = async () => {
       if (pollingStatus || disposed) {
         return;
@@ -388,7 +491,11 @@ export function useScanner(): ScannerController {
           void vision.stopCamera().catch(() => {});
           break;
         case 'CAPTURE_FRAME':
-          void captureOnce();
+          if (effect.mode === 'collect') {
+            void captureToCollection();
+          } else {
+            void captureOnce();
+          }
           break;
         case 'PERSIST_SCAN':
           void writeScanCount(effect.dayKey, effect.scansUsedToday).catch(
@@ -434,6 +541,15 @@ export function useScanner(): ScannerController {
         statusTimer = null;
       }
     });
+
+    void captures
+      .hydrate()
+      .then(() => {
+        if (!disposed) {
+          resumeCaptureProcessing();
+        }
+      })
+      .catch(() => {});
 
     void (async () => {
       try {
@@ -542,6 +658,10 @@ export function useScanner(): ScannerController {
     store.send({ type: 'DISMISS_ERROR', timestampMs: Date.now() });
   }, [store]);
 
+  const setCaptureMode = useCallback((mode: CaptureMode) => {
+    void captureMode.set(mode);
+  }, []);
+
   const rescan = useCallback(
     async (language: string) => {
       try {
@@ -587,6 +707,7 @@ export function useScanner(): ScannerController {
 
   return {
     snapshot,
+    setCaptureMode,
     beginHold,
     setReticleFrame,
     scanAgain,

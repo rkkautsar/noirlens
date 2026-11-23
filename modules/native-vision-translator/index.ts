@@ -39,6 +39,14 @@ export interface TranslatePayload {
   cached: boolean;
 }
 
+export interface CaptureStillPayload {
+  /** Flat filename under the native captures directory. */
+  image: string;
+  thumb: string;
+  width: number;
+  height: number;
+}
+
 export interface CameraStatus {
   authorized: boolean;
   running: boolean;
@@ -66,6 +74,12 @@ export interface NativeVisionTranslatorModule extends NativeModule {
   recognizeLast(language: string): Promise<OcrPayload>;
   getCameraStatus(): Promise<CameraStatus>;
   captureFrame(sourceLanguage: string, crop?: OcrCrop): Promise<OcrPayload>;
+  /** Capture a still without OCR; writes the JPEG + thumbnail to disk. */
+  captureStill(): Promise<CaptureStillPayload>;
+  capturesDirectory(): Promise<string>;
+  captureFileUri(name: string): Promise<string>;
+  recognizeCapture(image: string, language: string): Promise<OcrPayload>;
+  deleteCaptureFiles(names: string[]): Promise<void>;
   translate(params: {
     text: string;
     sourceLanguage: string;
@@ -123,6 +137,18 @@ const WEB_MOCK_OCR: OcrPayload = {
 const WEB_MOCK_TRANSLATION =
   'Bánh mì thịt\nBaguette with pork, pâté and pickled vegetables\n45,000 VND';
 
+const WEB_MOCK_CAPTURE =
+  'data:image/svg+xml;charset=utf-8,' +
+  encodeURIComponent(
+    '<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="900">' +
+      '<rect width="1200" height="900" fill="#141416"/>' +
+      '<rect x="80" y="300" width="1040" height="40" rx="4" fill="#F5F2EA"/>' +
+      '<rect x="80" y="380" width="760" height="28" rx="4" fill="#9C988E"/>' +
+      '<rect x="80" y="450" width="560" height="28" rx="4" fill="#9C988E"/>' +
+      '<text x="80" y="720" font-family="monospace" font-size="28" fill="#D9B36C">CAPTURE</text>' +
+      '</svg>',
+  );
+
 const webMock = {
   startCamera: async () => {},
   stopCamera: async () => {},
@@ -142,6 +168,21 @@ const webMock = {
     });
     return WEB_MOCK_OCR;
   },
+  captureStill: async () => ({
+    image: WEB_MOCK_CAPTURE,
+    thumb: WEB_MOCK_CAPTURE,
+    width: 1200,
+    height: 900,
+  }),
+  capturesDirectory: async () => '',
+  captureFileUri: async (name: string) => name,
+  recognizeCapture: async (_image: string, _language: string) => {
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, 500);
+    });
+    return WEB_MOCK_OCR;
+  },
+  deleteCaptureFiles: async (_names: string[]) => {},
   romanize: async (text: string, _language: string) => text,
   speak: async (_text: string, _language: string) => false,
   stopSpeaking: async () => {},

@@ -58,13 +58,19 @@ export function ShutterOverlay({ open }: { open: boolean }) {
   });
 
   return (
-    <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+    <View pointerEvents="none" style={styles.viewport}>
       {blades}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  // The blades are much larger than the screen; clip them so the document
+  // never gains scrollable overflow on web.
+  viewport: {
+    ...StyleSheet.absoluteFill,
+    overflow: 'hidden',
+  },
   blade: {
     position: 'absolute',
     backgroundColor: colors.background,

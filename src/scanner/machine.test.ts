@@ -682,3 +682,68 @@ describe('counter and lifecycle events', () => {
     expect(result.context.state).toBe('SLEEP');
   });
 });
+
+describe('collect capture mode', () => {
+  it('arms without charging the free scan limit', () => {
+    const context = ctx({ captureMode: 'collect', scansUsedToday: 15 });
+    const result = reduceScanner(context, {
+      type: 'WAKE',
+      timestampMs: 1000,
+    });
+    expect(result.context.state).toBe('PREWARM');
+    expect(hasEffect(result.effects, 'START_CAMERA')).toBe(true);
+    expect(hasEffect(result.effects, 'SHOW_PAYWALL')).toBe(false);
+  });
+
+  it('still blocks read mode at the free limit', () => {
+    const context = ctx({ captureMode: 'read', scansUsedToday: 15 });
+    const result = reduceScanner(context, {
+      type: 'WAKE',
+      timestampMs: 1000,
+    });
+    expect(result.context.state).not.toBe('PREWARM');
+    expect(hasEffect(result.effects, 'SHOW_PAYWALL')).toBe(true);
+  });
+
+  it('tags the capture effect with the active mode', () => {
+    const context = ctx({
+      state: 'PREWARM',
+      captureMode: 'collect',
+      armedAtMs: 1000,
+      cameraSettled: true,
+      scansUsedToday: 15,
+    });
+    const result = reduceScanner(context, {
+      type: 'CAPTURE_NOW',
+      timestampMs: 2000,
+    });
+    const frame = result.effects.find(
+      (effect): effect is Extract<ScannerEffect, { type: 'CAPTURE_FRAME' }> =>
+        effect.type === 'CAPTURE_FRAME',
+    );
+    expect(frame?.mode).toBe('collect');
+    expect(hasEffect(result.effects, 'SHOW_PAYWALL')).toBe(false);
+  });
+
+  it('returns to standby after a saved collect capture without persisting a scan', () => {
+    const context = ctx({ state: 'SCANNING', captureMode: 'collect' });
+    const result = reduceScanner(context, {
+      type: 'CAPTURE_SAVED',
+      timestampMs: 5000,
+    });
+    expect(result.context.state).toBe('SLEEP');
+    expect(result.context.result).toBeNull();
+    expect(hasEffect(result.effects, 'STOP_CAMERA')).toBe(true);
+    expect(hasEffect(result.effects, 'PERSIST_SCAN')).toBe(false);
+  });
+
+  it('switches modes without touching the hardware', () => {
+    const result = reduceScanner(ctx(), {
+      type: 'SET_CAPTURE_MODE',
+      mode: 'collect',
+      timestampMs: 300,
+    });
+    expect(result.context.captureMode).toBe('collect');
+    expect(result.effects).toHaveLength(0);
+  });
+});

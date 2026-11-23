@@ -26,6 +26,8 @@ export function ResultCard({
   onShowOriginal,
   onOpenLanguages,
   onLookUp,
+  readOnly = false,
+  bottomOffset = 0,
 }: {
   result: ScanResult;
   remaining: number | null;
@@ -34,6 +36,10 @@ export function ResultCard({
   onShowOriginal?: () => void;
   onOpenLanguages: () => void;
   onLookUp: (phrase: string, alt?: string) => void;
+  /** History replay: the primary action closes instead of rescanning. */
+  readOnly?: boolean;
+  /** Extra clearance for a persistent tab bar under the card. */
+  bottomOffset?: number;
 }) {
   const insets = useSafeAreaInsets();
   const [copied, setCopied] = useState(false);
@@ -88,17 +94,25 @@ export function ResultCard({
       ? `The ${language} offline pack is not installed. Download it once, then scan again. You can still read the source below.`
       : '';
 
-  const primaryLabel = translated
-    ? 'SCAN AGAIN'
-    : packMissing
-      ? `GET ${shortLanguage} PACK`
-      : 'CHOOSE LANGUAGE';
-  const primaryIcon = translated
-    ? 'refresh'
-    : packMissing
-      ? 'cloud-download-outline'
-      : 'language-outline';
-  const primaryAction = translated ? onScanAgain : onOpenLanguages;
+  const primaryLabel = readOnly
+    ? 'CLOSE'
+    : translated
+      ? 'SCAN AGAIN'
+      : packMissing
+        ? `GET ${shortLanguage} PACK`
+        : 'CHOOSE LANGUAGE';
+  const primaryIcon = readOnly
+    ? 'close'
+    : translated
+      ? 'refresh'
+      : packMissing
+        ? 'cloud-download-outline'
+        : 'language-outline';
+  const primaryAction = readOnly
+    ? onScanAgain
+    : translated
+      ? onScanAgain
+      : onOpenLanguages;
   const lookupTerms = translated ? untranslatedTerms(result) : [];
   const lookupPattern = termPattern(lookupTerms);
   const sourceTerms = [
@@ -278,8 +292,8 @@ export function ResultCard({
           {
             flexGrow: 1,
             justifyContent: 'center',
-            paddingTop: insets.top + 56,
-            paddingBottom: insets.bottom + 190,
+            paddingTop: insets.top + 80,
+            paddingBottom: insets.bottom + 190 + bottomOffset,
           },
         ]}
       >
@@ -339,7 +353,7 @@ export function ResultCard({
         style={[
           styles.actions,
           styles.fixedActions,
-          { bottom: insets.bottom + 94 },
+          { bottom: insets.bottom + 94 + bottomOffset },
         ]}
       >
         {onShowOriginal ? (
@@ -359,14 +373,22 @@ export function ResultCard({
             void copy();
           }}
         />
-        {translated ? null : (
+        {translated && !readOnly ? (
           <ChipButton
             label="SCAN AGAIN"
             icon="refresh"
             iconOnly
             onPress={onScanAgain}
           />
-        )}
+        ) : null}
+        {!translated && readOnly ? (
+          <ChipButton
+            label="CLOSE"
+            icon="close"
+            iconOnly
+            onPress={onScanAgain}
+          />
+        ) : null}
         <ChipButton
           label="Change language"
           icon="language-outline"

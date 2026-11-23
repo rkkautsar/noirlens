@@ -1,8 +1,10 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { LanguagesSheet } from '@/components/LanguagesSheet';
+import { ModeTabs } from '@/components/ModeTabs';
 import { LookupSheet } from '@/components/LookupSheet';
 import { OverlaySheet } from '@/components/OverlaySheet';
 import { ResultCard } from '@/components/ResultCard';
@@ -46,6 +48,7 @@ function resultFromEntry(entry: ScanHistoryEntry): ScanResult {
 
 export default function ResultScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id?: string }>();
   const [entry, setEntry] = useState<ScanHistoryEntry | null>(null);
   const [loading, setLoading] = useState(true);
@@ -111,6 +114,7 @@ export default function ResultScreen() {
         result={resultFromEntry(entry)}
         remaining={null}
         unlimited
+        readOnly
         onScanAgain={close}
         onOpenLanguages={() => setOverlay({ kind: 'languages' })}
         onLookUp={(phrase, alt) => {
@@ -134,6 +138,12 @@ export default function ResultScreen() {
         onCapture={() => {}}
         onCancel={close}
         onLanguages={() => setOverlay({ kind: 'languages' })}
+        readOnly
+      />
+      <ModeTabs
+        active="camera"
+        onCamera={close}
+        onTranslate={() => router.push('/translate')}
       />
       {overlay ? (
         <OverlaySheet onClose={() => setOverlay(null)}>

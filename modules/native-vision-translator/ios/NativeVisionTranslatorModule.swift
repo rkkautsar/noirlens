@@ -1,4 +1,5 @@
 import ExpoModulesCore
+import Foundation
 
 struct TranslateParams: Record {
   @Field var text: String = ""
@@ -67,6 +68,51 @@ public final class NativeVisionTranslatorModule: Module {
     // Latin, Han to Mandarin pinyin. No model download. Already-Latin text is
     // returned untouched so Vietnamese accents are not stripped, and Japanese
     // only romanizes kana (kanji readings need a dictionary, not pinyin).
+    AsyncFunction("captureStill") { () async throws -> [String: Any] in
+      let frame = try await CameraController.shared.captureFrame()
+      guard let jpeg = frame.previewJpegBase64 else {
+        throw cameraException(
+          name: "NoFrame",
+          description: "The captured frame had no image data.",
+          code: "ERR_NO_FRAME"
+        )
+      }
+      let saved = try CaptureFiles.save(jpegBase64: jpeg)
+      return [
+        "image": saved.image,
+        "thumb": saved.thumb,
+        "width": saved.width,
+        "height": saved.height,
+      ]
+    }
+
+    AsyncFunction("capturesDirectory") { () -> String in
+      CaptureFiles.directoryUri()
+    }
+
+    AsyncFunction("captureFileUri") { (name: String) -> String in
+      CaptureFiles.uri(for: name)
+    }
+
+    AsyncFunction("recognizeCapture") {
+      (image: String, language: String) async throws -> [String: Any] in
+      guard
+        let url = CaptureFiles.url(for: image),
+        let data = try? Data(contentsOf: url)
+      else {
+        throw cameraException(
+          name: "CaptureMissing",
+          description: "The saved capture is no longer on disk.",
+          code: "ERR_CAPTURE_MISSING"
+        )
+      }
+      return try TextRecognizer.recognize(jpegData: data, languageHint: language)
+    }
+
+    AsyncFunction("deleteCaptureFiles") { (names: [String]) in
+      CaptureFiles.delete(names: names)
+    }
+
     AsyncFunction("romanize") { (text: String, language: String) async -> String in
       // Only the scripts the OCR supports get a reading; Latin text (including
       // Vietnamese diacritics above U+0370) passes through untouched.

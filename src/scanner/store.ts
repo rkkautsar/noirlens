@@ -5,6 +5,7 @@ import {
   remainingScans,
   type ScanError,
   type ScanResult,
+  type CaptureMode,
   type ScannerArmMode,
   type ScannerContext,
   type ScannerEffect,
@@ -16,6 +17,7 @@ import {
 export interface ScannerSnapshot {
   state: ScannerState;
   mode: ScannerArmMode;
+  captureMode: CaptureMode;
   result: ScanResult | null;
   error: ScanError | null;
   scansUsedToday: number;
@@ -34,6 +36,7 @@ function buildSnapshot(
   return {
     state: context.state,
     mode: context.armMode,
+    captureMode: context.captureMode,
     result: context.result,
     error: context.error,
     scansUsedToday: context.scansUsedToday,
@@ -47,6 +50,7 @@ function affectsUI(previous: ScannerContext, next: ScannerContext): boolean {
   return (
     previous.state !== next.state ||
     previous.armMode !== next.armMode ||
+    previous.captureMode !== next.captureMode ||
     previous.result !== next.result ||
     previous.error !== next.error ||
     previous.scansUsedToday !== next.scansUsedToday ||
@@ -72,6 +76,7 @@ export class ScannerStore {
     scansUsedToday: number;
     unlimited: boolean;
     nowMs: number;
+    captureMode?: CaptureMode;
     tuning?: ScannerTuning;
   }) {
     this.tuning = options.tuning ?? DEFAULT_TUNING;
@@ -80,6 +85,7 @@ export class ScannerStore {
       scansUsedToday: options.scansUsedToday,
       unlimited: options.unlimited,
       nowMs: options.nowMs,
+      captureMode: options.captureMode,
     });
     this.snapshot = buildSnapshot(this.context, this.tuning);
   }

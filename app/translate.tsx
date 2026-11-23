@@ -408,7 +408,7 @@ const styles = StyleSheet.create({
   },
   content: {
     paddingHorizontal: 18,
-    paddingTop: 20,
+    paddingTop: 30,
     gap: 14,
   },
   languageRow: {

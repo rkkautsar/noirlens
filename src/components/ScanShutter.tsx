@@ -3,6 +3,7 @@ import * as Haptics from 'expo-haptics';
 import { useMemo, useRef, useState } from 'react';
 import {
   Animated,
+  Dimensions,
   PanResponder,
   Platform,
   StyleSheet,
@@ -46,6 +47,8 @@ export function ScanShutter({
   onCancel,
   onLanguages,
   bottomOffset = 0,
+  collect = false,
+  readOnly = false,
 }: {
   active: boolean;
   scanning: boolean;
@@ -55,6 +58,8 @@ export function ScanShutter({
   onCancel: () => void;
   onLanguages: () => void;
   bottomOffset?: number;
+  collect?: boolean;
+  readOnly?: boolean;
 }) {
   const insets = useSafeAreaInsets();
   const [zone, setZone] = useState<Zone | null>(null);
@@ -155,6 +160,17 @@ export function ScanShutter({
           fire('languages');
           return;
         }
+        // A direct tap on the visible cancel / languages targets must do what
+        // the icon says; only a tap in the middle captures.
+        const screenWidth = Dimensions.get('window').width;
+        if (gesture.x0 <= 96) {
+          fire('cancel');
+          return;
+        }
+        if (gesture.x0 >= screenWidth - 96) {
+          fire('languages');
+          return;
+        }
         latest.current.onCapture();
       },
       onPanResponderTerminate: () => {
@@ -193,16 +209,24 @@ export function ScanShutter({
     outputRange: [0.4, 1],
   });
 
-  const label = scanning
-    ? 'READING ON-DEVICE'
-    : active
-      ? 'RELEASE TO CAPTURE'
+  const label = readOnly
+    ? 'CLOSE'
+    : scanning
+      ? 'READING ON-DEVICE'
+      : active
+      ? collect
+        ? 'RELEASE TO COLLECT'
+        : 'RELEASE TO CAPTURE'
       : next
         ? 'NEXT SCAN'
-        : 'HOLD TO SCAN';
-  const icon: React.ComponentProps<typeof Ionicons>['name'] = scanning
-    ? 'hourglass-outline'
-    : active
+        : collect
+          ? 'HOLD TO COLLECT'
+          : 'HOLD TO SCAN';
+  const icon: React.ComponentProps<typeof Ionicons>['name'] = readOnly
+    ? 'close'
+    : scanning
+      ? 'hourglass-outline'
+      : active
       ? 'radio-button-on'
       : next
         ? 'refresh'
@@ -225,7 +249,9 @@ export function ScanShutter({
               ? 'Release to capture'
               : next
                 ? 'Hold for the next scan. Swipe left to cancel, right for languages.'
-                : 'Hold to scan. Swipe left to cancel, right for languages.'
+                : collect
+                  ? 'Hold to save a capture. Swipe left to cancel, right for languages.'
+                  : 'Hold to scan. Swipe left to cancel, right for languages.'
         }
         style={[
           styles.bar,

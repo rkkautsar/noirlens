@@ -3,6 +3,7 @@ import CryptoKit
 import ExpoModulesCore
 import Foundation
 import NaturalLanguage
+import UIKit
 import Vision
 
 /**
@@ -60,6 +61,42 @@ enum TextRecognizer {
         code: "ERR_OCR_FAILED"
       )
     }
+    return try recognize(
+      image: image,
+      previewJpegBase64: previewJpegBase64,
+      languageHint: languageHint
+    )
+  }
+
+  /// OCR an already upright, already cropped JPEG (a stored Collect capture)
+  /// without rotating or cropping it again: the normalized boxes must map
+  /// 1:1 onto the image the user sees in Review.
+  static func recognize(
+    jpegData: Data,
+    languageHint: String
+  ) throws -> [String: Any] {
+    guard
+      let decoded = UIImage(data: jpegData),
+      let image = decoded.cgImage
+    else {
+      throw Exception(
+        name: "TextRecognitionFailed",
+        description: "The saved capture could not be read for OCR.",
+        code: "ERR_OCR_FAILED"
+      )
+    }
+    return try recognize(
+      image: image,
+      previewJpegBase64: nil,
+      languageHint: languageHint
+    )
+  }
+
+  private static func recognize(
+    image: CGImage,
+    previewJpegBase64: String?,
+    languageHint: String
+  ) throws -> [String: Any] {
     let width = image.width
     let height = image.height
 

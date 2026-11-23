@@ -17,6 +17,8 @@ export const FREE_DAILY_SCAN_LIMIT = 15;
 
 export type ScannerState = 'SLEEP' | 'PREWARM' | 'SCANNING' | 'LOCKED_READ';
 export type ScannerArmMode = 'AUTO' | 'MANUAL';
+/** Read shows a translation; collect only saves a frame for later review. */
+export type CaptureMode = 'read' | 'collect';
 
 export interface ScanBlock {
   text: string;
@@ -143,6 +145,7 @@ export const DEFAULT_TUNING: ScannerTuning = {
 export interface ScannerContext {
   state: ScannerState;
   armMode: ScannerArmMode;
+  captureMode: CaptureMode;
   dayKey: string;
   scansUsedToday: number;
   unlimited: boolean;
@@ -172,7 +175,7 @@ export interface ScannerContext {
 export type ScannerEffect =
   | { type: 'START_CAMERA' }
   | { type: 'STOP_CAMERA' }
-  | { type: 'CAPTURE_FRAME' }
+  | { type: 'CAPTURE_FRAME'; mode: CaptureMode }
   | { type: 'PERSIST_SCAN'; dayKey: string; scansUsedToday: number }
   | { type: 'SHOW_PAYWALL' }
   | { type: 'HAPTIC_SUCCESS' }
@@ -200,6 +203,8 @@ export type ScannerEvent =
   | { type: 'SLEEP'; timestampMs: number }
   | { type: 'DISMISS_ERROR'; timestampMs: number }
   | { type: 'ENTITLEMENT_CHANGED'; unlimited: boolean; timestampMs: number }
+  | { type: 'SET_CAPTURE_MODE'; mode: CaptureMode; timestampMs: number }
+  | { type: 'CAPTURE_SAVED'; timestampMs: number }
   | {
       type: 'DAY_ROLLOVER';
       dayKey: string;
@@ -218,10 +223,12 @@ export function createInitialContext(params: {
   unlimited?: boolean;
   hydrated?: boolean;
   nowMs?: number;
+  captureMode?: CaptureMode;
 }): ScannerContext {
   return {
     state: 'SLEEP',
     armMode: 'AUTO',
+    captureMode: params.captureMode ?? 'read',
     dayKey: params.dayKey,
     scansUsedToday: params.scansUsedToday ?? 0,
     unlimited: params.unlimited ?? false,
@@ -376,7 +383,7 @@ function attemptArm(
   if (!context.hydrated) {
     return context;
   }
-  if (!canScan(context, tuning)) {
+  if (context.captureMode === 'read' && !canScan(context, tuning)) {
     return showPaywallIfDue(context, timestampMs, tuning, effects);
   }
   return enterPrewarm(context, effects, timestampMs, {
@@ -445,7 +452,7 @@ function evaluateActive(
     const armedFor = timestampMs - armedAt;
 
     if (armedFor >= tuning.prewarmMinMs && stillFor >= tuning.stillHoldMs) {
-      if (!canScan(context, tuning)) {
+      if (context.captureMode === 'read' && !canScan(context, tuning)) {
         const prompted = showPaywallIfDue(
           context,
           timestampMs,
@@ -454,7 +461,7 @@ function evaluateActive(
         );
         return enterSleep(prompted, effects, { clearResult: true }, timestampMs);
       }
-      effects.push({ type: 'CAPTURE_FRAME' });
+      effects.push({ type: 'CAPTURE_FRAME', mode: context.captureMode });
       return {
         ...context,
         state: 'SCANNING',
@@ -787,7 +794,7 @@ export function reduceScanner(
         return { context, effects };
       }
 
-      if (!canScan(context, tuning)) {
+      if (context.captureMode === 'read' && !canScan(context, tuning)) {
         const prompted = showPaywallIfDue(
           context,
           event.timestampMs,
@@ -805,7 +812,7 @@ export function reduceScanner(
         };
       }
 
-      effects.push({ type: 'CAPTURE_FRAME' });
+      effects.push({ type: 'CAPTURE_FRAME', mode: context.captureMode });
       return {
         context: {
           ...context,
@@ -851,6 +858,36 @@ export function reduceScanner(
     case 'DISMISS_ERROR': {
       return {
         context: { ...context, error: null, nowMs: event.timestampMs },
+        effects,
+      };
+    }
+
+    case 'SET_CAPTURE_MODE': {
+      return {
+        context: {
+          ...context,
+          captureMode: event.mode,
+          nowMs: event.timestampMs,
+        },
+        effects,
+      };
+    }
+
+    case 'CAPTURE_SAVED': {
+      if (context.state !== 'SCANNING') {
+        return {
+          context: { ...context, nowMs: event.timestampMs },
+          effects,
+        };
+      }
+      effects.push({ type: 'STOP_CAMERA' }, { type: 'HAPTIC_SUCCESS' });
+      return {
+        context: enterSleep(
+          context,
+          effects,
+          { clearResult: true },
+          event.timestampMs,
+        ),
         effects,
       };
     }

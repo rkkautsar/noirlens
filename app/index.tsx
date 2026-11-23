@@ -1,15 +1,23 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
-import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useRef, useState, type ComponentRef } from 'react';
+import {
+  Animated,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AimHud } from '@/components/AimHud';
+import { CaptureFlight } from '@/components/CaptureFlight';
 import { HistorySheet } from '@/components/HistorySheet';
 import { LanguagesSheet } from '@/components/LanguagesSheet';
 import { LookupSheet } from '@/components/LookupSheet';
-import { MODE_TABS_HEIGHT, ModeTabs } from '@/components/ModeTabs';
+import { ModeTabs } from '@/components/ModeTabs';
 import { OverlaySheet } from '@/components/OverlaySheet';
 import { OriginalView } from '@/components/OriginalView';
 import { ResultCard } from '@/components/ResultCard';
@@ -24,12 +32,24 @@ import {
   writeEcoPreviewPreference,
 } from '@/services/preferences';
 import { useSourceLanguage } from '@/services/sourceLanguage';
+import { captures, useCaptures } from '@/services/captures';
+import type { CaptureRecord } from '@/services/captureModel';
 import { colors, typography } from '@/theme';
 import vision, { EcoCameraView } from '../modules/native-vision-translator';
 
 export default function ScannerScreen() {
   const router = useRouter();
-  const scanner = useScanner();
+  const [flight, setFlight] = useState<CaptureRecord | null>(null);
+  const [flightTarget, setFlightTarget] = useState<{ x: number; y: number } | null>(null);
+  const { unreviewed } = useCaptures();
+  const historyRef = useRef<ComponentRef<typeof View> | null>(null);
+  const pulse = useRef(new Animated.Value(1)).current;
+  const scanner = useScanner({
+    onCaptureSaved: (record) => {
+      setFlight(record);
+      setFlightTarget(null);
+    },
+  });
   const insets = useSafeAreaInsets();
   const source = useSourceLanguage();
   const [ecoMode, setEcoMode] = useState(true);
@@ -48,7 +68,36 @@ export default function ScannerScreen() {
   const { state, result } = snapshot;
   const active = state === 'PREWARM' || state === 'SCANNING';
   const locked = state === 'LOCKED_READ' && result !== null;
-  const exhausted = snapshot.remainingToday === 0;
+  const exhausted =
+    snapshot.remainingToday === 0 && snapshot.captureMode === 'read';
+
+  useEffect(() => {
+    if (!flight) {
+      return;
+    }
+    const timer = setTimeout(() => {
+      historyRef.current?.measureInWindow((x, y, width, height) => {
+        setFlightTarget({ x: x + width / 2, y: y + height / 2 });
+      });
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [flight]);
+
+  const pulseHistory = () => {
+    pulse.setValue(1);
+    Animated.sequence([
+      Animated.timing(pulse, {
+        toValue: 1.16,
+        duration: 90,
+        useNativeDriver: true,
+      }),
+      Animated.timing(pulse, {
+        toValue: 1,
+        duration: 140,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
 
   useEffect(() => {
     if (!snapshot.error) {
@@ -148,6 +197,7 @@ export default function ScannerScreen() {
 
       <Standby
         hidden={active}
+        collect={snapshot.captureMode === 'collect'}
         remaining={snapshot.remainingToday}
         error={snapshot.error}
         onOpenLanguages={openLanguages}
@@ -193,8 +243,11 @@ export default function ScannerScreen() {
           onStart={locked ? beginNext : scanner.beginHold}
           onCapture={scanner.captureNow}
           onCancel={locked ? scanner.scanAgain : scanner.stop}
-          onLanguages={openLanguages}
-          bottomOffset={MODE_TABS_HEIGHT}
+          onLanguages={() => {
+            scanner.stop();
+            openLanguages();
+          }}
+          collect={snapshot.captureMode === 'collect'}
         />
       ) : null}
 
@@ -203,27 +256,9 @@ export default function ScannerScreen() {
         <View
           style={[
             styles.sourceRow,
-            { bottom: insets.bottom + 92 + MODE_TABS_HEIGHT },
+            { bottom: insets.bottom + 92 },
           ]}
         >
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Recent scans"
-            onPress={() => {
-              setOverlay({ kind: 'history' });
-            }}
-            style={({ pressed }) => [
-              styles.historyButton,
-              pressed && styles.sourceButtonPressed,
-            ]}
-          >
-            <Ionicons
-              name="time-outline"
-              size={16}
-              color={colors.foreground}
-            />
-          </Pressable>
-
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={
@@ -252,7 +287,81 @@ export default function ScannerScreen() {
               {source.code === 'auto' ? 'AUTO' : languageShortLabel(source.code)}
             </Text>
           </Pressable>
+          <Animated.View style={{ transform: [{ scale: pulse }] }}>
+            <Pressable
+              ref={historyRef}
+              accessibilityRole="button"
+              accessibilityLabel={
+                snapshot.captureMode === 'collect'
+                  ? 'Review captures'
+                  : 'Recent scans'
+              }
+              onPress={() => {
+                scanner.stop();
+                setOverlay({ kind: 'history' });
+              }}
+              style={({ pressed }) => [
+                styles.historyButton,
+                pressed && styles.sourceButtonPressed,
+              ]}
+            >
+              <Ionicons
+                name="time-outline"
+                size={16}
+                color={colors.foreground}
+              />
+              {unreviewed > 0 ? (
+                <View style={styles.historyBadge}>
+                  <Text style={styles.historyBadgeText}>
+                    {unreviewed > 99 ? '99+' : unreviewed}
+                  </Text>
+                </View>
+              ) : null}
+            </Pressable>
+          </Animated.View>
         </View>
+      ) : null}
+
+      {!exhausted && !locked ? (
+        <Pressable
+          accessibilityRole="switch"
+          accessibilityLabel={
+            snapshot.captureMode === 'collect'
+              ? 'Collect mode on. Switch to Read mode.'
+              : 'Collect mode off. Switch to Collect mode.'
+          }
+          accessibilityState={{
+            checked: snapshot.captureMode === 'collect',
+          }}
+          onPress={() => {
+            void Haptics.impactAsync(
+              Haptics.ImpactFeedbackStyle.Light,
+            ).catch(() => {});
+            scanner.setCaptureMode(
+              snapshot.captureMode === 'collect' ? 'read' : 'collect',
+            );
+          }}
+          style={({ pressed }) => [
+            styles.modeButton,
+            { bottom: insets.bottom + 92 },
+            snapshot.captureMode === 'collect' && styles.torchButtonOn,
+            pressed && styles.sourceButtonPressed,
+          ]}
+        >
+          <Ionicons
+            name={
+              snapshot.captureMode === 'collect'
+                ? 'layers'
+                : 'layers-outline'
+            }
+            size={16}
+            color={
+              snapshot.captureMode === 'collect'
+                ? colors.accent
+                : colors.foreground
+            }
+          />
+        </Pressable>
       ) : null}
 
       {!exhausted && !locked ? (
@@ -299,7 +408,7 @@ export default function ScannerScreen() {
           }}
           style={({ pressed }) => [
             styles.filterButton,
-            { bottom: insets.bottom + 92 + MODE_TABS_HEIGHT },
+            { bottom: insets.bottom + 92 },
             pressed && styles.sourceButtonPressed,
           ]}
         >
@@ -324,6 +433,22 @@ export default function ScannerScreen() {
         onTranslate={() => router.push('/translate')}
       />
 
+      {flight && flightTarget ? (
+        <View pointerEvents="none" style={styles.flightLayer}>
+          <CaptureFlight
+            key={flight.id}
+            thumbnail={captures.uriFor(flight.thumb)}
+            targetX={flightTarget.x}
+            targetY={flightTarget.y}
+            onDone={() => {
+              setFlight(null);
+              setFlightTarget(null);
+              pulseHistory();
+            }}
+          />
+        </View>
+      ) : null}
+
       {overlay ? (
         <OverlaySheet onClose={() => setOverlay(null)}>
           {overlay.kind === 'lookup' ? (
@@ -335,7 +460,12 @@ export default function ScannerScreen() {
                     ) : overlay.kind === 'languages' ? (
             <LanguagesSheet onClose={() => setOverlay(null)} />
           ) : (
-            <HistorySheet onClose={() => setOverlay(null)} />
+            <HistorySheet
+            initialTab={
+              snapshot.captureMode === 'collect' ? 'captures' : 'translations'
+            }
+            onClose={() => setOverlay(null)}
+          />
           )}
         </OverlaySheet>
       ) : null}
@@ -362,9 +492,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
   },
-  torchButton: {
+  modeButton: {
     position: 'absolute',
     left: 62,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: 'rgba(10,10,10,0.94)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  torchButton: {
+    position: 'absolute',
+    left: 108,
     width: 38,
     height: 38,
     borderRadius: 19,
@@ -389,6 +531,31 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(10,10,10,0.94)',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  flightLayer: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    zIndex: 30,
+  },
+  historyBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    minWidth: 16,
+    height: 16,
+    paddingHorizontal: 3,
+    borderRadius: 8,
+    backgroundColor: colors.accent,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  historyBadgeText: {
+    color: colors.background,
+    fontSize: 9,
+    fontWeight: '700',
   },
   historyButton: {
     width: 38,

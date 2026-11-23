@@ -7,6 +7,7 @@ import { ChipButton, MicroLabel, SolidButton } from './ui';
 
 export function Standby({
   hidden = false,
+  collect = false,
   remaining,
   error,
   onOpenLanguages,
@@ -14,6 +15,7 @@ export function Standby({
   onDismissError,
 }: {
   hidden?: boolean;
+  collect?: boolean;
   remaining: number | null;
   error: ScanError | null;
   onOpenLanguages: () => void;
@@ -21,12 +23,18 @@ export function Standby({
   onDismissError: () => void;
 }) {
   const insets = useSafeAreaInsets();
-  const exhausted = remaining === 0;
+  const exhausted = !collect && remaining === 0;
 
-  const heading = exhausted ? 'DAILY LIMIT REACHED' : 'HOLD TO SCAN';
+  const heading = exhausted
+    ? 'DAILY LIMIT REACHED'
+    : collect
+      ? 'HOLD TO COLLECT'
+      : 'HOLD TO SCAN';
   const subheading = exhausted
     ? 'Unlock unlimited scans to keep going.'
-    : 'Hold to aim, release to capture.';
+    : collect
+      ? 'Hold to aim, release to save for review.'
+      : 'Hold to aim, release to capture.';
 
   const primaryAction = exhausted ? onOpenPaywall : null;
 

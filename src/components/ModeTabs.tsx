@@ -1,4 +1,3 @@
-import Ionicons from '@expo/vector-icons/Ionicons';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -6,17 +5,15 @@ import { colors, typography } from '@/theme';
 
 export type AppMode = 'camera' | 'translate';
 
-/** Height of the tab row above the safe area; screens lift controls by this. */
-export const MODE_TABS_HEIGHT = 56;
+/** Kept for screens that still reserve bottom clearance. */
+export const MODE_TABS_HEIGHT = 0;
 
 function Tab({
   label,
-  icon,
   active,
   onPress,
 }: {
   label: string;
-  icon: 'camera-outline' | 'language-outline';
   active: boolean;
   onPress: () => void;
 }) {
@@ -25,20 +22,22 @@ function Tab({
       accessibilityRole="tab"
       accessibilityLabel={label}
       accessibilityState={{ selected: active }}
-      hitSlop={6}
+      hitSlop={10}
       onPress={onPress}
       style={({ pressed }) => [styles.tab, pressed && styles.pressed]}
     >
-      <Ionicons
-        name={icon}
-        size={20}
-        color={active ? colors.accent : colors.muted}
-      />
-      <Text style={[styles.label, active && styles.labelActive]}>{label}</Text>
+      <Text style={[styles.label, active && styles.labelActive]}>
+        {label}
+      </Text>
+      <View style={[styles.underline, active && styles.underlineActive]} />
     </Pressable>
   );
 }
 
+/**
+ * Minimal top mode switcher: no container, no border. The active mode is the
+ * only accent element, underlined like a page tab.
+ */
 export function ModeTabs({
   active,
   onCamera,
@@ -50,16 +49,10 @@ export function ModeTabs({
 }) {
   const insets = useSafeAreaInsets();
   return (
-    <View style={[styles.bar, { paddingBottom: insets.bottom }]}>
-      <Tab
-        label="CAMERA"
-        icon="camera-outline"
-        active={active === 'camera'}
-        onPress={onCamera}
-      />
+    <View pointerEvents="box-none" style={[styles.row, { top: insets.top + 44 }]}>
+      <Tab label="CAMERA" active={active === 'camera'} onPress={onCamera} />
       <Tab
         label="TRANSLATE"
-        icon="language-outline"
         active={active === 'translate'}
         onPress={onTranslate}
       />
@@ -68,30 +61,36 @@ export function ModeTabs({
 }
 
 const styles = StyleSheet.create({
-  bar: {
+  row: {
     position: 'absolute',
     left: 0,
     right: 0,
-    bottom: 0,
     flexDirection: 'row',
-    backgroundColor: 'rgba(9,9,10,0.98)',
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.border,
+    justifyContent: 'center',
+    gap: 26,
     zIndex: 20,
   },
   tab: {
-    flex: 1,
-    height: MODE_TABS_HEIGHT,
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
+    paddingTop: 6,
   },
   label: {
     ...typography.micro,
-    color: colors.muted,
+    color: colors.dim,
+    letterSpacing: 1.8,
   },
   labelActive: {
     color: colors.accent,
+  },
+  underline: {
+    marginTop: 5,
+    height: 2,
+    width: '100%',
+    borderRadius: 1,
+    backgroundColor: 'transparent',
+  },
+  underlineActive: {
+    backgroundColor: colors.accent,
   },
   pressed: {
     opacity: 0.7,

@@ -52,8 +52,8 @@ export function resumeCaptureProcessing(): void {
 }
 
 /** Re-runs OCR for a stored capture with a different source hint ('' = auto). */
-export function rerunCaptureOcr(id: string, hint: string): void {
-  void captures.beginOcrRerun(id, hint).then((revision) => {
+export function rerunCaptureOcr(id: string, hint: string): Promise<void> {
+  return captures.beginOcrRerun(id, hint).then((revision) => {
     if (revision !== null) {
       enqueueCapture(id);
     }

@@ -1,67 +1,75 @@
-import Ionicons from '@expo/vector-icons/Ionicons';
+import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Image,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
-  View,
   useWindowDimensions,
+  View,
+  type ScrollViewInstance,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { AppSheet } from '@/components/AppSheet';
 import { LanguagePickerSheet } from '@/components/LanguagePickerSheet';
+import { LanguagesSheet } from '@/components/LanguagesSheet';
+import { LookupSheet } from '@/components/LookupSheet';
 import { ModeTabs } from '@/components/ModeTabs';
-import { OverlaySheet } from '@/components/OverlaySheet';
+import { ResultCard } from '@/components/ResultCard';
 import { ScanlineOverlay } from '@/components/ScanlineOverlay';
+import { TopBar } from '@/components/TopBar';
 import { ChipButton, MicroLabel } from '@/components/ui';
-import { languageLabel, languageShortLabel } from '@/constants/languages';
+import {
+  isEnglishLanguageCode,
+  languageLabel,
+  languageShortLabel,
+} from '@/constants/languages';
+import type { ScanResult } from '@/scanner/machine';
 import { captures, useCaptures } from '@/services/captures';
 import { rerunCaptureOcr, retryCapture } from '@/services/captureProcessing';
-import { colors, radius, typography } from '@/theme';
+import {
+  describeNativeError,
+  isLanguagePackFailure,
+} from '@/services/nativeErrors';
+import vision from '../../modules/native-vision-translator';
+import { colors, radius, spacing, typography } from '@/theme';
 
-function formatTime(at: number): string {
-  return new Date(at).toLocaleString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-}
+type Overlay =
+  | { kind: 'lookup'; q: string; alt?: string }
+  | { kind: 'languages' }
+  | { kind: 'languagePicker' }
+  | null;
 
-/**
- * Capture detail is only the image, the OCR boxes, the OCR language and
- * deletion. Translation, lookup, romanization and copy live on the existing
- * result screen so there is one result presentation in the app.
- */
 export default function CaptureDetailScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id } = useLocalSearchParams<{ id?: string }>();
   const router = useRouter();
-  const insets = useSafeAreaInsets();
-  const { width } = useWindowDimensions();
-  const state = useCaptures();
-  const record = state.records.find((entry) => entry.id === id);
-
-  const [imageFailed, setImageFailed] = useState(false);
-  const [picker, setPicker] = useState(false);
-  const [languageBusy, setLanguageBusy] = useState(false);
-  const reviewed = useRef(false);
+  const { records } = useCaptures();
+  const record = records.find((row) => row.id === id);
 
   useEffect(() => {
     void captures.hydrate();
   }, []);
+  const { width } = useWindowDimensions();
+  const [overlay, setOverlay] = useState<Overlay>(null);
+  const [imageFailed, setImageFailed] = useState(false);
+  const [languageBusy, setLanguageBusy] = useState(false);
+  const [languageError, setLanguageError] = useState<string | null>(null);
+  const [translating, setTranslating] = useState(false);
+  const [entry, setEntry] = useState<ScanResult | null>(null);
+  const [translateError, setTranslateError] = useState<string | null>(null);
+  const [selected, setSelected] = useState<number>(-1);
+  const scrollRef = useRef<ScrollViewInstance>(null);
+  const [entryY, setEntryY] = useState<number | null>(null);
+  const requestRef = useRef(0);
+  const lastRequest = useRef<{ index: number | null } | null>(null);
 
-  useEffect(() => {
-    if (!record || record.reviewedAt !== null || reviewed.current) {
-      return;
-    }
-    reviewed.current = true;
-    void captures.review(id);
-  }, [id, record]);
+  const busy =
+    languageBusy ||
+    record?.status === 'pending' ||
+    record?.status === 'processing';
 
   useEffect(() => {
     if (record?.status === 'done' || record?.status === 'failed') {
@@ -69,380 +77,496 @@ export default function CaptureDetailScreen() {
     }
   }, [record?.status]);
 
-  const hint = record?.hint ?? '';
-  const busy =
-    languageBusy ||
-    record?.status === 'pending' ||
-    record?.status === 'processing';
-
-  const chooseLanguage = (code: string) => {
-    setPicker(false);
-    if (!record) {
-      return;
+  useEffect(() => {
+    if (entry && entryY !== null) {
+      scrollRef.current?.scrollTo({
+        y: Math.max(0, entryY - 72),
+        animated: true,
+      });
     }
-    const next = code === 'auto' ? '' : code;
-    if (next === record.hint) {
-      return;
-    }
-    // Lock the control before the async metadata write so a second choice
-    // cannot race the first one.
-    setLanguageBusy(true);
-    rerunCaptureOcr(record.id, next);
-  };
+  }, [entry, entryY]);
 
-  const translateAll = () => {
-    if (!record) {
-      return;
-    }
-    router.push({
-      pathname: '/result',
-      params: { captureId: record.id },
-    });
-  };
-
-  const translateRegion = (index: number) => {
-    if (!record) {
-      return;
-    }
-    router.push({
-      pathname: '/result',
-      params: { captureId: record.id, block: String(index) },
-    });
-  };
-
-  const remove = () => {
-    if (!record) {
-      return;
-    }
-    Alert.alert(
-      'Delete capture?',
-      'The image and its recognized text are removed from this device.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: () => {
-            void captures.remove(record.id).then(() => router.back());
-          },
-        },
-      ],
-    );
-  };
-
-  const header = (
-    <View
-      style={[
-        styles.headerWrap,
-        { paddingTop: insets.top + 8, paddingBottom: 8 },
-      ]}
-    >
-      <View style={styles.headerRow}>
-        <ChipButton
-          label="Back"
-          icon="chevron-back"
-          iconOnly
-          onPress={() => router.back()}
-        />
-        <MicroLabel tone="dim">
-          {record ? formatTime(record.at) : 'NOT FOUND'}
-        </MicroLabel>
-        {record ? (
-          <ChipButton
-            label="Delete capture"
-            icon="trash-outline"
-            iconOnly
-            onPress={remove}
-          />
-        ) : (
-          <View style={styles.headerSpacer} />
-        )}
-      </View>
-      <ModeTabs
-        inline
-        active="camera"
-        onCamera={() => router.back()}
-        onTranslate={() => router.push('/translate')}
-      />
-    </View>
-  );
-
-  if (!state.loaded) {
-    return (
-      <View style={styles.root}>
-        {header}
-        <View style={styles.center}>
-          <ActivityIndicator color={colors.accent} />
-        </View>
-      </View>
-    );
-  }
+  // A different capture invalidates the inline translation.
+  useEffect(() => {
+    requestRef.current += 1;
+    setEntry(null);
+    setTranslating(false);
+    lastRequest.current = null;
+  }, [id]);
 
   if (!record) {
     return (
-      <View style={styles.root}>
-        {header}
-        <View style={styles.center}>
+      <View style={styles.page}>
+        <View style={styles.empty}>
           <MicroLabel tone="dim">CAPTURE NOT FOUND</MicroLabel>
-          <Text style={styles.emptyText}>
-            It was deleted or its image is no longer on this device.
-          </Text>
+          <Pressable onPress={() => router.replace('/')} style={styles.textButton}>
+            <Text style={styles.textButtonLabel}>BACK TO CAMERA</Text>
+          </Pressable>
         </View>
       </View>
     );
   }
 
-  const imageWidth = width - 32;
-  const imageHeight = Math.max(
-    120,
-    imageWidth * (record.height / Math.max(1, record.width)),
-  );
-  const hasText = record.text.length > 0;
+  const imageWidth = Math.min(width - spacing.lg * 2, 620);
+  const imageHeight = imageWidth * (record.height / record.width);
+  const hasText = record.status === 'done' && record.text.length > 0;
+  const canTranslate = hasText && !busy;
+  const title = languageLabel(record.language || record.hint);
+
+  const runTranslation = async (index: number | null) => {
+    if (!record || !canTranslate) {
+      return;
+    }
+    const block = index !== null ? record.blocks[index] : undefined;
+    if (index !== null && !block) {
+      return;
+    }
+    const text = (block?.text ?? record.text).trim();
+    if (!text) {
+      return;
+    }
+    const sourceLanguage = record.language || record.hint || 'und';
+    const base: ScanResult = {
+      kind: 'translated',
+      sourceText: text,
+      translatedText: '',
+      sourceLanguage,
+      sourceHash: record.id,
+      blocks: index !== null && block ? [block] : record.blocks,
+      imageWidth: record.width,
+      imageHeight: record.height,
+      cached: false,
+    };
+    const token = requestRef.current + 1;
+    requestRef.current = token;
+    lastRequest.current = { index };
+    setTranslating(true);
+    setTranslateError(null);
+    setEntry(null);
+    try {
+      if (isEnglishLanguageCode(sourceLanguage)) {
+        setEntry({ ...base, kind: 'english', translatedText: '' });
+        return;
+      }
+      const out = await vision.translate({
+        text,
+        sourceLanguage,
+        targetLanguage: 'en',
+      });
+      if (token !== requestRef.current) {
+        return;
+      }
+      setEntry({ ...base, kind: 'translated', translatedText: out.translatedText });
+    } catch (error) {
+      if (token !== requestRef.current) {
+        return;
+      }
+      if (isLanguagePackFailure(error)) {
+        setEntry({ ...base, kind: 'pack_missing', translatedText: '' });
+      } else {
+        setTranslateError(describeNativeError(error).message);
+      }
+    } finally {
+      if (token === requestRef.current) {
+        setTranslating(false);
+      }
+    }
+  };
+
+  const chooseLanguage = (code: string) => {
+    setOverlay(null);
+    const next = code === 'auto' ? '' : code;
+    if (!record || next === record.hint) {
+      return;
+    }
+    setLanguageBusy(true);
+    setLanguageError(null);
+    requestRef.current += 1;
+    setEntry(null);
+    setTranslating(false);
+    lastRequest.current = null;
+    void rerunCaptureOcr(record.id, next)
+      .catch(() => {
+        setLanguageError('Could not change the OCR language. Try again.');
+      })
+      .finally(() => {
+        setLanguageBusy(false);
+      });
+  };
+
+  const openLanguagePicker = () => {
+    if (busy) {
+      return;
+    }
+    setOverlay({ kind: 'languagePicker' });
+  };
+
+  const closeLanguages = () => {
+    const retry = entry?.kind === 'pack_missing' ? lastRequest.current : null;
+    setOverlay(null);
+    if (retry) {
+      void runTranslation(retry.index);
+    }
+  };
 
   return (
-    <View style={styles.root}>
-      {header}
+    <View style={styles.page}>
+      <TopBar
+        remaining={null}
+        unlimited
+        onOpenPaywall={() => {}}
+        showNavigation={false}
+      />
       <ScrollView
-        contentContainerStyle={[
-          styles.content,
-          { paddingBottom: insets.bottom + 40 },
-        ]}
+        ref={scrollRef}
+        style={styles.scroll}
+        contentContainerStyle={styles.content}
       >
-        <View
-          style={[
-            styles.imageWrap,
-            { width: imageWidth, height: imageHeight },
-          ]}
-        >
+        <ModeTabs
+          inline
+          active="camera"
+          onCamera={() => router.replace('/')}
+          onTranslate={() => router.push('/translate')}
+        />
+
+        <View style={[styles.imageWrap, { width: imageWidth, height: imageHeight }]}>
           <Image
-            source={{ uri: captures.uriFor(record.image) }}
-            style={StyleSheet.absoluteFill}
-            resizeMode="cover"
+            source={{ uri: captures.uriFor(record.thumb) }}
+            style={{ width: imageWidth, height: imageHeight }}
+            resizeMode="contain"
             onError={() => setImageFailed(true)}
           />
-          {!imageFailed ? <ScanlineOverlay /> : null}
-          {imageFailed ? (
-            <View style={styles.missingImage}>
-              <Ionicons name="image-outline" size={22} color={colors.dim} />
-              <MicroLabel tone="dim">IMAGE UNAVAILABLE</MicroLabel>
-            </View>
-          ) : null}
+          <ScanlineOverlay />
           {record.status === 'done'
-            ? record.blocks.map((entry, index) => (
-                <Pressable
-                  key={`${index}-${entry.text}`}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Translate ${entry.text}`}
-                  hitSlop={6}
-                  onPress={() => translateRegion(index)}
-                  style={[
-                    styles.block,
-                    {
-                      left: entry.x * imageWidth,
-                      top: entry.y * imageHeight,
-                      width: Math.max(entry.width * imageWidth, 18),
-                      height: Math.max(entry.height * imageHeight, 12),
-                    },
-                  ]}
-                />
-              ))
+            ? record.blocks.map((block, index) => {
+                const active = selected === index;
+                return (
+                  <Pressable
+                    key={`${index}-${block.text.slice(0, 8)}`}
+                    style={[
+                      styles.box,
+                      {
+                        left: `${block.x * 100}%`,
+                        top: `${block.y * 100}%`,
+                        width: `${block.width * 100}%`,
+                        height: `${block.height * 100}%`,
+                      },
+                      active && styles.boxActive,
+                      busy && styles.boxDisabled,
+                    ]}
+                    onPress={() => {
+                      if (!canTranslate) {
+                        return;
+                      }
+                      setSelected(index);
+                      void runTranslation(index);
+                    }}
+                  >
+                    <Text style={styles.boxLabel}>{index + 1}</Text>
+                  </Pressable>
+                );
+              })
             : null}
-          {busy ? (
-            <View style={styles.processing}>
-              <ActivityIndicator color={colors.accent} />
-              <MicroLabel>READING TEXT ON-DEVICE…</MicroLabel>
+          {imageFailed ? (
+            <View style={styles.imageFallback}>
+              <Text style={styles.imageFallbackText}>
+                IMAGE NO LONGER AVAILABLE
+              </Text>
             </View>
           ) : null}
         </View>
 
-        <View style={styles.panel}>
-          <View style={styles.panelHead}>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={`OCR language: ${
-                hint ? languageLabel(hint) : 'Auto-detect'
-              }. Change language and read again.`}
-              accessibilityState={{ disabled: busy }}
-              disabled={busy}
-              onPress={() => setPicker(true)}
-              style={({ pressed }) => [
-                styles.languagePill,
-                busy && styles.disabled,
-                pressed && styles.pressed,
-              ]}
-            >
-              <Ionicons
-                name="language-outline"
-                size={14}
-                color={colors.accent}
-              />
-              <Text style={styles.languagePillText}>
-                {hint ? languageShortLabel(hint) : 'AUTO'}
-              </Text>
-              <Ionicons name="chevron-down" size={12} color={colors.muted} />
-            </Pressable>
-            {hasText ? (
-              <ChipButton
-                label="TRANSLATE ALL"
-                icon="language-outline"
-                onPress={translateAll}
-              />
-            ) : null}
+        {translating ? (
+          <View style={styles.translating}>
+            <ActivityIndicator color={colors.accent} />
+            <MicroLabel tone="accent">TRANSLATING…</MicroLabel>
           </View>
+        ) : null}
 
-          {record.status === 'failed' ? (
-            <View style={styles.noticeRow}>
-              <Text style={styles.errorText}>
-                {record.error || 'Text recognition failed.'}
+        {entry ? (
+          <View onLayout={(event) => setEntryY(event.nativeEvent.layout.y)}>
+          <ResultCard
+            embedded
+            readOnly
+            result={entry}
+            remaining={null}
+            unlimited
+            onScanAgain={() => {
+              setEntry(null);
+              setSelected(-1);
+              lastRequest.current = null;
+            }}
+            onOpenLanguages={() => setOverlay({ kind: 'languages' })}
+            onLookUp={(phrase, alt) => {
+              const q = phrase.trim();
+              if (q) {
+                setOverlay({ kind: 'lookup', q, alt });
+              }
+            }}
+          />
+          </View>
+        ) : null}
+
+        {translateError ? (
+          <View style={styles.errorPanel}>
+            <MicroLabel tone="danger">TRANSLATION FAILED</MicroLabel>
+            <Text style={styles.errorText}>{translateError}</Text>
+            <ChipButton
+              label="RETRY"
+              icon="refresh"
+              onPress={() => runTranslation(lastRequest.current?.index ?? null)}
+            />
+          </View>
+        ) : null}
+
+        {languageError ? (
+          <View style={styles.errorPanel}>
+            <MicroLabel tone="danger">OCR LANGUAGE</MicroLabel>
+            <Text style={styles.errorText}>{languageError}</Text>
+          </View>
+        ) : null}
+
+        <View style={styles.languagePanel}>
+          <MicroLabel>{title.toUpperCase()}</MicroLabel>
+          <View style={styles.languagePill}>
+            <ChipButton
+              label={
+                busy && record.status !== 'failed'
+                  ? `${languageShortLabel(record.language || record.hint)} · OCR…`
+                  : languageShortLabel(record.language || record.hint)
+              }
+              icon="language-outline"
+              active
+              disabled={busy}
+              onPress={openLanguagePicker}
+            />
+          </View>
+          <View style={styles.panelSpacer} />
+          <ChipButton
+            label="TRANSLATE ALL"
+            icon="sparkles"
+            active={canTranslate}
+            disabled={!canTranslate}
+            onPress={() => void runTranslation(null)}
+          />
+        </View>
+
+        {record.status === 'failed' ? (
+          <View style={styles.stateBlock}>
+            <MicroLabel tone="danger">OCR FAILED</MicroLabel>
+            <Text style={styles.stateText}>
+              {record.error || 'The text could not be read.'}
+            </Text>
+            <ChipButton
+              label="RETRY OCR"
+              icon="refresh"
+              active
+              onPress={() => void retryCapture(record.id)}
+            />
+          </View>
+        ) : record.status === 'done' && !record.text.trim() ? (
+          <View style={styles.stateBlock}>
+            <MicroLabel tone="dim">NO TEXT FOUND</MicroLabel>
+            <Text style={styles.stateText}>
+              Tap the OCR language above if it misread the characters.
+            </Text>
+          </View>
+        ) : record.status === 'done' ? (
+          <View style={styles.blocks}>
+            <MicroLabel tone="dim">DETECTED TEXT</MicroLabel>
+            {record.blocks.slice(0, 12).map((block, index) => (
+              <Text key={`${index}-${block.text.slice(0, 6)}`} style={styles.block} numberOfLines={2}>
+                {block.text}
               </Text>
-              <ChipButton
-                label="Retry text recognition"
-                icon="refresh"
-                iconOnly
-                onPress={() => retryCapture(record.id)}
-              />
-            </View>
-          ) : null}
+            ))}
+          </View>
+        ) : null}
 
-          {record.status === 'done' && !hasText ? (
-            <Text style={styles.hint}>
-              No text was recognized. Choose another OCR language and the image
-              will be read again.
-            </Text>
-          ) : null}
-
-          {hasText ? (
-            <Text style={styles.hint}>
-              Tap a highlighted region to translate it on the result screen,
-              or translate the whole capture.
-            </Text>
-          ) : null}
+        <View style={styles.footer}>
+          <Text style={styles.footerMeta}>
+            {new Date(record.at).toLocaleString()}
+          </Text>
+          <ChipButton
+            label="DELETE CAPTURE"
+            icon="trash-outline"
+            onPress={() => void captures.remove(record.id)}
+          />
         </View>
       </ScrollView>
 
-      {picker ? (
-        <OverlaySheet onClose={() => setPicker(false)}>
+      <AppSheet
+        visible={overlay !== null}
+        onClose={() => {
+          if (overlay?.kind === 'languages') {
+            closeLanguages();
+          } else {
+            setOverlay(null);
+          }
+        }}
+      >
+        {overlay?.kind === 'lookup' ? (
+          <LookupSheet
+            q={overlay.q}
+            alt={overlay.alt}
+            onClose={() => setOverlay(null)}
+          />
+        ) : overlay?.kind === 'languages' ? (
+          <LanguagesSheet onClose={closeLanguages} />
+        ) : overlay?.kind === 'languagePicker' ? (
           <LanguagePickerSheet
             title="OCR LANGUAGE"
-            selected={hint || 'auto'}
+            selected={record.hint}
             allowAuto
-            onSelect={chooseLanguage}
+            onSelect={(code) => {
+              chooseLanguage(code);
+            }}
           />
-        </OverlaySheet>
-      ) : null}
+        ) : null}
+      </AppSheet>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  root: {
+  page: {
     flex: 1,
     backgroundColor: colors.background,
   },
-  headerWrap: {
-    paddingHorizontal: 18,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.borderSoft,
-  },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
-  headerSpacer: {
-    width: 38,
+  scroll: {
+    flex: 1,
   },
   content: {
-    padding: 16,
-    gap: 16,
+    paddingHorizontal: spacing.lg,
+    paddingTop: 72,
+    paddingBottom: 120,
+    gap: spacing.lg,
   },
-  center: {
+  empty: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 10,
-    padding: 32,
+    gap: 12,
   },
-  emptyText: {
-    ...typography.body,
-    color: colors.muted,
-    textAlign: 'center',
+  textButton: {
+    paddingVertical: 8,
+  },
+  textButtonLabel: {
+    ...typography.micro,
+    color: colors.accent,
+    fontSize: 12,
+    letterSpacing: 2,
   },
   imageWrap: {
-    position: 'relative',
+    alignSelf: 'center',
     borderRadius: radius.lg,
     overflow: 'hidden',
-    backgroundColor: colors.surfaceRaised,
+    backgroundColor: '#000',
+    borderWidth: 1,
+    borderColor: colors.border,
   },
-  missingImage: {
-    ...StyleSheet.absoluteFill,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: colors.surfaceRaised,
-  },
-  block: {
+  box: {
     position: 'absolute',
     borderWidth: 1,
-    borderColor: 'rgba(217,179,108,0.55)',
-    backgroundColor: 'rgba(217,179,108,0.06)',
-    borderRadius: 3,
+    borderColor: colors.border,
+    borderRadius: 6,
+    backgroundColor: 'rgba(255,255,255,0.03)',
+    alignItems: 'flex-start',
+    justifyContent: 'flex-start',
   },
-  processing: {
-    ...StyleSheet.absoluteFill,
+  boxActive: {
+    borderColor: colors.accent,
+  },
+  boxDisabled: {
+    opacity: 0.5,
+  },
+  boxLabel: {
+    ...typography.micro,
+    color: colors.muted,
+    fontSize: 9,
+    paddingHorizontal: 3,
+  },
+  imageFallback: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 10,
-    backgroundColor: 'rgba(0,0,0,0.45)',
   },
-  panel: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.lg,
-    backgroundColor: colors.surface,
-    padding: 14,
-    gap: 12,
-  },
-  panelHead: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 10,
-  },
-  languagePill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  languagePillText: {
+  imageFallbackText: {
     ...typography.micro,
-    color: colors.foreground,
+    color: colors.muted,
+    fontSize: 11,
+    letterSpacing: 1.6,
   },
-  noticeRow: {
+  translating: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
+    gap: 10,
+    justifyContent: 'center',
+    paddingVertical: 12,
+  },
+  errorPanel: {
+    gap: 8,
+    padding: 14,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
   },
   errorText: {
     ...typography.body,
-    color: colors.danger,
+    color: colors.muted,
+    fontSize: 13,
+    lineHeight: 19,
+  },
+  languagePanel: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingVertical: spacing.sm,
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: colors.border,
+  },
+  languagePill: {
+    flexShrink: 1,
+  },
+  panelSpacer: {
     flex: 1,
   },
-  hint: {
+  stateBlock: {
+    gap: 8,
+    paddingVertical: 12,
+  },
+  stateText: {
     ...typography.body,
-    color: colors.dim,
+    color: colors.muted,
+    fontSize: 13,
+    lineHeight: 20,
   },
-  pressed: {
-    opacity: 0.7,
+  blocks: {
+    gap: 8,
   },
-  disabled: {
-    opacity: 0.4,
+  block: {
+    ...typography.body,
+    color: colors.muted,
+    fontSize: 13,
+    lineHeight: 19,
+  },
+  footer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderColor: colors.border,
+  },
+  footerMeta: {
+    ...typography.micro,
+    color: colors.muted,
+    fontSize: 10,
+    letterSpacing: 1.2,
   },
 });

@@ -9,7 +9,7 @@ import { ResultCard } from '@/components/ResultCard';
 import { HistorySheet } from '@/components/HistorySheet';
 import { LanguagesSheet } from '@/components/LanguagesSheet';
 import { LookupSheet } from '@/components/LookupSheet';
-import { OverlaySheet } from '@/components/OverlaySheet';
+import { AppSheet } from '@/components/AppSheet';
 import { ResultSheet } from '@/components/ResultSheet';
 import { ScanShutter } from '@/components/ScanShutter';
 import { Standby } from '@/components/Standby';
@@ -123,24 +123,22 @@ export default function PreviewScreen() {
   return (
     <View style={styles.page}>
       <View style={styles.phone}>
-        {overlay ? (
-          <OverlaySheet onClose={() => setOverlay(null)}>
-            {overlay.kind === 'lookup' ? (
-              <LookupSheet
-                q={overlay.q}
-                alt={overlay.alt}
-                onClose={() => setOverlay(null)}
-              />
-                        ) : overlay.kind === 'languages' ? (
-              <LanguagesSheet onClose={() => setOverlay(null)} />
-            ) : (
-              <HistorySheet
-                demo={overlay.demo}
-                onClose={() => setOverlay(null)}
-              />
-            )}
-          </OverlaySheet>
-        ) : null}
+        <AppSheet visible={overlay !== null} onClose={() => setOverlay(null)}>
+          {overlay?.kind === 'lookup' ? (
+            <LookupSheet
+              q={overlay.q}
+              alt={overlay.alt}
+              onClose={() => setOverlay(null)}
+            />
+          ) : overlay?.kind === 'languages' ? (
+            <LanguagesSheet onClose={() => setOverlay(null)} />
+          ) : overlay ? (
+            <HistorySheet
+              demo={overlay.demo}
+              onClose={() => setOverlay(null)}
+            />
+          ) : null}
+        </AppSheet>
         <Standby
           hidden={mode === 'aim'}
           remaining={15}

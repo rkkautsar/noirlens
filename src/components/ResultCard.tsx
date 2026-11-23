@@ -27,6 +27,7 @@ export function ResultCard({
   onOpenLanguages,
   onLookUp,
   readOnly = false,
+  embedded = false,
 }: {
   result: ScanResult;
   remaining: number | null;
@@ -37,6 +38,8 @@ export function ResultCard({
   onLookUp: (phrase: string, alt?: string) => void;
   /** History replay: the primary action closes instead of rescanning. */
   readOnly?: boolean;
+  /** Render inline (capture detail) instead of as a fixed full-screen card. */
+  embedded?: boolean;
 }) {
   const insets = useSafeAreaInsets();
   const [copied, setCopied] = useState(false);
@@ -280,20 +283,8 @@ export function ResultCard({
     return parts;
   };
 
-  return (
-    <View style={styles.container}>
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={[
-          styles.content,
-          {
-            flexGrow: 1,
-            justifyContent: 'center',
-            paddingTop: insets.top + 80,
-            paddingBottom: insets.bottom + 190,
-          },
-        ]}
-      >
+  const bodyContent = (
+    <>
         <View style={styles.kickerRow}>
           <MicroLabel
             tone={translated ? 'accent' : packMissing ? 'warning' : 'dim'}
@@ -344,15 +335,10 @@ export function ResultCard({
               ? `${remaining ?? 0} OF 15 FREE SCANS LEFT TODAY`
               : `NOT CHARGED · ${remaining ?? 0} OF 15 FREE SCANS LEFT TODAY`}
         </MicroLabel>
-      </ScrollView>
-
-      <View
-        style={[
-          styles.actions,
-          styles.fixedActions,
-          { bottom: insets.bottom + 94 },
-        ]}
-      >
+    </>
+  );
+  const actionButtons = (
+    <>
         {onShowOriginal ? (
           <ChipButton
             label="INSPECT"
@@ -399,17 +385,59 @@ export function ResultCard({
           onPress={primaryAction}
           primary
         />
+      
+    </>
+  );
+  const tooltip = priceTip ? (
+    <PriceTooltip
+      price={priceTip.price}
+      locale={preferred.locale}
+      x={priceTip.x}
+      y={priceTip.y}
+      onClose={() => setPriceTip(null)}
+    />
+  ) : null;
+
+  if (embedded) {
+    return (
+      <View style={styles.embedded}>
+        <View style={[styles.content, styles.embeddedContent]}>{bodyContent}</View>
+        <View style={[styles.actions, styles.embeddedActions]}>
+          {actionButtons}
+        </View>
+        {tooltip}
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.container}>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={[
+          styles.content,
+          {
+            flexGrow: 1,
+            justifyContent: 'center',
+            paddingTop: insets.top + 80,
+            paddingBottom: insets.bottom + 190,
+          },
+        ]}
+      >
+        {bodyContent}
+      </ScrollView>
+
+      <View
+        style={[
+          styles.actions,
+          styles.fixedActions,
+          { bottom: insets.bottom + 94 },
+        ]}
+      >
+        {actionButtons}
       </View>
 
-      {priceTip ? (
-        <PriceTooltip
-          price={priceTip.price}
-          locale={preferred.locale}
-          x={priceTip.x}
-          y={priceTip.y}
-          onClose={() => setPriceTip(null)}
-        />
-      ) : null}
+      {tooltip}
     </View>
   );
 }
@@ -491,5 +519,23 @@ const styles = StyleSheet.create({
   },
   footer: {
     marginTop: 8,
+  },
+  embedded: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 16,
+    backgroundColor: colors.surface,
+    overflow: 'hidden',
+  },
+  embeddedContent: {
+    paddingTop: 16,
+    paddingBottom: 4,
+    paddingHorizontal: 16,
+    gap: 14,
+  },
+  embeddedActions: {
+    paddingHorizontal: 16,
+    paddingBottom: 14,
+    justifyContent: 'flex-end',
   },
 });

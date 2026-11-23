@@ -22,6 +22,7 @@ export interface CaptureQueueDeps<T> {
  */
 export class CaptureQueue<T> {
   private queued: CaptureQueueJob[] = [];
+  private activeRevisions = new Map<string, number>();
   private active = 0;
   private disposed = false;
 
@@ -34,11 +35,17 @@ export class CaptureQueue<T> {
     if (this.disposed) {
       return;
     }
-    // Coalesce reruns that have not started: the newest hint wins. A job
-    // already running for this capture is allowed to finish; its result is
-    // discarded by the revision check in the deps.
+    // Same-revision duplicates (a double Retry) are dropped. A newer revision
+    // is queued behind an active job; an older one is stale and dropped.
+    const activeRevision = this.activeRevisions.get(job.id);
+    if (activeRevision !== undefined && job.revision <= activeRevision) {
+      return;
+    }
     const queuedIndex = this.queued.findIndex((entry) => entry.id === job.id);
     if (queuedIndex >= 0) {
+      if (job.revision <= this.queued[queuedIndex]!.revision) {
+        return;
+      }
       this.queued[queuedIndex] = job;
     } else {
       this.queued.push(job);
@@ -62,8 +69,12 @@ export class CaptureQueue<T> {
         return;
       }
       this.active += 1;
+      this.activeRevisions.set(job.id, job.revision);
       void this.run(job).finally(() => {
         this.active -= 1;
+        if (this.activeRevisions.get(job.id) === job.revision) {
+          this.activeRevisions.delete(job.id);
+        }
         void this.drain();
       });
     }

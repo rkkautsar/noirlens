@@ -17,7 +17,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { LanguagePickerSheet } from '@/components/LanguagePickerSheet';
 import { ModeTabs } from '@/components/ModeTabs';
-import { OverlaySheet } from '@/components/OverlaySheet';
+import { AppSheet } from '@/components/AppSheet';
 import { ShowToLocal } from '@/components/ShowToLocal';
 import { TopBar } from '@/components/TopBar';
 import {
@@ -362,15 +362,15 @@ export default function TranslateScreen() {
         onTranslate={() => {}}
       />
 
-      {picker ? (
-        <OverlaySheet onClose={() => setPicker(null)}>
+      <AppSheet visible={picker !== null} onClose={() => setPicker(null)}>
+        {picker ? (
           <LanguagePickerSheet
             title={picker === 'source' ? 'TRANSLATE FROM' : 'TRANSLATE TO'}
             selected={picker === 'source' ? source : target}
             onSelect={chooseLanguage}
           />
-        </OverlaySheet>
-      ) : null}
+        ) : null}
+      </AppSheet>
 
       {showing && request.text ? (
         <ShowToLocal

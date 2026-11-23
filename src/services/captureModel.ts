@@ -113,7 +113,7 @@ export function parseCaptureStore(raw: string | null): {
           typeof record.ocrRevision === 'number' ? record.ocrRevision : 0,
       }))
       .slice(0, MAX_CAPTURES);
-    return { records, complete: kept.length === parsed.length };
+    return { records, complete: records.length === parsed.length };
   } catch {
     return { records: [], complete: false };
   }

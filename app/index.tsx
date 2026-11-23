@@ -18,7 +18,7 @@ import { HistorySheet } from '@/components/HistorySheet';
 import { LanguagesSheet } from '@/components/LanguagesSheet';
 import { LookupSheet } from '@/components/LookupSheet';
 import { ModeTabs } from '@/components/ModeTabs';
-import { OverlaySheet } from '@/components/OverlaySheet';
+import { AppSheet } from '@/components/AppSheet';
 import { OriginalView } from '@/components/OriginalView';
 import { ResultCard } from '@/components/ResultCard';
 import { ScanShutter } from '@/components/ScanShutter';
@@ -450,26 +450,24 @@ export default function ScannerScreen() {
         </View>
       ) : null}
 
-      {overlay ? (
-        <OverlaySheet onClose={() => setOverlay(null)}>
-          {overlay.kind === 'lookup' ? (
-            <LookupSheet
-              q={overlay.q}
-              alt={overlay.alt}
-              onClose={() => setOverlay(null)}
-            />
-                    ) : overlay.kind === 'languages' ? (
-            <LanguagesSheet onClose={() => setOverlay(null)} />
-          ) : (
-            <HistorySheet
+      <AppSheet visible={overlay !== null} onClose={() => setOverlay(null)}>
+        {overlay?.kind === 'lookup' ? (
+          <LookupSheet
+            q={overlay.q}
+            alt={overlay.alt}
+            onClose={() => setOverlay(null)}
+          />
+        ) : overlay?.kind === 'languages' ? (
+          <LanguagesSheet onClose={() => setOverlay(null)} />
+        ) : overlay ? (
+          <HistorySheet
             initialTab={
               snapshot.captureMode === 'collect' ? 'captures' : 'translations'
             }
             onClose={() => setOverlay(null)}
           />
-          )}
-        </OverlaySheet>
-      ) : null}
+        ) : null}
+      </AppSheet>
     </View>
   );
 }

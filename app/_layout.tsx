@@ -26,26 +26,6 @@ export default function RootLayout() {
       >
         <Stack.Screen name="index" />
         <Stack.Screen
-          name="languages"
-          options={{
-            presentation: 'formSheet',
-            sheetAllowedDetents: [0.6, 1],
-            sheetGrabberVisible: true,
-            sheetCornerRadius: 24,
-            contentStyle: { backgroundColor: colors.background },
-          }}
-        />
-        <Stack.Screen
-          name="history"
-          options={{
-            presentation: 'formSheet',
-            sheetAllowedDetents: [0.6, 1],
-            sheetGrabberVisible: true,
-            sheetCornerRadius: 24,
-            contentStyle: { backgroundColor: colors.background },
-          }}
-        />
-        <Stack.Screen
           name="paywall"
           options={{
             presentation: 'modal',

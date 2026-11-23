@@ -1,4 +1,3 @@
-import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -17,12 +16,11 @@ import { sourceLanguage, useSourceLanguage } from '@/services/sourceLanguage';
 import { colors, typography } from '@/theme';
 import vision, {
   type LanguagePackStatus,
-} from '../modules/native-vision-translator';
+} from '../../modules/native-vision-translator';
 
 type RowStatus = LanguagePackStatus | 'loading';
 
-export default function LanguagesScreen() {
-  const router = useRouter();
+export function LanguagesSheet({ onClose }: { onClose: () => void }) {
   const insets = useSafeAreaInsets();
   const mounted = useRef(true);
   const selectedSource = useSourceLanguage();

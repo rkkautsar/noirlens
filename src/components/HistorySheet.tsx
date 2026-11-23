@@ -1,6 +1,5 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Clipboard from 'expo-clipboard';
-import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
   Pressable,
@@ -58,11 +57,14 @@ function formatTime(at: number): string {
   });
 }
 
-export default function HistoryScreen() {
-  const router = useRouter();
+export function HistorySheet({
+  demo = false,
+  onClose,
+}: {
+  demo?: boolean;
+  onClose: () => void;
+}) {
   const insets = useSafeAreaInsets();
-  const params = useLocalSearchParams<{ demo?: string }>();
-  const demo = params.demo === '1';
   const [entries, setEntries] = useState<ScanHistoryEntry[]>([]);
   const [copied, setCopied] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);

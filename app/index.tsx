@@ -6,6 +6,8 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AimHud } from '@/components/AimHud';
+import { HistorySheet } from '@/components/HistorySheet';
+import { LanguagesSheet } from '@/components/LanguagesSheet';
 import { LookupSheet } from '@/components/LookupSheet';
 import { OverlaySheet } from '@/components/OverlaySheet';
 import { PricesSheet } from '@/components/PricesSheet';
@@ -37,6 +39,8 @@ export default function ScannerScreen() {
   const [overlay, setOverlay] = useState<
     | { kind: 'lookup'; q: string; alt?: string }
     | { kind: 'prices'; rows: import('@/services/currency').PriceConversion[] }
+    | { kind: 'languages' }
+    | { kind: 'history' }
     | null
   >(null);
 
@@ -99,7 +103,7 @@ export default function ScannerScreen() {
   };
 
   const openLanguages = () => {
-    router.push('/languages');
+    setOverlay({ kind: 'languages' });
   };
   const openLookup = (phrase: string, alt?: string) => {
     const query = phrase.trim();
@@ -201,7 +205,7 @@ export default function ScannerScreen() {
             accessibilityRole="button"
             accessibilityLabel="Recent scans"
             onPress={() => {
-              router.push('/history');
+              setOverlay({ kind: 'history' });
             }}
             style={({ pressed }) => [
               styles.historyButton,
@@ -317,11 +321,15 @@ export default function ScannerScreen() {
               alt={overlay.alt}
               onClose={() => setOverlay(null)}
             />
-          ) : (
+          ) : overlay.kind === 'prices' ? (
             <PricesSheet
               rows={overlay.rows}
               onClose={() => setOverlay(null)}
             />
+          ) : overlay.kind === 'languages' ? (
+            <LanguagesSheet onClose={() => setOverlay(null)} />
+          ) : (
+            <HistorySheet onClose={() => setOverlay(null)} />
           )}
         </OverlaySheet>
       ) : null}

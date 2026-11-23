@@ -6,6 +6,8 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { AimHud } from '@/components/AimHud';
 import { OriginalView } from '@/components/OriginalView';
 import { ResultCard } from '@/components/ResultCard';
+import { HistorySheet } from '@/components/HistorySheet';
+import { LanguagesSheet } from '@/components/LanguagesSheet';
 import { LookupSheet } from '@/components/LookupSheet';
 import { OverlaySheet } from '@/components/OverlaySheet';
 import { PricesSheet } from '@/components/PricesSheet';
@@ -72,6 +74,8 @@ export default function PreviewScreen() {
   const [overlay, setOverlay] = useState<
     | { kind: 'lookup'; q: string; alt?: string }
     | { kind: 'prices'; rows: import('@/services/currency').PriceConversion[] }
+    | { kind: 'languages' }
+    | { kind: 'history'; demo?: boolean }
     | null
   >(null);
   const openPrices = (
@@ -137,9 +141,16 @@ export default function PreviewScreen() {
                 alt={overlay.alt}
                 onClose={() => setOverlay(null)}
               />
-            ) : (
+            ) : overlay.kind === 'prices' ? (
               <PricesSheet
                 rows={overlay.rows}
+                onClose={() => setOverlay(null)}
+              />
+            ) : overlay.kind === 'languages' ? (
+              <LanguagesSheet onClose={() => setOverlay(null)} />
+            ) : (
+              <HistorySheet
+                demo={overlay.demo}
                 onClose={() => setOverlay(null)}
               />
             )}
@@ -205,7 +216,7 @@ export default function PreviewScreen() {
           onLanguages={() => {
             setPressing(false);
             setScanning(false);
-            router.push('/languages');
+            setOverlay({ kind: 'languages' });
           }}
         />
 
@@ -236,7 +247,7 @@ export default function PreviewScreen() {
             accessibilityRole="button"
             accessibilityLabel="Recent scans"
             onPress={() => {
-              router.push('/history?demo=1');
+              setOverlay({ kind: 'history', demo: true });
             }}
             style={({ pressed }) => [
               styles.historyButton,
@@ -253,7 +264,7 @@ export default function PreviewScreen() {
             accessibilityRole="button"
             accessibilityLabel="Source language"
             onPress={() => {
-              router.push('/languages');
+              setOverlay({ kind: 'languages' });
             }}
             style={({ pressed }) => [
               styles.sourceButton,

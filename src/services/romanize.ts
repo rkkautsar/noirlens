@@ -185,7 +185,7 @@ export interface RomanSpan {
 // on one of these was translated, not retained, so it is not a lookup term.
 export const COMMON_ENGLISH = new Set([
   'about', 'after', 'again', 'airport', 'ancient', 'another', 'bakery', 'bank',
-  'beach', 'before', 'best', 'bridge', 'building', 'cafe', 'center', 'centre',
+  'beach', 'before', 'best', 'bridge', 'building', 'cafe', 'center', 'centre', 'central',
   'church', 'city', 'coffee', 'coffeeshop', 'food', 'famous', 'garden', 'great',
   'hall', 'historic', 'history', 'hotel', 'house', 'island', 'large', 'left',
   'local', 'main', 'mall', 'market', 'museum', 'new', 'noodle', 'noodles',
@@ -206,12 +206,12 @@ export function romanTermSpans(
       // fuzzy prefix/suffix fallback is only for transliterations.
       fuzzy: !/^[\p{Script=Latin}\p{N}\p{P}\p{Z}]+$/u.test(term),
     }))
-    .filter((entry) => entry.roman.length >= 4);
+    .filter((entry) => entry.fuzzy && entry.roman.length >= 4);
   if (entries.length === 0) {
     return [];
   }
   const spans: RomanSpan[] = [];
-  for (const match of text.matchAll(/[A-Za-z]+/g)) {
+  for (const match of text.matchAll(/[\p{L}\p{M}]+/gu)) {
     const word = match[0];
     if (word.length < 4) {
       continue;

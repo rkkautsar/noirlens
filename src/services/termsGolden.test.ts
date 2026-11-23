@@ -21,9 +21,44 @@ function occurrences(text: string, term: string): Occurrence[] {
   }
 }
 
-function overlaps(a: Occurrence, b: Occurrence): boolean {
-  return a.start < b.end && a.end > b.start;
-}
+describe('lookup term boundaries', () => {
+  const exact = (
+    blocks: string[],
+    translatedText: string,
+  ) =>
+    resolveTermSpans(
+      lookupSpans({
+        sourceText: blocks.join(' '),
+        translatedText,
+        blocks: blocks.map((text) => ({ text })),
+      }),
+    );
+
+  it('keeps standalone terms out of larger words and returns exact offsets', () => {
+    const cases = [
+      { blocks: ['Sony'], translatedText: "A booth near Sony opened SonyCorp's new store.", term: 'Sony' },
+      { blocks: ['Acme'], translatedText: 'Acme Éditions sells AcmeÉditions.', term: 'Acme' },
+      { blocks: ['Lima'], translatedText: 'Lima is not Limaçon.', term: 'Lima' },
+    ];
+    for (const entry of cases) {
+      const hits = exact(entry.blocks, entry.translatedText).filter(
+        (span) => span.text.toLowerCase() === entry.term.toLowerCase(),
+      );
+      expect(hits, entry.translatedText).toHaveLength(1);
+      const at = entry.translatedText.toLowerCase().indexOf(entry.term.toLowerCase());
+      expect(hits[0]?.start).toBe(at);
+      expect(hits[0]?.end).toBe(at + entry.term.length);
+    }
+  });
+
+  it('covers a decomposed accent in the tappable range', () => {
+    const translatedText = 'We ate at Cafe\u0301 Central.';
+    const span = exact(['Café Central'], translatedText).find((entry) =>
+      entry.text.startsWith('Cafe'),
+    );
+    expect(span?.text).toBe('Cafe\u0301 Central');
+  });
+});
 
 describe('lookup terms golden set', () => {
   it('meets the exact-term precision/recall floor on paired translations', () => {

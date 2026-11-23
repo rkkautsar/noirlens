@@ -151,18 +151,6 @@ export function ResultBody({
 
   const renderTranslation = () => {
     const text = result.translatedText;
-    const spans: Array<{
-      start: number;
-      end: number;
-      kind: 'term' | 'price';
-      price?: PriceConversion;
-    }> = [];
-    for (const span of termSpans) {
-      spans.push({ start: span.start, end: span.end, kind: 'term' });
-    }
-    for (const price of translationPrices) {
-      spans.push({ start: price.start, end: price.end, kind: 'price', price });
-    }
     const termOnly = resolveTermSpans(termSpans, translationPrices);
     const kept = [
       ...termOnly.map((span) => ({

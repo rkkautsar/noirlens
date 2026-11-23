@@ -197,6 +197,7 @@ function normalizeTerm(value: string): string {
     .normalize('NFD')
     .replace(/\p{Diacritic}/gu, '')
     .toLowerCase()
+    .replace(/\s+/g, ' ')
     .trim();
 }
 
@@ -226,7 +227,19 @@ function containsTerm(translated: string, term: string): boolean {
 }
 
 function isWordCharacter(value: string | undefined): boolean {
-  return value !== undefined && /[\p{L}\p{N}]/u.test(value);
+  return value !== undefined && /[\p{L}\p{N}\p{M}]/u.test(value);
+}
+
+function codePointBefore(text: string, index: number): string | undefined {
+  if (index <= 0) {
+    return undefined;
+  }
+  const points = Array.from(text.slice(0, index));
+  return points[points.length - 1];
+}
+
+function codePointAfter(text: string, index: number): string | undefined {
+  return Array.from(text.slice(index))[0];
 }
 
 interface NormalizedText {
@@ -239,16 +252,38 @@ function normalizeWithMap(text: string): NormalizedText {
   let normalized = '';
   const startMap: number[] = [];
   const endMap: number[] = [];
-  for (let index = 0; index < text.length; index += 1) {
-    const base = text[index]!
-      .normalize('NFD')
-      .replace(/\p{Diacritic}/gu, '')
-      .toLowerCase();
-    for (let offset = 0; offset < base.length; offset += 1) {
-      normalized += base[offset];
-      startMap.push(index);
-      endMap.push(index + 1);
+  let index = 0;
+  while (index < text.length) {
+    const codePoint = text.codePointAt(index);
+    if (codePoint === undefined) {
+      break;
     }
+    const character = String.fromCodePoint(codePoint);
+    const base = character
+      .normalize('NFD')
+      .replace(/\p{M}/gu, '')
+      .toLowerCase();
+    if (base.length === 0) {
+      // A combining mark keeps the preceding emitted range whole.
+      if (endMap.length > 0) {
+        endMap[endMap.length - 1] = index + character.length;
+      }
+    } else if (/\s/.test(base)) {
+      if (normalized.length > 0 && !normalized.endsWith(' ')) {
+        normalized += ' ';
+        startMap.push(index);
+        endMap.push(index + character.length);
+      } else if (endMap.length > 0) {
+        endMap[endMap.length - 1] = index + character.length;
+      }
+    } else {
+      for (const emitted of base) {
+        normalized += emitted;
+        startMap.push(index);
+        endMap.push(index + character.length);
+      }
+    }
+    index += character.length;
   }
   return { text: normalized, startMap, endMap };
 }
@@ -269,8 +304,8 @@ function normalizedSpans(
       if (at < 0) {
         break;
       }
-      const before = translated.text[at - 1];
-      const after = translated.text[at + needle.length];
+      const before = codePointBefore(translated.text, at);
+      const after = codePointAfter(translated.text, at + needle.length);
       const cjk = isCjkTerm(candidate);
       if (cjk || (!isWordCharacter(before) && !isWordCharacter(after))) {
         spans.push({
@@ -292,7 +327,17 @@ function sourceTermCandidates(result: {
   return [
     ...result.blocks
       .map((block) => block.text.trim())
-      .filter((text) => text.length > 0 && text.split(/\s+/).length <= 4),
+      .filter(
+        (text) =>
+          text.length > 0 &&
+          text.split(/\s+/).length <= 4 &&
+          !(
+            text.split(/\s+/).length === 1 &&
+            COMMON_ENGLISH.has(
+              text.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase(),
+            )
+          ),
+      ),
     ...result.sourceText
       .split(/[^\p{L}\p{N}]+/u)
       .filter(
@@ -330,6 +375,12 @@ export function untranslatedTerms(result: {
     if (words.length === 0 || words.length > 4) {
       continue;
     }
+    if (
+      words.length === 1 &&
+      COMMON_ENGLISH.has(normalizeTerm(text))
+    ) {
+      continue;
+    }
     const enough =
       isCjkTerm(text) || normalizeTerm(text).length >= 3;
     if (enough && containsTerm(result.translatedText, text)) {
@@ -338,7 +389,11 @@ export function untranslatedTerms(result: {
   }
   const sourceWords = result.sourceText
     .split(/[^\p{L}\p{N}]+/u)
-    .filter((word) => word.length >= 4);
+    .filter(
+      (word) =>
+        word.length >= 4 &&
+        !COMMON_ENGLISH.has(normalizeTerm(word)),
+    );
   for (const word of sourceWords) {
     if (
       normalizeTerm(word).length >= 4 &&
@@ -388,22 +443,21 @@ export function lookupSpans(result: {
       // term is CJK/Thai (no word separators).
       if (
         !isCjkTerm(matched) &&
-        (isWordCharacter(text[start - 1]) || isWordCharacter(text[end]))
+        (isWordCharacter(codePointBefore(text, start)) ||
+          isWordCharacter(codePointAfter(text, end)))
       ) {
         continue;
       }
       spans.push({ start, end, text: matched });
     }
   }
+  const candidates = sourceTermCandidates(result);
   const normalized = normalizeWithMap(text);
-  for (const span of normalizedSpans(
-    normalized,
-    sourceTermCandidates(result),
-  )) {
+  for (const span of normalizedSpans(normalized, candidates)) {
     span.text = text.slice(span.start, span.end);
     spans.push(span);
   }
-  for (const span of romanTermSpans(text, sourceTermCandidates(result))) {
+  for (const span of romanTermSpans(text, candidates)) {
     spans.push({ start: span.start, end: span.end, text: span.word });
   }
   spans.sort(

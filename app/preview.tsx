@@ -19,27 +19,36 @@ type Mode = 'standby' | 'aim' | 'result' | 'original';
 
 const RESULT: ScanResult = {
   kind: 'translated',
-  sourceText: 'Bánh mì thịt — 45.000đ',
+  sourceText:
+    'Bánh mì thịt\nBánh mì kẹp thịt heo, pâté và rau củ muối\n45.000đ',
   translatedText:
-    'Bánh mì thịt is a Vietnamese sandwich with pork, pâté and pickled vegetables. It costs 45,000 VND.',
+    'Bánh mì thịt\nBaguette with pork, pâté and pickled vegetables\n45,000 VND',
   sourceLanguage: 'vi',
   sourceHash: 'preview',
   blocks: [
     {
       text: 'Bánh mì thịt',
-      confidence: 0.95,
-      x: 0.12,
-      y: 0.25,
-      width: 0.76,
+      confidence: 0.96,
+      x: 0.14,
+      y: 0.22,
+      width: 0.72,
+      height: 0.11,
+    },
+    {
+      text: 'Bánh mì kẹp thịt heo, pâté và rau củ muối',
+      confidence: 0.92,
+      x: 0.08,
+      y: 0.42,
+      width: 0.84,
       height: 0.1,
     },
     {
       text: '45.000đ',
       confidence: 0.9,
-      x: 0.6,
-      y: 0.5,
+      x: 0.42,
+      y: 0.62,
       width: 0.3,
-      height: 0.07,
+      height: 0.08,
     },
   ],
   imageWidth: 1000,

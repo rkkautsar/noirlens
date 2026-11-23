@@ -57,7 +57,7 @@ const WEB_MOCK_HISTORY: ScanHistoryEntry[] = [
     sourceLanguage: 'vi',
     sourceText: 'Bánh mì thịt — 45.000đ',
     translatedText:
-      'Bánh mì thịt is a Vietnamese sandwich with pork, pâté and pickled vegetables.',
+      'Bánh mì thịt\nBaguette with pork, pâté and pickled vegetables\n45,000 VND',
     kind: 'translated',
   },
   {

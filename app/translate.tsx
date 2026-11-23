@@ -24,11 +24,6 @@ import {
   languageLabel,
   languageShortLabel,
 } from '@/constants/languages';
-import { FREE_DAILY_SCAN_LIMIT } from '@/scanner/machine';
-import { hasUnlimitedScans } from '@/services/entitlementLogic';
-import { useEntitlementState } from '@/services/entitlements';
-import { localDayKey } from '@/services/day';
-import { readScanCount } from '@/services/scanLedger';
 import {
   IDLE_TRANSLATE,
   describeTranslateFailure,
@@ -48,7 +43,6 @@ function tap() {
 export default function TranslateScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const entitlement = useEntitlementState();
   const preferred = useSourceLanguage();
 
   const [source, setSource] = useState(() =>
@@ -64,18 +58,6 @@ export default function TranslateScreen() {
   const [copied, setCopied] = useState(false);
   const [speaking, setSpeaking] = useState(false);
   const [showing, setShowing] = useState(false);
-  const [remaining, setRemaining] = useState<number | null>(null);
-
-  const unlimited = hasUnlimitedScans(entitlement, Date.now());
-
-  useEffect(() => {
-    void readScanCount(localDayKey())
-      .then((count) =>
-        setRemaining(Math.max(0, FREE_DAILY_SCAN_LIMIT - count)),
-      )
-      .catch(() => setRemaining(null));
-  }, []);
-
   // Leaving the screen must not keep speaking.
   useEffect(
     () => () => {
@@ -198,8 +180,9 @@ export default function TranslateScreen() {
   return (
     <View style={styles.root}>
       <TopBar
-        remaining={remaining}
-        unlimited={unlimited}
+        remaining={null}
+        unlimited={false}
+        counterLabel="PRO"
         onOpenPaywall={() => router.push('/paywall')}
       />
 

@@ -9,14 +9,18 @@ export function TopBar({
   unlimited,
   onOpenPaywall,
   showNavigation = true,
+  counterLabel,
 }: {
   remaining: number | null;
   unlimited: boolean;
   onOpenPaywall: () => void;
   showNavigation?: boolean;
+  /** Overrides the scan counter for screens that are not scan-metered. */
+  counterLabel?: string;
 }) {
   const insets = useSafeAreaInsets();
-  const counter = unlimited ? 'PRO' : `${remaining ?? 0} LEFT`;
+  const counter =
+    counterLabel ?? (unlimited ? 'PRO' : `${remaining ?? 0} LEFT`);
 
   return (
     <View style={[styles.container, { paddingTop: insets.top + 8 }]}>

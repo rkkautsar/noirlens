@@ -11,6 +11,12 @@ export async function romanizeNative(
   text: string,
   language = '',
 ): Promise<string> {
+  // The bundled tables are deterministic and read better for Hangul (RR),
+  // Cyrillic, Arabic and kana; ICU is only needed for Han and Thai.
+  const table = romanize(text);
+  if (table !== text) {
+    return table;
+  }
   if (Platform.OS === 'ios') {
     try {
       const out = await vision.romanize(text, language);
@@ -18,8 +24,8 @@ export async function romanizeNative(
         return out;
       }
     } catch {
-      // fall through to the tables
+      // fall through
     }
   }
-  return romanize(text);
+  return text;
 }

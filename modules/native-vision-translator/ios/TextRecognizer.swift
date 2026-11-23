@@ -716,7 +716,7 @@ enum TextRecognizer {
     language: String,
     vertical: Bool
   ) -> String {
-    let separator = vertical || isCJK(language) ? "" : " "
+    let separator = vertical ? "" : "\n"
     return lines.map(\.text).joined(separator: separator)
   }
 

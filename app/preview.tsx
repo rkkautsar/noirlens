@@ -66,6 +66,15 @@ export default function PreviewScreen() {
         : 'standby',
   );
   const router = useRouter();
+  const lookUpTerms = (terms: string[]) => {
+    if (terms.length === 0) {
+      return;
+    }
+    router.push({
+      pathname: '/lookup',
+      params: { terms: JSON.stringify(terms) },
+    });
+  };
   const lookUp = (phrase: string, alt?: string) => {
     router.push({
       pathname: '/lookup',
@@ -156,6 +165,7 @@ export default function PreviewScreen() {
                 }}
                 onOpenLanguages={noop}
                 onLookUp={lookUp}
+                onLookUpTerms={lookUpTerms}
               />
             )}
           </ResultSheet>

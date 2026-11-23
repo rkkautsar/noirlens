@@ -23,6 +23,7 @@ export function ResultCard({
   onShowOriginal,
   onOpenLanguages,
   onLookUp,
+  onLookUpTerms,
 }: {
   result: ScanResult;
   remaining: number | null;
@@ -31,6 +32,7 @@ export function ResultCard({
   onShowOriginal: () => void;
   onOpenLanguages: () => void;
   onLookUp: (phrase: string, alt?: string) => void;
+  onLookUpTerms: (terms: string[]) => void;
 }) {
   const insets = useSafeAreaInsets();
   const [copied, setCopied] = useState(false);
@@ -227,7 +229,11 @@ export function ResultCard({
           icon="book-outline"
           iconOnly
           onPress={() => {
-            onLookUp(lookupPhrase, result.translatedText);
+            if (lookupTerms.length > 0) {
+              onLookUpTerms(lookupTerms);
+            } else {
+              onLookUp(lookupPhrase, result.translatedText);
+            }
           }}
         />
         <ChipButton

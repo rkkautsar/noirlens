@@ -21,12 +21,34 @@ import { colors, typography } from '@/theme';
 
 export default function LookupScreen() {
   const router = useRouter();
-  const { q, alt } = useLocalSearchParams<{ q?: string; alt?: string }>();
+  const { q, alt, terms } = useLocalSearchParams<{
+    q?: string;
+    alt?: string;
+    terms?: string;
+  }>();
   const [result, setResult] = useState<LookupResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
 
+  const termList: string[] = (() => {
+    if (typeof terms !== 'string' || !terms) {
+      return [];
+    }
+    try {
+      const parsed: unknown = JSON.parse(terms);
+      return Array.isArray(parsed)
+        ? parsed.filter((term): term is string => typeof term === 'string')
+        : [];
+    } catch {
+      return [];
+    }
+  })();
+
   useEffect(() => {
+    if (termList.length > 0) {
+      setLoading(false);
+      return;
+    }
     let cancelled = false;
     const phrase = typeof q === 'string' ? q : '';
     const fallback = typeof alt === 'string' ? alt : '';
@@ -44,15 +66,39 @@ export default function LookupScreen() {
     return () => {
       cancelled = true;
     };
-  }, [q, alt]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [q, alt, terms]);
 
   const phrase = (typeof q === 'string' ? q : '') || (typeof alt === 'string' ? alt : '');
 
   return (
     <View style={styles.screen}>
-      <SheetHeader title="LOOK UP" subtitle="WIKIPEDIA · DUCKDUCKGO" />
+      <SheetHeader
+        title={termList.length > 0 ? 'TERMS' : 'LOOK UP'}
+        subtitle={
+          termList.length > 0
+            ? 'TAP A TERM TO EXPLAIN'
+            : 'WIKIPEDIA · DUCKDUCKGO'
+        }
+      />
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
-        {loading ? (
+        {termList.length > 0 ? (
+          <View style={styles.block}>
+            {termList.map((term) => (
+              <ChipButton
+                key={term}
+                label={term}
+                icon="book-outline"
+                onPress={() => {
+                  router.push({
+                    pathname: '/lookup',
+                    params: { q: term },
+                  });
+                }}
+              />
+            ))}
+          </View>
+        ) : loading ? (
           <View style={styles.center}>
             <ActivityIndicator size="small" color={colors.accent} />
             <MicroLabel tone="dim">SEARCHING…</MicroLabel>

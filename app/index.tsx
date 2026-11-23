@@ -105,6 +105,16 @@ export default function ScannerScreen() {
     });
   };
 
+  const openTerms = (terms: string[]) => {
+    if (terms.length === 0) {
+      return;
+    }
+    router.push({
+      pathname: '/lookup',
+      params: { terms: JSON.stringify(terms) },
+    });
+  };
+
   const openPaywall = () => {
     router.push('/paywall');
   };
@@ -169,6 +179,7 @@ export default function ScannerScreen() {
               }}
               onOpenLanguages={openLanguages}
               onLookUp={openLookup}
+              onLookUpTerms={openTerms}
             />
           )}
         </ResultSheet>

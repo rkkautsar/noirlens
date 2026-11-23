@@ -11,7 +11,7 @@ import {
 import { Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import vision from '../../modules/native-vision-translator';
+import { translateText } from '@/services/translationTask';
 import { imageFitRect, mapBlockRect } from '@/scanner/geometry';
 import type { ScanResult } from '@/scanner/machine';
 import { colors, typography } from '@/theme';
@@ -99,23 +99,20 @@ export function OriginalView({
     }
     const id = ++requestId.current;
     setTranslating(true);
-    void vision
-      .translate({ text: block.text, sourceLanguage: result.sourceLanguage })
-      .then((payload) => {
-        if (requestId.current === id) {
-          setTranslation(payload.translatedText || null);
-        }
-      })
-      .catch(() => {
-        if (requestId.current === id) {
-          setTranslationFailed(true);
-        }
-      })
-      .finally(() => {
-        if (requestId.current === id) {
-          setTranslating(false);
-        }
-      });
+    void translateText({
+      text: block.text,
+      sourceLanguage: result.sourceLanguage,
+    }).then((outcome) => {
+      if (requestId.current !== id) {
+        return;
+      }
+      if (outcome.status === 'translated') {
+        setTranslation(outcome.text || null);
+      } else {
+        setTranslationFailed(true);
+      }
+      setTranslating(false);
+    });
   };
 
   const picked = selected !== null ? result.blocks[selected] : null;

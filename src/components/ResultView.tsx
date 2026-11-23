@@ -1,14 +1,6 @@
 import * as Clipboard from 'expo-clipboard';
 import { useEffect, useRef, useState } from 'react';
-import {
-  Image,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { languageLabel, languageShortLabel } from '@/constants/languages';
 import type { ScanResult } from '@/scanner/machine';
@@ -415,89 +407,8 @@ export function ResultActions({
   );
 }
 
-/** Full-screen result (live scan): body scroll plus a fixed action row. */
-export function ResultCard({
-  result,
-  remaining,
-  unlimited,
-  onScanAgain,
-  onShowOriginal,
-  thumbnail,
-  onOpenLanguages,
-  onLookUp,
-  onPreparePack,
-}: {
-  result: ScanResult;
-  remaining: number | null;
-  unlimited: boolean;
-  onScanAgain: () => void;
-  onShowOriginal?: () => void;
-  thumbnail?: string;
-  onOpenLanguages: () => void;
-  onLookUp: (phrase: string, alt?: string) => void;
-  onPreparePack?: () => void;
-}) {
-  const insets = useSafeAreaInsets();
-
-  return (
-    <View style={styles.container}>
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={[
-          styles.content,
-          {
-            flexGrow: 1,
-            justifyContent: 'center',
-            paddingTop: insets.top + 80,
-            paddingBottom: insets.bottom + 190,
-          },
-        ]}
-      >
-        <ResultBody
-          result={result}
-          remaining={remaining}
-          unlimited={unlimited}
-          onLookUp={onLookUp}
-        />
-      </ScrollView>
-
-      <View
-        style={[
-          styles.actions,
-          styles.fixedActions,
-          { bottom: insets.bottom + 94 },
-        ]}
-      >
-        <ResultActions
-          result={result}
-          onScanAgain={onScanAgain}
-          onShowOriginal={onShowOriginal}
-          thumbnail={thumbnail}
-          onOpenLanguages={onOpenLanguages}
-          onPreparePack={onPreparePack}
-        />
-      </View>
-    </View>
-  );
-}
 
 const styles = StyleSheet.create({
-  container: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    bottom: 0,
-    left: 0,
-    backgroundColor: colors.background,
-  },
-  scroll: {
-    flex: 1,
-  },
-  content: {
-    paddingHorizontal: 20,
-    paddingTop: 28,
-    gap: 20,
-  },
   kickerRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -549,12 +460,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flexWrap: 'wrap',
     gap: 10,
-  },
-  fixedActions: {
-    position: 'absolute',
-    left: 20,
-    right: 20,
-    justifyContent: 'flex-end',
   },
   thumbnailButton: {
     width: 34,

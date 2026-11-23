@@ -15,22 +15,21 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { LanguagePickerSheet } from '@/components/LanguagePickerSheet';
-import { ModeTabs } from '@/components/ModeTabs';
-import { AppSheet } from '@/components/AppSheet';
 import { ShowToLocal } from '@/components/ShowToLocal';
-import { TopBar } from '@/components/TopBar';
+import { ScreenShell } from '@/components/ScreenShell';
+import { useSheet } from '@/components/SheetHost';
 import {
   languageLabel,
   languageShortLabel,
 } from '@/constants/languages';
 import {
   IDLE_TRANSLATE,
-  describeTranslateFailure,
   swapPair,
   translateReducer,
 } from '@/services/translateRequest';
+import { installPack, translateText } from '@/services/translationTask';
 import { useSourceLanguage } from '@/services/sourceLanguage';
+import { useScanAllowance } from '@/services/allowance';
 import { colors, radius, typography } from '@/theme';
 import vision from '../modules/native-vision-translator';
 
@@ -44,13 +43,14 @@ export default function TranslateScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const preferred = useSourceLanguage();
+  const allowance = useScanAllowance();
+  const { openSheet } = useSheet();
 
   const [source, setSource] = useState(() =>
     preferred.code !== 'auto' ? preferred.code : 'ja',
   );
   const [target, setTarget] = useState('en');
   const [input, setInput] = useState('');
-  const [picker, setPicker] = useState<'source' | 'target' | null>(null);
   const [request, dispatch] = useReducer(translateReducer, IDLE_TRANSLATE);
   const requestCounter = useRef(0);
   const [preparing, setPreparing] = useState(false);
@@ -77,14 +77,20 @@ export default function TranslateScreen() {
     setCopied(false);
   };
 
-  const chooseLanguage = (code: string) => {
-    if (picker === 'source') {
-      setSource(code);
-    } else if (picker === 'target') {
-      setTarget(code);
-    }
-    setPicker(null);
-    reset();
+  const openPicker = (which: 'source' | 'target') => {
+    openSheet({
+      kind: 'languagePicker',
+      title: which === 'source' ? 'TRANSLATE FROM' : 'TRANSLATE TO',
+      selected: which === 'source' ? source : target,
+      onSelect: (code) => {
+        if (which === 'source') {
+          setSource(code);
+        } else {
+          setTarget(code);
+        }
+        reset();
+      },
+    });
   };
 
   const swap = () => {
@@ -105,24 +111,23 @@ export default function TranslateScreen() {
     requestCounter.current = requestId;
     dispatch({ type: 'start', requestId });
     setNotice(null);
-    try {
-      const payload = await vision.translate({
-        text,
-        sourceLanguage: source,
-        targetLanguage: target,
-      });
+    const outcome = await translateText({
+      text,
+      sourceLanguage: source,
+      targetLanguage: target,
+    });
+    if (outcome.status === 'translated') {
       dispatch({
         type: 'success',
         requestId,
-        text: payload.translatedText,
+        text: outcome.text,
       });
-    } catch (error) {
-      const failure = describeTranslateFailure(error, source, target);
+    } else {
       dispatch({
         type: 'failure',
         requestId,
-        message: failure.message,
-        packGap: failure.packGap,
+        message: outcome.message,
+        packGap: outcome.status === 'pack_missing',
       });
     }
   };
@@ -130,19 +135,17 @@ export default function TranslateScreen() {
   const prepare = async () => {
     setPreparing(true);
     setNotice(null);
-    try {
-      const status = await vision.prepareLanguagePack(source, target);
-      if (status.status === 'installed') {
-        await run();
-      } else {
-        setNotice('The pack did not finish installing. Try again.');
-      }
-    } catch (error) {
-      const failure = describeTranslateFailure(error, source, target);
-      setNotice(failure.message);
-    } finally {
-      setPreparing(false);
+    const outcome = await installPack(source, target);
+    if (outcome === 'installed') {
+      await run();
+    } else {
+      setNotice(
+        outcome === 'failed'
+          ? 'The pack could not be installed.'
+          : 'The pack did not finish installing. Try again.',
+      );
     }
+    setPreparing(false);
   };
 
   const copy = async () => {
@@ -179,19 +182,20 @@ export default function TranslateScreen() {
 
   return (
     <View style={styles.root}>
-      <TopBar
-        remaining={null}
-        unlimited={false}
-        counterLabel="PRO"
-        onOpenPaywall={() => router.push('/paywall')}
-      />
-
+      <ScreenShell
+        mode="translate"
+        remaining={allowance.remaining}
+        unlimited={allowance.unlimited}
+        onPaywall={() => router.push('/paywall')}
+        onCamera={() => router.dismissTo('/')}
+        onTranslate={() => {}}
+      >
       <View style={styles.languageBar}>
           <View style={styles.languageRow}>
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={`Source language: ${languageLabel(source)}`}
-              onPress={() => setPicker('source')}
+              onPress={() => openPicker('source')}
               style={({ pressed }) => [styles.language, pressed && styles.pressed]}
             >
               <Text style={styles.languageHint}>FROM</Text>
@@ -213,7 +217,7 @@ export default function TranslateScreen() {
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={`Target language: ${languageLabel(target)}`}
-              onPress={() => setPicker('target')}
+              onPress={() => openPicker('target')}
               style={({ pressed }) => [styles.language, pressed && styles.pressed]}
             >
               <Text style={styles.languageHint}>TO</Text>
@@ -356,22 +360,6 @@ export default function TranslateScreen() {
         </View>
       </KeyboardAvoidingView>
 
-      <ModeTabs
-        active="translate"
-        onCamera={() => router.dismissTo('/')}
-        onTranslate={() => {}}
-      />
-
-      <AppSheet visible={picker !== null} onClose={() => setPicker(null)}>
-        {picker ? (
-          <LanguagePickerSheet
-            title={picker === 'source' ? 'TRANSLATE FROM' : 'TRANSLATE TO'}
-            selected={picker === 'source' ? source : target}
-            onSelect={chooseLanguage}
-          />
-        ) : null}
-      </AppSheet>
-
       {showing && request.text ? (
         <ShowToLocal
           translation={request.text}
@@ -382,6 +370,9 @@ export default function TranslateScreen() {
           onClose={() => setShowing(false)}
         />
       ) : null}
+      </ScreenShell>
+
+
     </View>
   );
 }

@@ -1,7 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Clipboard from 'expo-clipboard';
 import { useRouter } from 'expo-router';
-import { requestCaptureHistory } from '@/services/historyIntent';
 import { useEffect, useState } from 'react';
 import {
   Alert,
@@ -126,13 +125,10 @@ export function HistorySheet({
   demo = false,
   initialTab = 'translations',
   onClose,
-  reopenOnReturn = false,
 }: {
   demo?: boolean;
   initialTab?: HistoryTab;
   onClose: () => void;
-  /** The camera sheet asks the camera to reopen this same tab on return. */
-  reopenOnReturn?: boolean;
 }) {
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -181,12 +177,9 @@ export function HistorySheet({
     // Dismiss the native sheet before navigating, and ask the camera to
     // reopen History when this result closes.
     onClose();
-    if (reopenOnReturn) {
-      requestCaptureHistory(tab);
-    }
     router.push({
       pathname: '/result',
-      params: { capture: record.id },
+      params: { capture: record.id, from: tab },
     });
   };
 
@@ -300,12 +293,9 @@ export function HistorySheet({
                       accessibilityHint="Opens the result to look up again"
                       onPress={() => {
                         onClose();
-                        if (reopenOnReturn) {
-                          requestCaptureHistory(tab);
-                        }
                         router.push({
                           pathname: '/result',
-                          params: { id: entry.id },
+                          params: { id: entry.id, from: tab },
                         });
                       }}
                       style={({ pressed }) => [

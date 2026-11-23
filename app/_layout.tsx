@@ -7,6 +7,9 @@ import {
   initialWindowMetrics,
 } from 'react-native-safe-area-context';
 
+import { captures } from '@/services/captures';
+import { resumeCaptureProcessing } from '@/services/captureProcessing';
+import { SheetHost } from '@/components/SheetHost';
 import { colors } from '@/theme';
 
 export default function RootLayout() {
@@ -14,9 +17,17 @@ export default function RootLayout() {
     void SystemUI.setBackgroundColorAsync(colors.background).catch(() => {});
   }, []);
 
+  useEffect(() => {
+    void captures
+      .hydrate({ reconcile: true })
+      .then(() => resumeCaptureProcessing())
+      .catch(() => {});
+  }, []);
+
   return (
     <SafeAreaProvider initialMetrics={initialWindowMetrics}>
       <StatusBar style="light" hidden />
+      <SheetHost>
       <Stack
         screenOptions={{
           headerShown: false,
@@ -37,8 +48,8 @@ export default function RootLayout() {
           name="result"
           options={{ animation: 'slide_from_right' }}
         />
-        <Stack.Screen name="preview" />
       </Stack>
+      </SheetHost>
     </SafeAreaProvider>
   );
 }

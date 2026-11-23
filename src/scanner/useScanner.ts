@@ -10,6 +10,7 @@ import {
 import { AppState } from 'react-native';
 
 import vision, { type OcrCrop } from '../../modules/native-vision-translator';
+import { translateText } from '../services/translationTask';
 
 /** OCR rows arrive newline-separated; the translator sometimes doubles them. */
 function normalizeTranslated(text: string): string {
@@ -36,7 +37,6 @@ import type { CaptureRecord } from '@/services/captureModel';
 import { captures } from '@/services/captures';
 import {
   enqueueCapture,
-  resumeCaptureProcessing,
 } from '@/services/captureProcessing';
 import { sourceLanguage } from '@/services/sourceLanguage';
 import type { CaptureMode, ScannerEffect } from './machine';
@@ -285,45 +285,41 @@ export function useScanner(options: {
             if (token !== captureToken) {
               return;
             }
-            try {
-              const translation = await vision.translate({
-                text: ocr.text,
-                sourceLanguage: candidate,
-              });
+            const outcome = await translateText({
+              text: ocr.text,
+              sourceLanguage: candidate,
+            });
+            if (outcome.status === 'translated') {
               if (token !== captureToken) {
                 return;
               }
               sendResult(
                 'translated',
-                normalizeTranslated(translation.translatedText),
+                normalizeTranslated(outcome.text),
                 false,
                 candidate,
               );
               return;
-            } catch {
-              // Try the next installed source pack.
             }
+            // Try the next installed source pack.
           }
         }
 
-        try {
-          const translation = await vision.translate({
+        {
+          const outcome = await translateText({
             text: ocr.text,
             sourceLanguage: language,
           });
           if (token !== captureToken) {
             return;
           }
-          sendResult(
-            'translated',
-            normalizeTranslated(translation.translatedText),
-            false,
-          );
-        } catch (error) {
-          if (token !== captureToken) {
-            return;
-          }
-          if (isLanguagePackFailure(error)) {
+          if (outcome.status === 'translated') {
+            sendResult(
+              'translated',
+              normalizeTranslated(outcome.text),
+              false,
+            );
+          } else if (outcome.status === 'pack_missing') {
             // The native bridge can report a pack error even when the pack is
             // installed (for example, when the forced source does not match
             // the text). Trust the availability check over the error code.
@@ -344,8 +340,18 @@ export function useScanner(options: {
             // notice, not a fatal scan failure, and it does not use a scan.
             sendResult('pack_missing', '', false);
             return;
+          } else {
+            store.send({
+              type: 'CAPTURE_FAILED',
+              error: {
+                code: 'translation_failed',
+                message: outcome.message,
+                fatal: true,
+              },
+              timestampMs: Date.now(),
+            });
+            return;
           }
-          throw error;
         }
       } catch (error) {
         if (token !== captureToken) {
@@ -580,20 +586,6 @@ export function useScanner(options: {
       }
     });
 
-    let resumed = false;
-    const maybeResume = () => {
-      if (resumed || disposed) {
-        return;
-      }
-      const snapshot = captures.getSnapshot();
-      if (snapshot.loaded && snapshot.available) {
-        resumed = true;
-        resumeCaptureProcessing();
-      }
-    };
-    const unsubscribeCaptures = captures.subscribe(maybeResume);
-    void captures.hydrate({ reconcile: true }).then(maybeResume).catch(() => {});
-
     void (async () => {
       try {
         await Promise.all([
@@ -662,7 +654,6 @@ export function useScanner(options: {
     return () => {
       disposed = true;
       store.setEffectHandler(null);
-      unsubscribeCaptures();
       unsubscribeEntitlements();
       unsubscribeStatePoller();
       appStateSubscription.remove();
@@ -727,15 +718,15 @@ export function useScanner(options: {
         let translatedText = '';
         let kind: 'translated' | 'english' | 'pack_missing' = 'translated';
         let cached = false;
-        try {
-          const out = await vision.translate({
-            text: ocr.text,
-            sourceLanguage: resolvedLanguage,
-          });
-          translatedText = normalizeTranslated(out.translatedText);
-          cached = out.cached;
-        } catch (error) {
-          kind = isLanguagePackFailure(error) ? 'pack_missing' : 'english';
+        const outcome = await translateText({
+          text: ocr.text,
+          sourceLanguage: resolvedLanguage,
+        });
+        if (outcome.status === 'translated') {
+          translatedText = normalizeTranslated(outcome.text);
+          cached = outcome.cached;
+        } else {
+          kind = outcome.status === 'pack_missing' ? 'pack_missing' : 'english';
         }
         store.send({
           type: 'RESULT_REPLACED',

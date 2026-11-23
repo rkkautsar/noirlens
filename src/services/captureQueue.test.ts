@@ -116,6 +116,39 @@ describe('CaptureQueue', () => {
     expect(h.failed).toEqual([]);
   });
 
+  it('never runs two revisions of one capture concurrently', async () => {
+    const runs = new Map<string, number>();
+    let concurrent = false;
+    const inFlight = new Map<string, number>();
+    const queue = new CaptureQueue(
+      {
+        recognize: async (job) => {
+          runs.set(job.id, (runs.get(job.id) ?? 0) + 1);
+          const open = (inFlight.get(job.id) ?? 0) + 1;
+          if (open > 1) {
+            concurrent = true;
+          }
+          inFlight.set(job.id, open);
+          await delay(20);
+          inFlight.set(job.id, open - 1);
+          return { id: job.id };
+        },
+        start: async () => {},
+        finish: async () => {},
+        fail: async () => {},
+        isDeleted: () => false,
+      },
+      2,
+    );
+    queue.enqueue(job('a', 1));
+    queue.enqueue(job('a', 2));
+    queue.enqueue(job('b'));
+    await delay(120);
+    expect(concurrent).toBe(false);
+    expect(runs.get('a')).toBe(2);
+    expect(runs.get('b')).toBe(1);
+  });
+
   it('queues a rerun behind an active job for the same capture', async () => {
     const h = harness();
     const queue = new CaptureQueue(h.deps, 1);

@@ -8,12 +8,9 @@ import {
   View,
 } from 'react-native';
 
-import { AppSheet } from '@/components/AppSheet';
 import { ScreenShell } from '@/components/ScreenShell';
-import { LanguagePickerSheet } from '@/components/LanguagePickerSheet';
-import { LanguagesSheet } from '@/components/LanguagesSheet';
-import { LookupSheet } from '@/components/LookupSheet';
-import { ResultActions, ResultBody } from '@/components/ResultCard';
+import { useSheet } from '@/components/SheetHost';
+import { ResultActions, ResultBody } from '@/components/ResultView';
 import { ScanShutter } from '@/components/ScanShutter';
 import { OriginalView } from '@/components/OriginalView';
 import { ChipButton, MicroLabel, SolidButton } from '@/components/ui';
@@ -23,26 +20,14 @@ import {
 } from '@/constants/languages';
 import type { ScanResult } from '@/scanner/machine';
 import { captures, useCaptures } from '@/services/captures';
-import { resumeCaptureProcessing } from '@/services/captureProcessing';
-import { clearCaptureHistory } from '@/services/historyIntent';
 import { useScanAllowance } from '@/services/allowance';
+import { installPack, translateText } from '@/services/translationTask';
 import type { CaptureRecord } from '@/services/captureModel';
 import { rerunCaptureOcr, retryCapture } from '@/services/captureProcessing';
 import { DEMO_HISTORY } from '@/services/demoHistory';
-import {
-  describeNativeError,
-  isLanguagePackFailure,
-  isUnsupportedLanguagePair,
-} from '@/services/nativeErrors';
 import { readScanHistory, type ScanHistoryEntry } from '@/services/scanHistory';
 import { colors, radius, spacing, typography } from '@/theme';
-import vision from '../../modules/native-vision-translator';
 
-type Overlay =
-  | { kind: 'lookup'; q: string; alt?: string }
-  | { kind: 'languages' }
-  | { kind: 'languagePicker' }
-  | null;
 
 function resultFromEntry(entry: ScanHistoryEntry): ScanResult {
   const lines = entry.sourceText
@@ -86,9 +71,11 @@ function captureBase(record: CaptureRecord): ScanResult {
 export function ScanResultScreen({
   captureId,
   scanId,
+  returnTab,
 }: {
   captureId?: string;
   scanId?: string;
+  returnTab?: string;
 }) {
   const router = useRouter();
   const { records, loaded } = useCaptures();
@@ -98,7 +85,7 @@ export function ScanResultScreen({
 
   const [entry, setEntry] = useState<ScanHistoryEntry | null>(null);
   const [loading, setLoading] = useState(!captureId);
-  const [overlay, setOverlay] = useState<Overlay>(null);
+  const { openSheet } = useSheet();
   const [inspect, setInspect] = useState(false);
   const [captureResult, setCaptureResult] = useState<ScanResult | null>(null);
   const [captureError, setCaptureError] = useState<string | null>(null);
@@ -115,13 +102,6 @@ export function ScanResultScreen({
   const packBusyRef = useRef(false);
 
   useEffect(() => {
-    if (captureId) {
-      void captures
-        .hydrate()
-        .then(() => resumeCaptureProcessing())
-        .catch(() => {});
-      return;
-    }
     let active = true;
     void readScanHistory()
       .then((rows) => {
@@ -141,7 +121,7 @@ export function ScanResultScreen({
     return () => {
       active = false;
     };
-  }, [captureId, scanId]);
+  }, [scanId]);
 
   // Mark a reviewed capture once its OCR is done.
   useEffect(() => {
@@ -176,54 +156,35 @@ export function ScanResultScreen({
     }
     const token = requestToken.current + 1;
     requestToken.current = token;
+    translatedKey.current = key;
     setTranslating(true);
-    // Let a dismissing native sheet finish before Apple Translation presents.
-    const timer = setTimeout(() => {
+    void translateText({
+      text,
+      sourceLanguage: base.sourceLanguage,
+      targetLanguage: 'en',
+    }).then((outcome) => {
       if (token !== requestToken.current) {
         return;
       }
-      translatedKey.current = key;
-      void vision
-        .translate({
-        text,
-          sourceLanguage: base.sourceLanguage,
-          targetLanguage: 'en',
-        })
-        .then((out) => {
-          if (token !== requestToken.current) {
-            return;
-          }
-          setCaptureResult({
-            ...base,
-            kind: 'translated',
-            translatedText: out.translatedText,
-          });
-        })
-        .catch((error) => {
-          if (token !== requestToken.current) {
-            return;
-          }
-          if (isUnsupportedLanguagePair(error)) {
-          setCaptureError(
-            `${languageShortLabel(base.sourceLanguage)} to English is not supported on this device.`,
-          );
-        } else if (isLanguagePackFailure(error)) {
-            setCaptureResult({ ...base, kind: 'pack_missing', translatedText: '' });
-          } else {
-            setCaptureError(describeNativeError(error).message);
-          }
-        })
-        .finally(() => {
-          if (token === requestToken.current) {
-            setTranslating(false);
-          }
+      if (outcome.status === 'translated') {
+        setCaptureResult({
+          ...base,
+          kind: 'translated',
+          translatedText: outcome.text,
         });
-    }, 300);
-    return () => clearTimeout(timer);
+      } else if (outcome.status === 'pack_missing') {
+        setCaptureResult({ ...base, kind: 'pack_missing', translatedText: '' });
+      } else {
+        setCaptureError(outcome.message);
+      }
+      setTranslating(false);
+    });
   }, [captureId, record, captureNonce]);
 
   const close = () => {
-    if (router.canGoBack()) {
+    if (returnTab === 'translations' || returnTab === 'captures') {
+      router.dismissTo({ pathname: '/', params: { history: returnTab } });
+    } else if (router.canGoBack()) {
       router.back();
     } else {
       router.replace('/');
@@ -251,7 +212,6 @@ export function ScanResultScreen({
   };
 
   const chooseLanguage = (code: string) => {
-    setOverlay(null);
     if (!record) {
       return;
     }
@@ -260,6 +220,27 @@ export function ScanResultScreen({
       return;
     }
     applyOcrLanguage(next);
+  };
+
+  const openOcrPicker = () => {
+    if (!record) {
+      return;
+    }
+    openSheet({
+      kind: 'languagePicker',
+      title: 'OCR LANGUAGE',
+      selected: record.hint || 'auto',
+      allowAuto: true,
+      onSelect: chooseLanguage,
+    });
+  };
+
+  const openResultLanguages = () => {
+    if (captureId && record) {
+      openOcrPicker();
+    } else {
+      openSheet({ kind: 'languages' });
+    }
   };
 
   const retryOcrLanguage = () => {
@@ -278,20 +259,17 @@ export function ScanResultScreen({
     setPackBusy(true);
     setCaptureError(null);
     try {
-      const status = await vision.prepareLanguagePack(
+      const outcome = await installPack(
         record.language || record.hint || 'und',
         'en',
       );
-      if (status.status !== 'installed') {
+      if (outcome !== 'installed') {
         setCaptureResult(null);
         setCaptureError('The pack did not finish installing. Try again.');
         return;
       }
       translatedKey.current = null;
       setCaptureNonce((value) => value + 1);
-    } catch (error) {
-      setCaptureResult(null);
-      setCaptureError(describeNativeError(error).message);
     } finally {
       packBusyRef.current = false;
       setPackBusy(false);
@@ -308,8 +286,11 @@ export function ScanResultScreen({
 
   const remaining = allowance.remaining;
   const newScan = () => {
-    clearCaptureHistory();
-    close();
+    if (router.canGoBack()) {
+      router.dismissTo('/');
+    } else {
+      router.replace('/');
+    }
   };
   const historyResult = entry ? resultFromEntry(entry) : null;
   const result = captureId ? captureResult : historyResult;
@@ -350,11 +331,7 @@ export function ScanResultScreen({
                 captureId && record ? captures.uriFor(record.thumb) : undefined
               }
               onPreparePack={captureId ? preparePack : undefined}
-              onOpenLanguages={() =>
-                setOverlay(
-                  captureId ? { kind: 'languagePicker' } : { kind: 'languages' },
-                )
-              }
+              onOpenLanguages={openResultLanguages}
             />
           ) : undefined
         }
@@ -366,11 +343,7 @@ export function ScanResultScreen({
             onStart={newScan}
             onCapture={() => {}}
             onCancel={close}
-            onLanguages={() =>
-              setOverlay(
-                captureId ? { kind: 'languagePicker' } : { kind: 'languages' },
-              )
-            }
+            onLanguages={openResultLanguages}
           />
         }
         overlay={
@@ -380,11 +353,11 @@ export function ScanResultScreen({
               imageUri={captures.uriFor(record.thumb)}
               onClose={() => setInspect(false)}
               onScanAgain={newScan}
-              onOpenLanguages={() => setOverlay({ kind: 'languagePicker' })}
+              onOpenLanguages={openOcrPicker}
               onLookUp={(phrase, alt) => {
                 const q = phrase.trim();
                 if (q) {
-                  setOverlay({ kind: 'lookup', q, alt });
+                  openSheet({ kind: 'lookup', q, alt });
                 }
               }}
             />
@@ -403,7 +376,7 @@ export function ScanResultScreen({
               onLookUp={(phrase, alt) => {
                 const q = phrase.trim();
                 if (q) {
-                  setOverlay({ kind: 'lookup', q, alt });
+                  openSheet({ kind: 'lookup', q, alt });
                 }
               }}
             />
@@ -450,7 +423,7 @@ export function ScanResultScreen({
                   label="CHANGE OCR LANGUAGE"
                   icon="language-outline"
                   disabled={languageBusy}
-                  onPress={() => setOverlay({ kind: 'languagePicker' })}
+                  onPress={openOcrPicker}
                 />
               </View>
             ) : record.status === 'failed' ? (
@@ -470,7 +443,7 @@ export function ScanResultScreen({
                   label="CHANGE OCR LANGUAGE"
                   icon="language-outline"
                   disabled={languageBusy}
-                  onPress={() => setOverlay({ kind: 'languagePicker' })}
+                  onPress={openOcrPicker}
                 />
               </View>
             ) : record.status === 'done' && !captureText ? (
@@ -484,7 +457,7 @@ export function ScanResultScreen({
                   icon="language-outline"
                   active
                   disabled={languageBusy}
-                  onPress={() => setOverlay({ kind: 'languagePicker' })}
+                  onPress={openOcrPicker}
                 />
                 {languageBusy ? (
                   <MicroLabel tone="accent">UPDATING OCR…</MicroLabel>
@@ -508,26 +481,7 @@ export function ScanResultScreen({
         ) : null}
       </ScreenShell>
 
-      <AppSheet visible={overlay !== null} onClose={() => setOverlay(null)}>
-        {overlay?.kind === 'lookup' ? (
-          <LookupSheet
-            q={overlay.q}
-            alt={overlay.alt}
-            onClose={() => setOverlay(null)}
-          />
-        ) : overlay?.kind === 'languages' ? (
-          <LanguagesSheet onClose={() => setOverlay(null)} />
-        ) : overlay?.kind === 'languagePicker' && record ? (
-          <LanguagePickerSheet
-            title="OCR LANGUAGE"
-            selected={record.hint || 'auto'}
-            allowAuto
-            onSelect={(code) => {
-              chooseLanguage(code);
-            }}
-          />
-        ) : null}
-      </AppSheet>
+
     </View>
   );
 }

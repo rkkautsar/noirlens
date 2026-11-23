@@ -1,9 +1,19 @@
 import { useEffect, useState } from 'react';
 
-import { DEFAULT_TUNING } from '@/scanner/machine';
+import { DEFAULT_TUNING } from '../scanner/machine';
 import { localDayKey } from './day';
 import { entitlements, useEntitlementState } from './entitlements';
 import { readScanCount } from './scanLedger';
+
+export function remainingFor(
+  unlimited: boolean,
+  scansUsedToday: number | null,
+): number | null {
+  if (unlimited || scansUsedToday === null) {
+    return null;
+  }
+  return Math.max(0, DEFAULT_TUNING.freeDailyLimit - scansUsedToday);
+}
 
 export interface AllowanceSnapshot {
   /** Entitlement and today's ledger are both known. */
@@ -55,9 +65,6 @@ export function useScanAllowance(): AllowanceSnapshot {
   return {
     loaded: entitlement.loaded && (unlimited || count !== null),
     unlimited,
-    remaining:
-      unlimited || count === null
-        ? null
-        : Math.max(0, DEFAULT_TUNING.freeDailyLimit - count),
+    remaining: remainingFor(unlimited, count),
   };
 }

@@ -51,17 +51,34 @@ export function ScreenShell({
     />
   );
 
+  const footer =
+    actions || dock ? (
+      <View style={styles.footer}>
+        {actions ? <View style={styles.actions}>{actions}</View> : null}
+        {dock}
+      </View>
+    ) : null;
+
+  if (backdrop) {
+    // Full-bleed screens keep the content viewport at full screen so camera
+    // reticle coordinates stay relative to the native preview; chrome and
+    // dock float above it.
+    return (
+      <View style={styles.root}>
+        <View style={styles.backdrop}>{backdrop}</View>
+        <View style={styles.floatingHeader}>{header}</View>
+        <View style={styles.fullViewport}>{children}</View>
+        {footer ? <View style={styles.floatingFooter}>{footer}</View> : null}
+        {overlay}
+      </View>
+    );
+  }
+
   return (
     <View style={styles.root}>
-      {backdrop ? <View style={styles.backdrop}>{backdrop}</View> : null}
-      {backdrop ? <View style={styles.floatingHeader}>{header}</View> : header}
+      {header}
       <View style={styles.viewport}>{children}</View>
-      {actions || dock ? (
-        <View style={styles.footer}>
-          {actions ? <View style={styles.actions}>{actions}</View> : null}
-          {dock}
-        </View>
-      ) : null}
+      {footer}
       {overlay}
     </View>
   );
@@ -88,6 +105,19 @@ const styles = StyleSheet.create({
   },
   viewport: {
     flex: 1,
+  },
+  fullViewport: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+  },
+  floatingFooter: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
   },
   footer: {
     gap: 8,

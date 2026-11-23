@@ -23,11 +23,11 @@ Two capture behaviors, switched with the layers button beside the torch. The cho
 
 The transition table is a pure reducer in `src/scanner/machine.ts`; `src/scanner/useScanner.ts` executes its hardware effects. A frozen result is never interrupted by lowering the phone.
 
-**Collect** — the same press and release, but the selected frame is saved as a JPEG plus a thumbnail (longest side at most 480 px) under `Documents/captures`, then queued for OCR. There is no result screen: History shows the number of retained, unreviewed captures, and after a save the real thumbnail flies into the History icon unless Reduce Motion is enabled. Collect captures do not use the daily translation allowance. Opening a capture marks it reviewed.
+**Collect** — the same press and release, but the selected frame is saved as a JPEG plus a thumbnail (longest side at most 480 px) under `Documents/captures`, then queued for OCR. History shows the number of retained, unreviewed captures, and after a save the real thumbnail flies into the History icon unless Reduce Motion is enabled. Collect captures do not use the daily translation allowance. Opening a capture shows its result screen and marks it reviewed.
 
 Metadata lives in AsyncStorage (`captures.v1`). On iOS, the record stores filenames and the image bytes are saved as files; the web mock persists its data-URI mock instead. Collect retains the newest 100 records. Eviction, Delete, and Clear remove the metadata first, then attempt to remove the corresponding JPEGs and thumbnails; leftovers are eligible for startup cleanup. Unfinished OCR resumes on the next launch. On scanner startup, after a successful and complete metadata read, the app attempts to delete unreferenced `.jpg` files whose modification time is more than ten minutes old. The captures directory is excluded from iCloud backup.
 
-**Review** — History → CAPTURES, or the History button while in Collect. Rows show the thumbnail, timestamp, OCR status, and a text preview. A row opens the full image with its OCR boxes: tap a box to translate it, or translate the whole capture. Copy, retry, delete, and clear all work offline. Missing packs use the same native download prompt as Read.
+**Review** — History → CAPTURES, or the History button while in Collect. Rows show the thumbnail, timestamp, OCR status, and a text preview. A row opens the result screen for that capture: the saved image is the inspect thumbnail (tap it to view the image and tap a line to translate), the OCR language can be changed from the result, and copy/retry/delete/clear work offline. Delete lives in History with a confirmation. Missing packs use the same native download prompt as Read.
 
 Delete removes the record first and then attempts to remove both files. If the AsyncStorage read fails, History reports storage unavailable and writes are blocked until a read succeeds. A successful read with malformed metadata skips orphan cleanup but can still show an empty capture list.
 
@@ -163,7 +163,7 @@ To compare on a device, run the same scripted flow on both apps. For absolute en
 ## Verify
 
 ```bash
-npm test                 # 106 tests: reducer, entitlements, geometry, capture model/queue, show layout
+npm test                 # 115 tests: reducer, entitlements, geometry, capture model/queue, translation task, allowance, show layout
 npx tsc --noEmit         # strict typecheck
 npx expo prebuild --platform ios --no-install
 npx expo export --platform ios --output-dir dist
@@ -177,7 +177,7 @@ npx expo export --platform ios --output-dir dist
 - Validate the real camera, speech, system pack prompts, native capture files, and animation on a physical iPhone; the web mock does not validate native behavior.
 - OCR permits one character for recognized script ranges (kana, Han, Hangul, Thai, Arabic, Cyrillic) and requires at least two otherwise. Short observations require 0.45 confidence for those scripts and 0.72 otherwise. For four or more characters the main floor is 0.35 with an explicit source and 0.40 in AUTO; a final automatic pass uses 0.50. A separate noise filter rejects strings made entirely of digits, punctuation, whitespace, and listed symbols.
 - Read crops to an expanded region around the reticle; text outside it is ignored. Collect saves the full upright frame.
-- Collect keeps at most 100 captures. Review uses 480 px thumbnails; the detail screen decodes the stored JPEG.
+- Collect keeps at most 100 captures. Review uses 480 px thumbnails; the result screen's inspect view decodes the stored JPEG.
 - The unsigned CI artifact is not suitable for App Store submission. If provisioned with a free Apple account, it expires after seven days.
 - Unsigned CI builds set `EXPO_PUBLIC_DEV_UNLIMITED=1` and run with unlimited scans. A production build must not set that variable.
 - Price detection requires a recognized currency symbol, code, or a supported cue such as `won` for a Korean source. Rates are bundled estimates, not live rates.

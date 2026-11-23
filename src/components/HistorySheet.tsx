@@ -25,6 +25,7 @@ import {
   type ScanHistoryEntry,
 } from '@/services/scanHistory';
 import { colors, typography } from '@/theme';
+import { useSheet } from './SheetHost';
 
 export type HistoryTab = 'translations' | 'captures';
 
@@ -132,6 +133,7 @@ export function HistorySheet({
 }) {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { navigateAfterClose } = useSheet();
   const [entries, setEntries] = useState<ScanHistoryEntry[]>([]);
   const [copied, setCopied] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -176,10 +178,10 @@ export function HistorySheet({
   const openCapture = (record: CaptureRecord) => {
     // Dismiss the native sheet before navigating, and ask the camera to
     // reopen History when this result closes.
-    onClose();
-    router.push({
+    router.setParams({ history: tab });
+    navigateAfterClose({
       pathname: '/result',
-      params: { capture: record.id, from: tab },
+      params: { capture: record.id },
     });
   };
 
@@ -292,10 +294,10 @@ export function HistorySheet({
                       }`}
                       accessibilityHint="Opens the result to look up again"
                       onPress={() => {
-                        onClose();
-                        router.push({
+                        router.setParams({ history: tab });
+                        navigateAfterClose({
                           pathname: '/result',
-                          params: { id: entry.id, from: tab },
+                          params: { id: entry.id },
                         });
                       }}
                       style={({ pressed }) => [

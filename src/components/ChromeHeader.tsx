@@ -3,7 +3,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ModeTabs, type AppMode } from './ModeTabs';
 import { ChipButton } from './ui';
-import { colors, typography } from '@/theme';
+import { colors, layout, typography } from '@/theme';
 
 /**
  * Fixed screen header: brand + counter, then the camera/translate mode tabs.
@@ -44,7 +44,6 @@ export function ChromeHeader({
       <View pointerEvents="box-none" style={styles.tabs}>
         <ModeTabs
           active={active}
-          inline
           onCamera={onCamera}
           onTranslate={onTranslate}
         />
@@ -55,8 +54,9 @@ export function ChromeHeader({
 
 const styles = StyleSheet.create({
   header: {
-    paddingHorizontal: 18,
-    gap: 8,
+    paddingHorizontal: layout.page,
+    gap: layout.headerTop,
+    backgroundColor: colors.background,
   },
   row: {
     flexDirection: 'row',

@@ -2,11 +2,14 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react';
 
+import { usePathname, useRouter, type Href } from 'expo-router';
 import type { HistoryTab } from './HistorySheet';
 import { AppSheet } from './AppSheet';
 import { HistorySheet } from './HistorySheet';
@@ -29,6 +32,8 @@ export type SheetRequest =
 type SheetContextValue = {
   openSheet: (request: SheetRequest) => void;
   closeSheet: () => void;
+  /** Close the sheet, then push once the platform reports dismissal. */
+  navigateAfterClose: (href: Href) => void;
   sheetOpen: boolean;
 };
 
@@ -44,21 +49,62 @@ export function useSheet(): SheetContextValue {
 
 /** One presentation owner for every app sheet, mounted above the navigator. */
 export function SheetHost({ children }: { children: ReactNode }) {
+  const router = useRouter();
   const [sheet, setSheet] = useState<SheetRequest | null>(null);
+  const [pendingHref, setPendingHref] = useState<Href | null>(null);
+  const pathname = usePathname();
+  const lastPath = useRef(pathname);
+
+  useEffect(() => {
+    if (lastPath.current !== pathname) {
+      lastPath.current = pathname;
+      setSheet(null);
+      setPendingHref(null);
+    }
+  }, [pathname]);
+
+  useEffect(() => {
+    if (!pendingHref) {
+      return;
+    }
+    const href = pendingHref;
+    const timer = setTimeout(() => {
+      setPendingHref(null);
+      router.push(href);
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [pendingHref, router]);
   const closeSheet = useCallback(() => setSheet(null), []);
   const openSheet = useCallback(
     (request: SheetRequest) => setSheet(request),
     [],
   );
+  const navigateAfterClose = useCallback((href: Href) => {
+    setPendingHref(href);
+    setSheet(null);
+  }, []);
+  const handleDismiss = useCallback(() => {
+    setSheet(null);
+    if (pendingHref) {
+      const href = pendingHref;
+      setPendingHref(null);
+      router.push(href);
+    }
+  }, [pendingHref, router]);
   const value = useMemo(
-    () => ({ openSheet, closeSheet, sheetOpen: sheet !== null }),
-    [openSheet, closeSheet, sheet],
+    () => ({
+      openSheet,
+      closeSheet,
+      navigateAfterClose,
+      sheetOpen: sheet !== null,
+    }),
+    [openSheet, closeSheet, navigateAfterClose, sheet],
   );
 
   return (
     <SheetContext.Provider value={value}>
       {children}
-      <AppSheet visible={sheet !== null} onClose={closeSheet}>
+      <AppSheet visible={sheet !== null} onClose={handleDismiss}>
         {sheet?.kind === 'lookup' ? (
           <LookupSheet q={sheet.q} alt={sheet.alt} onClose={closeSheet} />
         ) : sheet?.kind === 'languages' ? (

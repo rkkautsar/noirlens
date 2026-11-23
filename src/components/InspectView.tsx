@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import {
   Image,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -8,31 +9,14 @@ import {
   View,
   type GestureResponderEvent,
 } from 'react-native';
-import { Platform } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { translateText } from '@/services/translationTask';
 import { imageFitRect, mapBlockRect } from '@/scanner/geometry';
 import type { ScanResult } from '@/scanner/machine';
-import { colors, typography } from '@/theme';
+import { translateText } from '@/services/translationTask';
+import { colors, layout, typography } from '@/theme';
 import { ChipButton, MicroLabel, SolidButton } from './ui';
 
-export function OriginalView({
-  result,
-  onClose,
-  onScanAgain,
-  onOpenLanguages,
-  onLookUp,
-  imageUri,
-}: {
-  result: ScanResult;
-  imageUri?: string;
-  onClose: () => void;
-  onScanAgain: () => void;
-  onOpenLanguages: () => void;
-  onLookUp: (phrase: string, alt?: string) => void;
-}) {
-  const insets = useSafeAreaInsets();
+export function useInspect(result: ScanResult | null, imageUri?: string) {
   const [stage, setStage] = useState({ width: 0, height: 0 });
   const [selected, setSelected] = useState<number | null>(null);
   const [translation, setTranslation] = useState<string | null>(null);
@@ -40,19 +24,21 @@ export function OriginalView({
   const [translationFailed, setTranslationFailed] = useState(false);
   const requestId = useRef(0);
 
-  const imageRect = imageFitRect(
-    { width: result.imageWidth, height: result.imageHeight },
-    stage,
-    'contain',
-  );
+  const imageRect = result
+    ? imageFitRect(
+        { width: result.imageWidth, height: result.imageHeight },
+        stage,
+        'contain',
+      )
+    : { x: 0, y: 0, width: 0, height: 0 };
   const uri =
     imageUri ??
-    (result.previewJpegBase64
+    (result?.previewJpegBase64
       ? `data:image/jpeg;base64,${result.previewJpegBase64}`
       : null);
 
   const inspect = (event: GestureResponderEvent) => {
-    if (!uri || stage.width <= 0) {
+    if (!result || !uri || stage.width <= 0) {
       return;
     }
     const native = event.nativeEvent as unknown as {
@@ -115,10 +101,46 @@ export function OriginalView({
     });
   };
 
-  const picked = selected !== null ? result.blocks[selected] : null;
+  const picked = selected !== null ? result?.blocks[selected] ?? null : null;
+
+  return {
+    result,
+    stage,
+    setStage,
+    selected,
+    translation,
+    translating,
+    translationFailed,
+    imageRect,
+    uri,
+    inspect,
+    picked,
+  };
+}
+
+export type InspectController = ReturnType<typeof useInspect>;
+
+/** Image + tapped line + translation; fills the shell viewport. */
+export function InspectBody({
+  controller,
+}: {
+  controller: InspectController;
+}) {
+  const {
+    stage,
+    setStage,
+    selected,
+    translation,
+    translating,
+    translationFailed,
+    imageRect,
+    uri,
+    inspect,
+    picked,
+  } = controller;
 
   return (
-    <View style={styles.container}>
+    <View style={styles.body}>
       <View
         style={styles.stage}
         onLayout={(event) => {
@@ -136,9 +158,8 @@ export function OriginalView({
           ) : (
             <MicroLabel tone="dim">FROZEN FRAME UNAVAILABLE</MicroLabel>
           )}
-
-          {uri && stage.width > 0
-            ? result.blocks.map((block, index) => {
+          {uri && stage.width > 0 && controller.result
+            ? controller.result.blocks.map((block, index) => {
                 const rect = mapBlockRect(block, imageRect);
                 return (
                   <View
@@ -161,7 +182,7 @@ export function OriginalView({
         </Pressable>
       </View>
 
-      <View style={[styles.panel, { paddingBottom: insets.bottom + 94 }]}>
+      <View style={styles.panel}>
         <MicroLabel tone="accent">INSPECT · TAP THE TEXT</MicroLabel>
         {picked ? (
           <ScrollView style={styles.pickedScroll}>
@@ -175,9 +196,7 @@ export function OriginalView({
                 {translation}
               </Text>
             ) : translationFailed ? (
-              <MicroLabel tone="dim">
-                COULD NOT TRANSLATE THIS TEXT
-              </MicroLabel>
+              <MicroLabel tone="dim">COULD NOT TRANSLATE THIS TEXT</MicroLabel>
             ) : null}
           </ScrollView>
         ) : (
@@ -185,51 +204,66 @@ export function OriginalView({
             Tap anywhere on the frame to read the text nearest that point.
           </Text>
         )}
-        <View style={styles.actions}>
-          <SolidButton
-            label="BACK"
-            icon="chevron-back"
-            iconOnly
-            onPress={onClose}
-          />
-          <ChipButton
-            label="Look up"
-            icon="book-outline"
-            iconOnly
-            disabled={!picked}
-            onPress={() => {
-              if (picked) {
-                onLookUp(picked.text, translation ?? undefined);
-              }
-            }}
-          />
-          <ChipButton
-            label="Change language"
-            icon="language-outline"
-            iconOnly
-            onPress={onOpenLanguages}
-          />
-          <SolidButton
-            label="SCAN AGAIN"
-            icon="refresh"
-            iconOnly
-            onPress={onScanAgain}
-            primary
-          />
-        </View>
       </View>
     </View>
   );
 }
 
+/** Inspect controls for the shell action slot. */
+export function InspectActions({
+  controller,
+  onClose,
+  onScanAgain,
+  onOpenLanguages,
+  onLookUp,
+}: {
+  controller: InspectController;
+  onClose: () => void;
+  onScanAgain: () => void;
+  onOpenLanguages: () => void;
+  onLookUp: (phrase: string, alt?: string) => void;
+}) {
+  const { picked, translation } = controller;
+
+  return (
+    <View style={styles.actions}>
+      <SolidButton
+        label="BACK"
+        icon="chevron-back"
+        iconOnly
+        onPress={onClose}
+      />
+      <ChipButton
+        label="Look up"
+        icon="book-outline"
+        iconOnly
+        disabled={!picked}
+        onPress={() => {
+          if (picked) {
+            onLookUp(picked.text, translation ?? undefined);
+          }
+        }}
+      />
+      <ChipButton
+        label="Change language"
+        icon="language-outline"
+        iconOnly
+        onPress={onOpenLanguages}
+      />
+      <SolidButton
+        label="SCAN AGAIN"
+        icon="refresh"
+        iconOnly
+        onPress={onScanAgain}
+        primary
+      />
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
-  container: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    bottom: 0,
-    left: 0,
-    backgroundColor: colors.background,
+  body: {
+    flex: 1,
   },
   stage: {
     flex: 1,
@@ -250,7 +284,8 @@ const styles = StyleSheet.create({
     borderTopColor: colors.border,
     backgroundColor: colors.background,
     paddingTop: 14,
-    paddingHorizontal: 20,
+    paddingHorizontal: layout.page,
+    paddingBottom: 14,
     gap: 10,
   },
   pickedScroll: {
@@ -276,6 +311,8 @@ const styles = StyleSheet.create({
   actions: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
+    alignItems: 'center',
+    flexWrap: 'wrap',
     gap: 10,
   },
 });

@@ -458,6 +458,7 @@ const styles = StyleSheet.create({
   actions: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'flex-end',
     flexWrap: 'wrap',
     gap: 10,
   },

@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { colors, typography } from '@/theme';
+import { colors, layout, typography } from '@/theme';
 
 type Zone = 'cancel' | 'languages';
 
@@ -320,7 +320,7 @@ export function ScanShutter({
 
 const styles = StyleSheet.create({
   wrap: {
-    paddingHorizontal: 16,
+    paddingHorizontal: layout.page,
     paddingTop: 28,
   },
   bar: {

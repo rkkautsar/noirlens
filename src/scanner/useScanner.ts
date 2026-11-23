@@ -725,8 +725,12 @@ export function useScanner(options: {
         if (outcome.status === 'translated') {
           translatedText = normalizeTranslated(outcome.text);
           cached = outcome.cached;
+        } else if (outcome.status === 'pack_missing') {
+          kind = 'pack_missing';
         } else {
-          kind = outcome.status === 'pack_missing' ? 'pack_missing' : 'english';
+          // Unsupported pairs and generic failures keep the prior result;
+          // they are not an English detection.
+          return;
         }
         store.send({
           type: 'RESULT_REPLACED',

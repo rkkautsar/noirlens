@@ -62,3 +62,12 @@ export const typography = {
     fontWeight: '500' as const,
   },
 } as const;
+
+/** One set of page metrics. Chrome, content and docks use these. */
+export const layout = {
+  page: 20,
+  headerTop: 8,
+  contentTop: 14,
+  section: 20,
+  dockGap: 8,
+} as const;

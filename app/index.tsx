@@ -15,10 +15,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AimHud } from '@/components/AimHud';
 import { CaptureFlight } from '@/components/CaptureFlight';
-import { ScreenShell } from '@/components/ScreenShell';
+import { ScreenShell, useShellLayout } from '@/components/ScreenShell';
 import { useSheet } from '@/components/SheetHost';
-import { OriginalView } from '@/components/OriginalView';
 import { ResultActions, ResultBody } from '@/components/ResultView';
+import { InspectActions, InspectBody, useInspect } from '@/components/InspectView';
 import { ScanShutter } from '@/components/ScanShutter';
 import { Standby } from '@/components/Standby';
 
@@ -31,8 +31,17 @@ import {
 import { useSourceLanguage } from '@/services/sourceLanguage';
 import { captures, useCaptures } from '@/services/captures';
 import type { CaptureRecord } from '@/services/captureModel';
-import { colors, typography } from '@/theme';
+import { colors, layout, typography } from '@/theme';
 import vision, { EcoCameraView } from '../modules/native-vision-translator';
+
+function CameraPanel({ children }: { children: React.ReactNode }) {
+  const { headerHeight, footerHeight } = useShellLayout();
+  return (
+    <View style={[styles.panelFill, { top: headerHeight, bottom: footerHeight }]}>
+      {children}
+    </View>
+  );
+}
 
 export default function ScannerScreen() {
   const router = useRouter();
@@ -58,6 +67,7 @@ export default function ScannerScreen() {
 
   const { snapshot } = scanner;
   const { state, result } = snapshot;
+  const inspectState = useInspect(result);
   const active = state === 'PREWARM' || state === 'SCANNING';
   const locked = state === 'LOCKED_READ' && result !== null;
   const exhausted =
@@ -213,7 +223,15 @@ export default function ScannerScreen() {
           <EcoCameraView style={StyleSheet.absoluteFill} ecoMode={ecoMode} />
         }
         actions={
-          locked ? (
+          showOriginal && result ? (
+            <InspectActions
+              controller={inspectState}
+              onClose={() => setShowOriginal(false)}
+              onScanAgain={scanner.scanAgain}
+              onOpenLanguages={openLanguages}
+              onLookUp={openLookup}
+            />
+          ) : locked ? (
             <ResultActions
               result={result}
               onScanAgain={scanner.scanAgain}
@@ -415,15 +433,7 @@ export default function ScannerScreen() {
           </>
         }
         overlay={
-          locked && showOriginal ? (
-            <OriginalView
-              result={result}
-              onClose={() => setShowOriginal(false)}
-              onScanAgain={scanner.scanAgain}
-              onOpenLanguages={openLanguages}
-              onLookUp={openLookup}
-            />
-          ) : flight && flightTarget ? (
+          flight && flightTarget ? (
             <View pointerEvents="none" style={styles.flightLayer}>
               <CaptureFlight
                 key={flight.id}
@@ -456,14 +466,15 @@ export default function ScannerScreen() {
             onReticleFrame={scanner.setReticleFrame}
           />
         ) : null}
-        {locked && !showOriginal ? (
-          <View style={styles.resultFill}>
+        {showOriginal && result ? (
+          <CameraPanel>
+            <InspectBody controller={inspectState} />
+          </CameraPanel>
+        ) : locked ? (
+          <CameraPanel>
             <ScrollView
               style={styles.resultScroll}
-              contentContainerStyle={[
-                styles.resultContent,
-                { paddingTop: insets.top + 78 },
-              ]}
+              contentContainerStyle={styles.resultContent}
             >
               <ResultBody
                 result={result}
@@ -472,7 +483,7 @@ export default function ScannerScreen() {
                 onLookUp={openLookup}
               />
             </ScrollView>
-          </View>
+          </CameraPanel>
         ) : null}
       </ScreenShell>
 
@@ -489,7 +500,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
+    paddingHorizontal: layout.page,
     paddingBottom: 4,
   },
   utilityGroup: {
@@ -497,21 +508,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
   },
-  resultFill: {
+  panelFill: {
     position: 'absolute',
-    top: 0,
-    right: 0,
-    bottom: 0,
     left: 0,
+    right: 0,
     backgroundColor: colors.background,
   },
   resultScroll: {
     flex: 1,
   },
   resultContent: {
-    paddingHorizontal: 20,
-    paddingBottom: 200,
-    gap: 20,
+    paddingHorizontal: layout.page,
+    paddingTop: layout.contentTop,
+    paddingBottom: layout.page,
+    gap: layout.section,
   },
   sourceRow: {
     flexDirection: 'row',

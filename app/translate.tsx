@@ -30,7 +30,7 @@ import {
 import { installPack, translateText } from '@/services/translationTask';
 import { useSourceLanguage } from '@/services/sourceLanguage';
 import { useScanAllowance } from '@/services/allowance';
-import { colors, radius, typography } from '@/theme';
+import { colors, layout, radius, typography } from '@/theme';
 import vision from '../modules/native-vision-translator';
 
 function tap() {
@@ -386,18 +386,18 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   content: {
-    paddingHorizontal: 18,
+    paddingHorizontal: layout.page,
     paddingTop: 16,
     paddingBottom: 24,
     gap: 14,
   },
   languageBar: {
-    paddingHorizontal: 18,
+    paddingHorizontal: layout.page,
     paddingTop: 22,
     paddingBottom: 10,
   },
   composer: {
-    paddingHorizontal: 18,
+    paddingHorizontal: layout.page,
     paddingTop: 10,
     gap: 10,
     backgroundColor: colors.background,

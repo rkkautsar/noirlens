@@ -12,8 +12,7 @@ import { ScreenShell } from '@/components/ScreenShell';
 import { useSheet } from '@/components/SheetHost';
 import { ResultActions, ResultBody } from '@/components/ResultView';
 import { ScanShutter } from '@/components/ScanShutter';
-import { OriginalView } from '@/components/OriginalView';
-import { ChipButton, MicroLabel, SolidButton } from '@/components/ui';
+import { InspectActions, InspectBody, useInspect } from '@/components/InspectView';import { ChipButton, MicroLabel, SolidButton } from '@/components/ui';
 import {
   isEnglishLanguageCode,
   languageShortLabel,
@@ -26,7 +25,7 @@ import type { CaptureRecord } from '@/services/captureModel';
 import { rerunCaptureOcr, retryCapture } from '@/services/captureProcessing';
 import { DEMO_HISTORY } from '@/services/demoHistory';
 import { readScanHistory, type ScanHistoryEntry } from '@/services/scanHistory';
-import { colors, radius, spacing, typography } from '@/theme';
+import { colors, layout, radius, spacing, typography } from '@/theme';
 
 
 function resultFromEntry(entry: ScanHistoryEntry): ScanResult {
@@ -71,11 +70,9 @@ function captureBase(record: CaptureRecord): ScanResult {
 export function ScanResultScreen({
   captureId,
   scanId,
-  returnTab,
 }: {
   captureId?: string;
   scanId?: string;
-  returnTab?: string;
 }) {
   const router = useRouter();
   const { records, loaded } = useCaptures();
@@ -182,10 +179,16 @@ export function ScanResultScreen({
   }, [captureId, record, captureNonce]);
 
   const close = () => {
-    if (returnTab === 'translations' || returnTab === 'captures') {
-      router.dismissTo({ pathname: '/', params: { history: returnTab } });
-    } else if (router.canGoBack()) {
+    if (router.canGoBack()) {
       router.back();
+    } else {
+      router.replace('/');
+    }
+  };
+
+  const newScan = () => {
+    if (router.canGoBack()) {
+      router.dismissTo({ pathname: '/', params: { history: '' } });
     } else {
       router.replace('/');
     }
@@ -285,15 +288,14 @@ export function ScanResultScreen({
   };
 
   const remaining = allowance.remaining;
-  const newScan = () => {
-    if (router.canGoBack()) {
-      router.dismissTo('/');
-    } else {
-      router.replace('/');
-    }
-  };
   const historyResult = entry ? resultFromEntry(entry) : null;
   const result = captureId ? captureResult : historyResult;
+  const inspectSource =
+    result ?? (record && record.status === 'done' ? captureBase(record) : null);
+  const inspectState = useInspect(
+    inspectSource,
+    captureId && record ? captures.uriFor(record.thumb) : undefined,
+  );
   const captureText = record?.text.trim() ?? '';
   const pending = record
     ? record.status === 'pending' || record.status === 'processing'
@@ -320,7 +322,20 @@ export function ScanResultScreen({
         onCamera={newScan}
         onTranslate={() => router.push('/translate')}
         actions={
-          result ? (
+          inspect ? (
+            <InspectActions
+              controller={inspectState}
+              onClose={() => setInspect(false)}
+              onScanAgain={newScan}
+              onOpenLanguages={openOcrPicker}
+              onLookUp={(phrase, alt) => {
+                const q = phrase.trim();
+                if (q) {
+                  openSheet({ kind: 'lookup', q, alt });
+                }
+              }}
+            />
+          ) : result ? (
             <ResultActions
               result={result}
               onScanAgain={newScan}
@@ -346,25 +361,10 @@ export function ScanResultScreen({
             onLanguages={openResultLanguages}
           />
         }
-        overlay={
-          inspect && record && captureResult ? (
-            <OriginalView
-              result={captureResult}
-              imageUri={captures.uriFor(record.thumb)}
-              onClose={() => setInspect(false)}
-              onScanAgain={newScan}
-              onOpenLanguages={openOcrPicker}
-              onLookUp={(phrase, alt) => {
-                const q = phrase.trim();
-                if (q) {
-                  openSheet({ kind: 'lookup', q, alt });
-                }
-              }}
-            />
-          ) : undefined
-        }
       >
-        {result ? (
+        {inspect ? (
+          <InspectBody controller={inspectState} />
+        ) : result ? (
           <ScrollView
             style={styles.scroll}
             contentContainerStyle={styles.content}
@@ -419,6 +419,13 @@ export function ScanResultScreen({
                   active
                   onPress={retryTranslation}
                 />
+                {record ? (
+                  <ChipButton
+                    label="VIEW IMAGE"
+                    icon="image-outline"
+                    onPress={() => setInspect(true)}
+                  />
+                ) : null}
                 <ChipButton
                   label="CHANGE OCR LANGUAGE"
                   icon="language-outline"
@@ -440,6 +447,11 @@ export function ScanResultScreen({
                   onPress={() => void retryCapture(record.id)}
                 />
                 <ChipButton
+                  label="VIEW IMAGE"
+                  icon="image-outline"
+                  onPress={() => setInspect(true)}
+                />
+                <ChipButton
                   label="CHANGE OCR LANGUAGE"
                   icon="language-outline"
                   disabled={languageBusy}
@@ -458,6 +470,11 @@ export function ScanResultScreen({
                   active
                   disabled={languageBusy}
                   onPress={openOcrPicker}
+                />
+                <ChipButton
+                  label="VIEW IMAGE"
+                  icon="image-outline"
+                  onPress={() => setInspect(true)}
                 />
                 {languageBusy ? (
                   <MicroLabel tone="accent">UPDATING OCR…</MicroLabel>
@@ -494,10 +511,10 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   content: {
-    paddingHorizontal: 20,
-    paddingTop: 14,
-    paddingBottom: 20,
-    gap: 20,
+    paddingHorizontal: layout.page,
+    paddingTop: layout.contentTop,
+    paddingBottom: layout.page,
+    gap: layout.section,
   },
   center: {
     flex: 1,

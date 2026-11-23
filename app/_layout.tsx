@@ -18,10 +18,19 @@ export default function RootLayout() {
   }, []);
 
   useEffect(() => {
-    void captures
-      .hydrate({ reconcile: true })
-      .then(() => resumeCaptureProcessing())
-      .catch(() => {});
+    let active = true;
+    const maybeResume = () => {
+      const snapshot = captures.getSnapshot();
+      if (active && snapshot.loaded && snapshot.available) {
+        resumeCaptureProcessing();
+      }
+    };
+    const unsubscribe = captures.subscribe(maybeResume);
+    void captures.hydrate({ reconcile: true }).then(maybeResume).catch(() => {});
+    return () => {
+      active = false;
+      unsubscribe();
+    };
   }, []);
 
   return (

@@ -1,5 +1,4 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { colors, typography } from '@/theme';
 
@@ -39,15 +38,11 @@ export function ModeTabs({
   active,
   onCamera,
   onTranslate,
-  inline = false,
 }: {
   active: AppMode;
   onCamera: () => void;
   onTranslate: () => void;
-  /** Render in the flow (screen header) instead of over the content. */
-  inline?: boolean;
 }) {
-  const insets = useSafeAreaInsets();
   const tabs = (
     <>
       <Tab label="CAMERA" active={active === 'camera'} onPress={onCamera} />
@@ -58,30 +53,14 @@ export function ModeTabs({
       />
     </>
   );
-  if (inline) {
-    return (
-      <View pointerEvents="box-none" style={styles.inlineRow}>
-        {tabs}
-      </View>
-    );
-  }
   return (
-    <View pointerEvents="box-none" style={[styles.row, { top: insets.top + 44 }]}>
+    <View pointerEvents="box-none" style={styles.inlineRow}>
       {tabs}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  row: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 26,
-    zIndex: 20,
-  },
   inlineRow: {
     flexDirection: 'row',
     justifyContent: 'center',

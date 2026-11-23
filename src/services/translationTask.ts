@@ -1,4 +1,5 @@
 import vision from '../../modules/native-vision-translator';
+import { languageLabel } from '../constants/languages';
 import {
   describeNativeError,
   isLanguagePackFailure,
@@ -39,7 +40,10 @@ export async function translateText({
   } catch (error) {
     const message = describeNativeError(error, sourceLanguage).message;
     if (isUnsupportedLanguagePair(error)) {
-      return { status: 'unsupported', message };
+      return {
+        status: 'unsupported',
+        message: `${languageLabel(sourceLanguage)} to ${languageLabel(targetLanguage)} is not supported on this device.`,
+      };
     }
     if (isLanguagePackFailure(error)) {
       return { status: 'pack_missing', message };

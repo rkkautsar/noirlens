@@ -1,9 +1,24 @@
-import type { ReactNode } from 'react';
+import {
+  createContext,
+  useContext,
+  useState,
+  type ReactNode,
+} from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { ChromeHeader } from './ChromeHeader';
 import type { AppMode } from './ModeTabs';
-import { colors } from '@/theme';
+import { colors, layout } from '@/theme';
+
+const ShellLayoutContext = createContext<{
+  headerHeight: number;
+  footerHeight: number;
+}>({ headerHeight: 0, footerHeight: 0 });
+
+/** Measured chrome height for full-bleed content that must clear the header. */
+export function useShellLayout() {
+  return useContext(ShellLayoutContext);
+}
 
 /**
  * The one screen layout: chrome, a content viewport, and a footer dock.
@@ -40,20 +55,33 @@ export function ScreenShell({
   overlay?: ReactNode;
   children: ReactNode;
 }) {
+  const [headerHeight, setHeaderHeight] = useState(0);
+  const [footerHeight, setFooterHeight] = useState(0);
   const header = (
-    <ChromeHeader
-      active={mode}
-      remaining={remaining}
-      unlimited={unlimited}
-      onOpenPaywall={onPaywall}
-      onCamera={onCamera}
-      onTranslate={onTranslate}
-    />
+    <View
+      onLayout={(event) => {
+        setHeaderHeight(event.nativeEvent.layout.height);
+      }}
+    >
+      <ChromeHeader
+        active={mode}
+        remaining={remaining}
+        unlimited={unlimited}
+        onOpenPaywall={onPaywall}
+        onCamera={onCamera}
+        onTranslate={onTranslate}
+      />
+    </View>
   );
 
   const footer =
     actions || dock ? (
-      <View style={styles.footer}>
+      <View
+        style={styles.footer}
+        onLayout={(event) => {
+          setFooterHeight(event.nativeEvent.layout.height);
+        }}
+      >
         {actions ? <View style={styles.actions}>{actions}</View> : null}
         {dock}
       </View>
@@ -64,23 +92,34 @@ export function ScreenShell({
     // reticle coordinates stay relative to the native preview; chrome and
     // dock float above it.
     return (
-      <View style={styles.root}>
-        <View style={styles.backdrop}>{backdrop}</View>
-        <View style={styles.floatingHeader}>{header}</View>
-        <View style={styles.fullViewport}>{children}</View>
-        {footer ? <View style={styles.floatingFooter}>{footer}</View> : null}
-        {overlay}
-      </View>
+      <ShellLayoutContext.Provider value={{ headerHeight, footerHeight }}>
+        <View style={styles.root}>
+          <View style={styles.backdrop}>{backdrop}</View>
+          <View style={styles.fullViewport}>{children}</View>
+          <View
+            style={styles.floatingHeader}
+            onLayout={(event) => {
+              setHeaderHeight(event.nativeEvent.layout.height);
+            }}
+          >
+            {header}
+          </View>
+          {footer ? <View style={styles.floatingFooter}>{footer}</View> : null}
+          {overlay}
+        </View>
+      </ShellLayoutContext.Provider>
     );
   }
 
   return (
-    <View style={styles.root}>
-      {header}
-      <View style={styles.viewport}>{children}</View>
-      {footer}
-      {overlay}
-    </View>
+    <ShellLayoutContext.Provider value={{ headerHeight, footerHeight }}>
+      <View style={styles.root}>
+        {header}
+        <View style={styles.viewport}>{children}</View>
+        {footer}
+        {overlay}
+      </View>
+    </ShellLayoutContext.Provider>
   );
 }
 
@@ -120,9 +159,9 @@ const styles = StyleSheet.create({
     bottom: 0,
   },
   footer: {
-    gap: 8,
+    gap: layout.dockGap,
   },
   actions: {
-    paddingHorizontal: 20,
+    paddingHorizontal: layout.page,
   },
 });

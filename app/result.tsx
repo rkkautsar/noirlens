@@ -1,23 +1,44 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
-import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  Image,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 
-import { LanguagesSheet } from '@/components/LanguagesSheet';
-import { ModeTabs } from '@/components/ModeTabs';
-import { LookupSheet } from '@/components/LookupSheet';
 import { AppSheet } from '@/components/AppSheet';
+import { LanguagePickerSheet } from '@/components/LanguagePickerSheet';
+import { LanguagesSheet } from '@/components/LanguagesSheet';
+import { LookupSheet } from '@/components/LookupSheet';
+import { ModeTabs } from '@/components/ModeTabs';
 import { ResultCard } from '@/components/ResultCard';
 import { ScanShutter } from '@/components/ScanShutter';
-import { SolidButton } from '@/components/ui';
+import { ScanlineOverlay } from '@/components/ScanlineOverlay';
+import { ChipButton, MicroLabel, SolidButton } from '@/components/ui';
 import { TopBar } from '@/components/TopBar';
+import {
+  isEnglishLanguageCode,
+  languageShortLabel,
+} from '@/constants/languages';
 import type { ScanResult } from '@/scanner/machine';
+import { captures, useCaptures } from '@/services/captures';
+import type { CaptureRecord } from '@/services/captureModel';
+import { rerunCaptureOcr, retryCapture } from '@/services/captureProcessing';
 import { DEMO_HISTORY } from '@/services/demoHistory';
+import {
+  describeNativeError,
+  isLanguagePackFailure,
+} from '@/services/nativeErrors';
 import { readScanHistory, type ScanHistoryEntry } from '@/services/scanHistory';
-import { colors } from '@/theme';
+import { colors, radius, spacing, typography } from '@/theme';
+import vision from '../modules/native-vision-translator';
 
 type Overlay =
   | { kind: 'lookup'; q: string; alt?: string }
   | { kind: 'languages' }
+  | { kind: 'languagePicker' }
   | null;
 
 function resultFromEntry(entry: ScanHistoryEntry): ScanResult {
@@ -45,21 +66,53 @@ function resultFromEntry(entry: ScanHistoryEntry): ScanResult {
   };
 }
 
+function captureBase(record: CaptureRecord): ScanResult {
+  return {
+    kind: 'translated',
+    sourceText: record.text,
+    translatedText: '',
+    sourceLanguage: record.language || record.hint || 'und',
+    sourceHash: record.id,
+    blocks: record.blocks,
+    imageWidth: record.width,
+    imageHeight: record.height,
+    cached: false,
+  };
+}
+
 export default function ResultScreen() {
   const router = useRouter();
-  const { id } = useLocalSearchParams<{ id?: string }>();
+  const params = useLocalSearchParams<{ id?: string; capture?: string }>();
+  const captureId = params.capture;
+  const { records, loaded } = useCaptures();
+  const record = captureId
+    ? records.find((row) => row.id === captureId) ?? null
+    : null;
+
   const [entry, setEntry] = useState<ScanHistoryEntry | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!captureId);
   const [overlay, setOverlay] = useState<Overlay>(null);
+  const [inspect, setInspect] = useState(false);
+  const [captureResult, setCaptureResult] = useState<ScanResult | null>(null);
+  const [captureError, setCaptureError] = useState<string | null>(null);
+  const [translating, setTranslating] = useState(false);
+  const [languageBusy, setLanguageBusy] = useState(false);
+  const [packBusy, setPackBusy] = useState(false);
+  const [captureNonce, setCaptureNonce] = useState(0);
+  const translatedKey = useRef<string | null>(null);
 
   useEffect(() => {
+    if (captureId) {
+      void captures.hydrate();
+      return;
+    }
     let active = true;
     void readScanHistory()
       .then((rows) => {
         if (active) {
           setEntry(
-            rows.find((row) => row.id === id) ??
-              DEMO_HISTORY.find((row) => row.id === id) ??
+            rows.find((row) => row.id === params.id) ??
+              DEMO_HISTORY.find((row) => row.id === params.id) ??
               null,
           );
         }
@@ -72,7 +125,74 @@ export default function ResultScreen() {
     return () => {
       active = false;
     };
-  }, [id]);
+  }, [captureId, params.id]);
+
+  // Mark a reviewed capture once its OCR is done.
+  useEffect(() => {
+    if (!record || record.status !== 'done' || record.reviewedAt !== null) {
+      return;
+    }
+    void captures.review(record.id).catch(() => {});
+  }, [record]);
+
+  // Translate the capture's OCR text whenever the language or revision changes.
+  useEffect(() => {
+    if (!captureId || !record || record.status !== 'done') {
+      return;
+    }
+    const key = `${record.id}:${record.ocrRevision}:${record.language}:${record.text.length}:${captureNonce}`;
+    if (translatedKey.current === key) {
+      return;
+    }
+    translatedKey.current = key;
+    const base = captureBase(record);
+    const text = record.text.trim();
+    setCaptureError(null);
+    setCaptureResult(null);
+    setTranslating(false);
+    if (!text) {
+      return;
+    }
+    if (isEnglishLanguageCode(base.sourceLanguage)) {
+      setCaptureResult({ ...base, kind: 'english', translatedText: '' });
+      return;
+    }
+    let active = true;
+    setTranslating(true);
+    void vision
+      .translate({
+        text,
+        sourceLanguage: base.sourceLanguage,
+        targetLanguage: 'en',
+      })
+      .then((out) => {
+        if (active) {
+          setCaptureResult({
+            ...base,
+            kind: 'translated',
+            translatedText: out.translatedText,
+          });
+        }
+      })
+      .catch((error) => {
+        if (!active) {
+          return;
+        }
+        if (isLanguagePackFailure(error)) {
+          setCaptureResult({ ...base, kind: 'pack_missing', translatedText: '' });
+        } else {
+          setCaptureError(describeNativeError(error).message);
+        }
+      })
+      .finally(() => {
+        if (active) {
+          setTranslating(false);
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [captureId, record, captureNonce]);
 
   const close = () => {
     if (router.canGoBack()) {
@@ -82,46 +202,180 @@ export default function ResultScreen() {
     }
   };
 
-  if (loading) {
-    return (
-      <View style={styles.page}>
-        <ActivityIndicator color={colors.accent} />
-      </View>
-    );
-  }
+  const chooseLanguage = (code: string) => {
+    setOverlay(null);
+    if (!record) {
+      return;
+    }
+    const next = code === 'auto' ? '' : code;
+    if (next === record.hint) {
+      return;
+    }
+    setLanguageBusy(true);
+    setCaptureError(null);
+    setCaptureResult(null);
+    setTranslating(false);
+    translatedKey.current = null;
+    void rerunCaptureOcr(record.id, next)
+      .catch(() => {
+        setCaptureError('Could not change the OCR language. Try again.');
+      })
+      .finally(() => {
+        setLanguageBusy(false);
+      });
+  };
 
-  if (!entry) {
-    return (
-      <View style={styles.page}>
-        <TopBar
-          remaining={null}
-          unlimited
-          onOpenPaywall={() => {}}
-          showNavigation={false}
-        />
-        <View style={styles.empty}>
-          <SolidButton label="BACK" icon="arrow-back" onPress={close} />
-        </View>
-      </View>
-    );
-  }
+  const preparePack = async () => {
+    if (!record) {
+      return;
+    }
+    setPackBusy(true);
+    setCaptureError(null);
+    try {
+      const status = await vision.prepareLanguagePack(
+        record.language || record.hint || 'und',
+        'en',
+      );
+      if (status.status !== 'installed') {
+        setCaptureError('That offline pack is not available on this device.');
+        return;
+      }
+      translatedKey.current = null;
+      setCaptureNonce((value) => value + 1);
+    } catch (error) {
+      setCaptureError(describeNativeError(error).message);
+    } finally {
+      setPackBusy(false);
+    }
+  };
+
+  const retryTranslation = () => {
+    setCaptureError(null);
+    translatedKey.current = null;
+    setCaptureNonce((value) => value + 1);
+  };
+
+  const historyResult = entry ? resultFromEntry(entry) : null;
+  const result = captureId ? captureResult : historyResult;
+  const captureText = record?.text.trim() ?? '';
+  const pending = record
+    ? record.status === 'pending' || record.status === 'processing'
+    : false;
+  const waiting = Boolean(
+    captureId &&
+      (!loaded ||
+        pending ||
+        (record?.status === 'done' &&
+          captureText.length > 0 &&
+          !captureResult &&
+          !captureError) ||
+        translating),
+  );
 
   return (
     <View style={styles.page}>
-      <ResultCard
-        result={resultFromEntry(entry)}
-        remaining={null}
-        unlimited
-        readOnly
-        onScanAgain={close}
-        onOpenLanguages={() => setOverlay({ kind: 'languages' })}
-        onLookUp={(phrase, alt) => {
-          const q = phrase.trim();
-          if (q) {
-            setOverlay({ kind: 'lookup', q, alt });
+      {result ? (
+        <ResultCard
+          result={result}
+          remaining={null}
+          unlimited
+          readOnly
+          onScanAgain={close}
+          onShowOriginal={captureId && record ? () => setInspect(true) : undefined}
+          onPreparePack={captureId ? preparePack : undefined}
+          onOpenLanguages={() =>
+            setOverlay(
+              captureId ? { kind: 'languagePicker' } : { kind: 'languages' },
+            )
           }
-        }}
-      />
+          onLookUp={(phrase, alt) => {
+            const q = phrase.trim();
+            if (q) {
+              setOverlay({ kind: 'lookup', q, alt });
+            }
+          }}
+        />
+      ) : (
+        <View style={styles.center}>
+          {!captureId && loading ? (
+            <ActivityIndicator color={colors.accent} />
+          ) : !captureId ? (
+            <>
+              <MicroLabel tone="dim">RESULT NOT FOUND</MicroLabel>
+              <SolidButton label="BACK" icon="arrow-back" onPress={close} />
+            </>
+          ) : !loaded ? (
+            <ActivityIndicator color={colors.accent} />
+          ) : !record ? (
+            <>
+              <MicroLabel tone="dim">CAPTURE NOT FOUND</MicroLabel>
+              <SolidButton label="BACK" icon="arrow-back" onPress={close} />
+            </>
+          ) : record.status === 'failed' ? (
+            <View style={styles.statePanel}>
+              <MicroLabel tone="danger">OCR FAILED</MicroLabel>
+              <Text style={styles.stateText}>
+                {record.error || 'The text could not be read.'}
+              </Text>
+              <ChipButton
+                label="RETRY OCR"
+                icon="refresh"
+                active
+                disabled={languageBusy}
+                onPress={() => void retryCapture(record.id)}
+              />
+              <ChipButton
+                label="CHANGE OCR LANGUAGE"
+                icon="language-outline"
+                disabled={languageBusy}
+                onPress={() => setOverlay({ kind: 'languagePicker' })}
+              />
+            </View>
+          ) : record.status === 'done' && !captureText ? (
+            <View style={styles.statePanel}>
+              <MicroLabel tone="dim">NO TEXT FOUND</MicroLabel>
+              <Text style={styles.stateText}>
+                Tap the OCR language below if it misread the characters.
+              </Text>
+              <ChipButton
+                label={`OCR LANGUAGE · ${languageShortLabel(record.hint)}`}
+                icon="language-outline"
+                active
+                disabled={languageBusy}
+                onPress={() => setOverlay({ kind: 'languagePicker' })}
+              />
+              {languageBusy ? (
+                <MicroLabel tone="accent">UPDATING OCR…</MicroLabel>
+              ) : null}
+            </View>
+          ) : captureError ? (
+            <View style={styles.statePanel}>
+              <MicroLabel tone="danger">TRANSLATION FAILED</MicroLabel>
+              <Text style={styles.stateText}>{captureError}</Text>
+              <ChipButton
+                label="RETRY"
+                icon="refresh"
+                active
+                onPress={retryTranslation}
+              />
+              <ChipButton
+                label="CHANGE OCR LANGUAGE"
+                icon="language-outline"
+                disabled={languageBusy}
+                onPress={() => setOverlay({ kind: 'languagePicker' })}
+              />
+            </View>
+          ) : (
+            <View style={styles.statePanel}>
+              <ActivityIndicator color={colors.accent} />
+              <MicroLabel tone="accent">
+                {pending ? 'READING CAPTURE…' : 'TRANSLATING…'}
+              </MicroLabel>
+            </View>
+          )}
+        </View>
+      )}
+
       <TopBar
         remaining={null}
         unlimited
@@ -135,7 +389,11 @@ export default function ResultScreen() {
         onStart={close}
         onCapture={() => {}}
         onCancel={close}
-        onLanguages={() => setOverlay({ kind: 'languages' })}
+        onLanguages={() =>
+          setOverlay(
+            captureId ? { kind: 'languagePicker' } : { kind: 'languages' },
+          )
+        }
         readOnly
       />
       <ModeTabs
@@ -143,6 +401,7 @@ export default function ResultScreen() {
         onCamera={close}
         onTranslate={() => router.push('/translate')}
       />
+
       <AppSheet visible={overlay !== null} onClose={() => setOverlay(null)}>
         {overlay?.kind === 'lookup' ? (
           <LookupSheet
@@ -150,10 +409,43 @@ export default function ResultScreen() {
             alt={overlay.alt}
             onClose={() => setOverlay(null)}
           />
-        ) : overlay ? (
+        ) : overlay?.kind === 'languages' ? (
           <LanguagesSheet onClose={() => setOverlay(null)} />
+        ) : overlay?.kind === 'languagePicker' && record ? (
+          <LanguagePickerSheet
+            title="OCR LANGUAGE"
+            selected={record.hint || 'auto'}
+            allowAuto
+            onSelect={(code) => {
+              chooseLanguage(code);
+            }}
+          />
         ) : null}
       </AppSheet>
+
+      {inspect && record ? (
+        <View style={styles.inspect}>
+          <Image
+            source={{ uri: captures.uriFor(record.thumb) }}
+            style={styles.inspectImage}
+            resizeMode="contain"
+          />
+          <ScanlineOverlay />
+          <View style={styles.inspectBar}>
+            <ChipButton
+              label="CLOSE"
+              icon="close"
+              onPress={() => setInspect(false)}
+            />
+          </View>
+        </View>
+      ) : null}
+
+      {waiting && result ? (
+        <View style={styles.busy} pointerEvents="none">
+          <ActivityIndicator color={colors.accent} />
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -163,10 +455,49 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-  empty: {
+  center: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 24,
+    gap: spacing.md,
+    paddingHorizontal: 28,
+  },
+  statePanel: {
+    gap: spacing.sm,
+    alignItems: 'center',
+    maxWidth: 420,
+  },
+  stateText: {
+    ...typography.body,
+    color: colors.muted,
+    fontSize: 13,
+    lineHeight: 20,
+    textAlign: 'center',
+  },
+  inspect: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    backgroundColor: colors.background,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  inspectImage: {
+    width: '100%',
+    height: '80%',
+  },
+  inspectBar: {
+    position: 'absolute',
+    top: 64,
+    right: 20,
+  },
+  busy: {
+    position: 'absolute',
+    top: '50%',
+    left: 0,
+    right: 0,
+    alignItems: 'center',
   },
 });

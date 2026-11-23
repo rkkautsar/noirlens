@@ -1,7 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Haptics from 'expo-haptics';
-import { useRouter } from 'expo-router';
-import { useEffect, useRef, useState, type ComponentRef } from 'react';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { useCallback, useEffect, useRef, useState, type ComponentRef } from 'react';
 import {
   Animated,
   Platform,
@@ -32,6 +32,7 @@ import {
 } from '@/services/preferences';
 import { useSourceLanguage } from '@/services/sourceLanguage';
 import { captures, useCaptures } from '@/services/captures';
+import { consumeCaptureHistory } from '@/services/historyIntent';
 import type { CaptureRecord } from '@/services/captureModel';
 import { colors, typography } from '@/theme';
 import vision, { EcoCameraView } from '../modules/native-vision-translator';
@@ -69,6 +70,14 @@ export default function ScannerScreen() {
   const locked = state === 'LOCKED_READ' && result !== null;
   const exhausted =
     snapshot.remainingToday === 0 && snapshot.captureMode === 'read';
+
+  useFocusEffect(
+    useCallback(() => {
+      if (consumeCaptureHistory()) {
+        setOverlay({ kind: 'history' });
+      }
+    }, []),
+  );
 
   useEffect(() => {
     if (!flight) {

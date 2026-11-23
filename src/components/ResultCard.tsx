@@ -26,6 +26,7 @@ export function ResultCard({
   onShowOriginal,
   onOpenLanguages,
   onLookUp,
+  onPreparePack,
   readOnly = false,
   embedded = false,
 }: {
@@ -36,6 +37,8 @@ export function ResultCard({
   onShowOriginal?: () => void;
   onOpenLanguages: () => void;
   onLookUp: (phrase: string, alt?: string) => void;
+  /** Capture card: install the missing pack and retry this result. */
+  onPreparePack?: () => void;
   /** History replay: the primary action closes instead of rescanning. */
   readOnly?: boolean;
   /** Render inline (capture detail) instead of as a fixed full-screen card. */
@@ -94,25 +97,34 @@ export function ResultCard({
       ? `The ${language} offline pack is not installed. Download it once, then scan again. You can still read the source below.`
       : '';
 
-  const primaryLabel = readOnly
-    ? 'CLOSE'
-    : translated
-      ? 'SCAN AGAIN'
-      : packMissing
-        ? `GET ${shortLanguage} PACK`
-        : 'CHOOSE LANGUAGE';
-  const primaryIcon = readOnly
-    ? 'close'
-    : translated
-      ? 'refresh'
-      : packMissing
-        ? 'cloud-download-outline'
-        : 'language-outline';
-  const primaryAction = readOnly
-    ? onScanAgain
-    : translated
-      ? onScanAgain
-      : onOpenLanguages;
+  const primaryLabel =
+    packMissing && onPreparePack
+      ? `GET ${shortLanguage} PACK`
+      : readOnly
+        ? 'CLOSE'
+        : translated
+          ? 'SCAN AGAIN'
+          : packMissing
+            ? `GET ${shortLanguage} PACK`
+            : 'CHOOSE LANGUAGE';
+  const primaryIcon =
+    packMissing && onPreparePack
+      ? 'cloud-download-outline'
+      : readOnly
+        ? 'close'
+        : translated
+          ? 'refresh'
+          : packMissing
+            ? 'cloud-download-outline'
+            : 'language-outline';
+  const primaryAction =
+    packMissing && onPreparePack
+      ? onPreparePack
+      : readOnly
+        ? onScanAgain
+        : translated
+          ? onScanAgain
+          : onOpenLanguages;
   const lookupTerms = translated ? untranslatedTerms(result) : [];
   const lookupPattern = termPattern(lookupTerms);
   const sourceTerms = [

@@ -1,6 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Clipboard from 'expo-clipboard';
 import { useRouter } from 'expo-router';
+import { requestCaptureHistory } from '@/services/historyIntent';
 import { useEffect, useState } from 'react';
 import {
   Alert,
@@ -174,10 +175,13 @@ export function HistorySheet({
   };
 
   const openCapture = (record: CaptureRecord) => {
-    // Keep the sheet mounted underneath so Back returns to the captures list.
+    // Dismiss the native sheet before navigating, and ask the camera to
+    // reopen History when this result closes.
+    onClose();
+    requestCaptureHistory();
     router.push({
-      pathname: '/capture/[id]',
-      params: { id: record.id },
+      pathname: '/result',
+      params: { capture: record.id },
     });
   };
 
@@ -290,6 +294,8 @@ export function HistorySheet({
                       }`}
                       accessibilityHint="Opens the result to look up again"
                       onPress={() => {
+                        onClose();
+                        requestCaptureHistory();
                         router.push({
                           pathname: '/result',
                           params: { id: entry.id },

@@ -100,6 +100,8 @@ export default function ResultScreen() {
   const [packBusy, setPackBusy] = useState(false);
   const [captureNonce, setCaptureNonce] = useState(0);
   const translatedKey = useRef<string | null>(null);
+  const requestToken = useRef(0);
+  const packBusyRef = useRef(false);
 
   useEffect(() => {
     if (captureId) {
@@ -157,7 +159,8 @@ export default function ResultScreen() {
       setCaptureResult({ ...base, kind: 'english', translatedText: '' });
       return;
     }
-    let active = true;
+    const token = requestToken.current + 1;
+    requestToken.current = token;
     setTranslating(true);
     void vision
       .translate({
@@ -166,16 +169,17 @@ export default function ResultScreen() {
         targetLanguage: 'en',
       })
       .then((out) => {
-        if (active) {
-          setCaptureResult({
-            ...base,
-            kind: 'translated',
-            translatedText: out.translatedText,
-          });
+        if (token !== requestToken.current) {
+          return;
         }
+        setCaptureResult({
+          ...base,
+          kind: 'translated',
+          translatedText: out.translatedText,
+        });
       })
       .catch((error) => {
-        if (!active) {
+        if (token !== requestToken.current) {
           return;
         }
         if (isLanguagePackFailure(error)) {
@@ -185,13 +189,10 @@ export default function ResultScreen() {
         }
       })
       .finally(() => {
-        if (active) {
+        if (token === requestToken.current) {
           setTranslating(false);
         }
       });
-    return () => {
-      active = false;
-    };
   }, [captureId, record, captureNonce]);
 
   const close = () => {
@@ -216,6 +217,7 @@ export default function ResultScreen() {
     setCaptureResult(null);
     setTranslating(false);
     translatedKey.current = null;
+    requestToken.current += 1;
     void rerunCaptureOcr(record.id, next)
       .catch(() => {
         setCaptureError('Could not change the OCR language. Try again.');
@@ -226,9 +228,10 @@ export default function ResultScreen() {
   };
 
   const preparePack = async () => {
-    if (!record) {
+    if (!record || packBusyRef.current) {
       return;
     }
+    packBusyRef.current = true;
     setPackBusy(true);
     setCaptureError(null);
     try {
@@ -237,21 +240,26 @@ export default function ResultScreen() {
         'en',
       );
       if (status.status !== 'installed') {
-        setCaptureError('That offline pack is not available on this device.');
+        setCaptureResult(null);
+        setCaptureError('The pack did not finish installing. Try again.');
         return;
       }
       translatedKey.current = null;
       setCaptureNonce((value) => value + 1);
     } catch (error) {
+      setCaptureResult(null);
       setCaptureError(describeNativeError(error).message);
     } finally {
+      packBusyRef.current = false;
       setPackBusy(false);
     }
   };
 
   const retryTranslation = () => {
     setCaptureError(null);
+    setCaptureResult(null);
     translatedKey.current = null;
+    requestToken.current += 1;
     setCaptureNonce((value) => value + 1);
   };
 
@@ -269,7 +277,8 @@ export default function ResultScreen() {
           captureText.length > 0 &&
           !captureResult &&
           !captureError) ||
-        translating),
+        translating ||
+        packBusy),
   );
 
   return (
@@ -311,6 +320,23 @@ export default function ResultScreen() {
               <MicroLabel tone="dim">CAPTURE NOT FOUND</MicroLabel>
               <SolidButton label="BACK" icon="arrow-back" onPress={close} />
             </>
+          ) : captureError ? (
+            <View style={styles.statePanel}>
+              <MicroLabel tone="danger">TRANSLATION FAILED</MicroLabel>
+              <Text style={styles.stateText}>{captureError}</Text>
+              <ChipButton
+                label="RETRY"
+                icon="refresh"
+                active
+                onPress={retryTranslation}
+              />
+              <ChipButton
+                label="CHANGE OCR LANGUAGE"
+                icon="language-outline"
+                disabled={languageBusy}
+                onPress={() => setOverlay({ kind: 'languagePicker' })}
+              />
+            </View>
           ) : record.status === 'failed' ? (
             <View style={styles.statePanel}>
               <MicroLabel tone="danger">OCR FAILED</MicroLabel>
@@ -347,23 +373,6 @@ export default function ResultScreen() {
               {languageBusy ? (
                 <MicroLabel tone="accent">UPDATING OCR…</MicroLabel>
               ) : null}
-            </View>
-          ) : captureError ? (
-            <View style={styles.statePanel}>
-              <MicroLabel tone="danger">TRANSLATION FAILED</MicroLabel>
-              <Text style={styles.stateText}>{captureError}</Text>
-              <ChipButton
-                label="RETRY"
-                icon="refresh"
-                active
-                onPress={retryTranslation}
-              />
-              <ChipButton
-                label="CHANGE OCR LANGUAGE"
-                icon="language-outline"
-                disabled={languageBusy}
-                onPress={() => setOverlay({ kind: 'languagePicker' })}
-              />
             </View>
           ) : (
             <View style={styles.statePanel}>

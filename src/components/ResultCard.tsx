@@ -28,7 +28,6 @@ export function ResultCard({
   onLookUp,
   onPreparePack,
   readOnly = false,
-  embedded = false,
 }: {
   result: ScanResult;
   remaining: number | null;
@@ -41,8 +40,6 @@ export function ResultCard({
   onPreparePack?: () => void;
   /** History replay: the primary action closes instead of rescanning. */
   readOnly?: boolean;
-  /** Render inline (capture detail) instead of as a fixed full-screen card. */
-  embedded?: boolean;
 }) {
   const insets = useSafeAreaInsets();
   const [copied, setCopied] = useState(false);
@@ -410,18 +407,6 @@ export function ResultCard({
     />
   ) : null;
 
-  if (embedded) {
-    return (
-      <View style={styles.embedded}>
-        <View style={[styles.content, styles.embeddedContent]}>{bodyContent}</View>
-        <View style={[styles.actions, styles.embeddedActions]}>
-          {actionButtons}
-        </View>
-        {tooltip}
-      </View>
-    );
-  }
-
   return (
     <View style={styles.container}>
       <ScrollView
@@ -531,23 +516,5 @@ const styles = StyleSheet.create({
   },
   footer: {
     marginTop: 8,
-  },
-  embedded: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 16,
-    backgroundColor: colors.surface,
-    overflow: 'hidden',
-  },
-  embeddedContent: {
-    paddingTop: 16,
-    paddingBottom: 4,
-    paddingHorizontal: 16,
-    gap: 14,
-  },
-  embeddedActions: {
-    paddingHorizontal: 16,
-    paddingBottom: 14,
-    justifyContent: 'flex-end',
   },
 });

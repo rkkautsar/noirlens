@@ -60,7 +60,7 @@ export default function ScannerScreen() {
   const [overlay, setOverlay] = useState<
     | { kind: 'lookup'; q: string; alt?: string }
     | { kind: 'languages' }
-    | { kind: 'history' }
+    | { kind: 'history'; tab?: 'translations' | 'captures' }
     | null
   >(null);
 
@@ -73,8 +73,9 @@ export default function ScannerScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      if (consumeCaptureHistory()) {
-        setOverlay({ kind: 'history' });
+      const tab = consumeCaptureHistory();
+      if (tab) {
+        setOverlay({ kind: 'history', tab });
       }
     }, []),
   );
@@ -471,8 +472,10 @@ export default function ScannerScreen() {
         ) : overlay ? (
           <HistorySheet
             initialTab={
-              snapshot.captureMode === 'collect' ? 'captures' : 'translations'
+              overlay.tab ??
+              (snapshot.captureMode === 'collect' ? 'captures' : 'translations')
             }
+            reopenOnReturn
             onClose={() => setOverlay(null)}
           />
         ) : null}

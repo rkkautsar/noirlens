@@ -1,14 +1,16 @@
-// A one-shot request to open the capture history after returning to the
-// camera. The camera screen consumes it on focus, so the capture detail can
-// dismiss itself without leaving a duplicate route or a URL param.
-let pending = false;
+// A one-shot request to reopen the capture history on the camera after a
+// result closes. The requesting sheet passes the tab the user left, so the
+// camera restores that tab rather than its mode default.
+export type HistoryTab = 'translations' | 'captures';
 
-export function requestCaptureHistory(): void {
-  pending = true;
+let pending: HistoryTab | null = null;
+
+export function requestCaptureHistory(tab: HistoryTab): void {
+  pending = tab;
 }
 
-export function consumeCaptureHistory(): boolean {
+export function consumeCaptureHistory(): HistoryTab | null {
   const value = pending;
-  pending = false;
+  pending = null;
   return value;
 }

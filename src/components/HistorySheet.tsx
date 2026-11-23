@@ -126,10 +126,13 @@ export function HistorySheet({
   demo = false,
   initialTab = 'translations',
   onClose,
+  reopenOnReturn = false,
 }: {
   demo?: boolean;
   initialTab?: HistoryTab;
   onClose: () => void;
+  /** The camera sheet asks the camera to reopen this same tab on return. */
+  reopenOnReturn?: boolean;
 }) {
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -178,7 +181,9 @@ export function HistorySheet({
     // Dismiss the native sheet before navigating, and ask the camera to
     // reopen History when this result closes.
     onClose();
-    requestCaptureHistory();
+    if (reopenOnReturn) {
+      requestCaptureHistory(tab);
+    }
     router.push({
       pathname: '/result',
       params: { capture: record.id },
@@ -295,7 +300,9 @@ export function HistorySheet({
                       accessibilityHint="Opens the result to look up again"
                       onPress={() => {
                         onClose();
-                        requestCaptureHistory();
+                        if (reopenOnReturn) {
+                          requestCaptureHistory(tab);
+                        }
                         router.push({
                           pathname: '/result',
                           params: { id: entry.id },

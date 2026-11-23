@@ -452,9 +452,8 @@ export default function CaptureDetailScreen() {
                 <Ionicons name="chevron-down" size={12} color={colors.muted} />
               </Pressable>
               <ChipButton
-                label="Translate all text"
+                label="TRANSLATE ALL"
                 icon="language-outline"
-                iconOnly
                 onPress={() => void translate(record.text, setAll, allRequest)}
               />
             </View>
@@ -729,6 +728,7 @@ const styles = StyleSheet.create({
   regionActions: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'flex-end',
     gap: 8,
   },
   hint: {

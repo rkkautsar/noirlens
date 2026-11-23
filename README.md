@@ -45,7 +45,7 @@ The camera never starts from this tab.
 - `expo-router`, `expo-clipboard`, `expo-haptics`, `expo-keep-awake`, `expo-localization`, `@react-native-async-storage/async-storage`
 - Local Expo module `modules/native-vision-translator` (Swift, iOS 18 deployment target)
   - `AVCaptureSession` power lifecycle, 720p/30 fps
-  - CoreImage luma-edge HUD (`CIEdges` + `CIColorMonochrome`, 15 fps)
+  - Noir preview mode: the live color preview dimmed by a black overlay with a repeating CRT scanline layer (no per-frame processing)
   - Three-frame capture with an edge-sharpness pick, reticle crop, JPEG + thumbnail encoding
   - `VNRecognizeTextRequest` with paragraph and vertical-CJK grouping, confidence/noise filters
   - Apple `Translation` (`TranslationSession`, `LanguageAvailability`) with the system pack download prompt, for any source→target pair
@@ -145,9 +145,9 @@ The table is an order-of-magnitude model, not a measurement, for an iPhone 13 (1
 
 Assumptions: rear camera + preview at about 1.2–1.8 W for our 720p session and 2–3 W for a higher-resolution preview plus a continuous Vision OCR loop; one OCR pass on a captured frame about 0.5 J; one translation about 1 J. A 2026 sensor-battery study found the rear camera to be the iPhone's most demanding sensor — about [six minutes of battery per percent](https://pmc.ncbi.nlm.nih.gov/articles/PMC13211051/) with no preview or recording at all — so the live-overlay rows are if anything conservative. Expect the real numbers to be off by a factor of two; the ordering is the point.
 
-The screen is a second saving the table does not count, and the freeze frame makes it larger. The standby and result screens are almost entirely `#000000`, which an OLED panel renders with the pixels off, and the app never raises the display brightness — auto-brightness stays in charge. While aiming, the default eco mode hides the full-color preview and draws a low-luminance edge/scanline HUD at 15 fps on black. A point-and-freeze translator instead shows the full-color camera image while pointing and keeps the full-color still on screen while the user reads the translation.
+The screen is a second saving the table does not count, and the freeze frame makes it larger. The standby and result screens are almost entirely `#000000`, which an OLED panel renders with the pixels off, and the app never raises the display brightness — auto-brightness stays in charge. While aiming, the default Noir mode keeps the live preview but dims it with a 72% black overlay and lines a repeating CRT scanline layer over it; no per-frame edge filter or 15 fps GPU pass runs. A point-and-freeze translator instead shows the undimmed full-color camera image while pointing and keeps the full-color still on screen while the user reads the translation.
 
-At typical indoor brightness a full-color image costs roughly 0.5–1 W of display power; a mostly-black UI with thin warm-white lines costs roughly 0.05–0.2 W. Over the same ten minutes the Apple-style flows keep full-color content on screen for essentially the whole session (live preview plus the frozen still), about 0.08–0.17 Wh (0.7–1.4% of the battery); NoirLens spends 0.01–0.02 Wh (0.1–0.2%). That is on top of the table — the screen is on while the user reads in both cases — and it is the largest design difference after the sensor itself.
+At typical indoor brightness an undimmed color image costs roughly 0.5–1 W of display power; the dimmed, scanlined preview roughly 0.1–0.2 W, and a black result screen with text roughly 0.05–0.15 W. Over the same ten minutes the Apple-style flows keep full-color content on screen for essentially the whole session (live preview plus the frozen still), about 0.08–0.17 Wh (0.7–1.4% of the battery); NoirLens spends 0.01–0.02 Wh (0.1–0.2%). That is on top of the table — the screen is on while the user reads in both cases — and it is the largest design difference after the sensor itself.
 
 For a real number, run a fixed script on the phone and read Xcode's Energy Log or Settings → Battery per app. The model above is only a design argument: between scans there is no sensor, no OCR loop, no translation work, and almost no lit pixels.
 
@@ -157,7 +157,7 @@ For a real number, run a fixed script on the phone and read Xcode's Energy Log o
 - Collect reuses that same capture path; the camera is already off while the JPEG is written and OCR runs in a bounded queue (two at a time, keyed by capture id so an old result can never land on a newer capture).
 - The eco HUD runs a GPU-backed CoreImage edge pass over the 720p frame at 15 fps; the color preview layer is hidden in that mode.
 - 720p/30 fps is the ceiling. HDR video, low-light boost, subject-area monitoring, and multi-camera devices are not used.
-- Screen brightness is never touched; the OLED standby (pure black, pixels off) plus auto-brightness handle idle power, and the aiming HUD is thin edges on black rather than a full-color preview. The scanner keeps the screen awake while mounted.
+- Screen brightness is never touched; the OLED standby (pure black, pixels off) plus auto-brightness handle idle power, and the aiming view is dimmed with scanlines rather than an undimmed full-color preview. The scanner keeps the screen awake while mounted.
 - Backgrounding forces `SLEEP` and stops the session. Leaving a screen does the same; a frozen result is never interrupted.
 
 ## Verify

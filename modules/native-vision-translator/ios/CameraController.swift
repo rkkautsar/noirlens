@@ -19,8 +19,9 @@ struct CapturedFrame {
  The session is configured once at 1280x720 / 30fps, never 4K and never
  multi-camera. `stop()` calls `stopRunning()`, which powers down the sensor,
  voice-coil autofocus and ISP until the next arm. Frame buffers are delivered
- on a background queue. The low-power edge HUD is derived on the GPU at 15 fps,
- while the untouched pixel buffer is handed to Vision on capture.
+ on a background queue. The Noir preview is composited by the view (dim +
+ scanlines) with no per-frame processing, while the untouched pixel buffer is
+ handed to Vision on capture.
  */
 final class CameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, @unchecked Sendable {
   static let shared = CameraController()

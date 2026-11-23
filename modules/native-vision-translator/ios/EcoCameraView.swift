@@ -5,10 +5,10 @@ import UIKit
 /**
  Full-screen camera surface with two render modes:
 
- - `ecoMode == true`: a luma-edge HUD in warm white over pure black. The
-   preview layer is hidden; CoreImage's edge pass runs at 15fps on the video
-   queue, so the OLED only lights the outlines.
- - `ecoMode == false`: the normal color preview from `AVCaptureVideoPreviewLayer`.
+ - `ecoMode == true` (Noir): the live preview dimmed by a black overlay with a
+   repeating CRT scanline layer over it. No per-frame filter runs; the OLED
+   emits a fraction of the light of the undimmed preview.
+ - `ecoMode == false`: the undimmed color preview from `AVCaptureVideoPreviewLayer`.
 
  The view never owns the capture session; `CameraController` powers it up and
  down from the JS state machine.

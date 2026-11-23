@@ -1,5 +1,5 @@
 import { readMeta, writeMeta } from './db';
-import { romanTermSpans } from './romanize';
+import { COMMON_ENGLISH, romanTermSpans } from './romanize';
 
 export interface LookupResult {
   title: string;
@@ -217,12 +217,72 @@ function containsTerm(translated: string, term: string): boolean {
   }
   try {
     return new RegExp(
-      `(?<![\p{L}\p{N}])${escapeRegExp(term)}(?![\p{L}\p{N}])`,
+      `(?<![\\p{L}\\p{N}])${escapeRegExp(term)}(?![\\p{L}\\p{N}])`,
       'iu',
     ).test(translated);
   } catch {
     return translated.includes(term);
   }
+}
+
+function isWordCharacter(value: string | undefined): boolean {
+  return value !== undefined && /[\p{L}\p{N}]/u.test(value);
+}
+
+interface NormalizedText {
+  text: string;
+  startMap: number[];
+  endMap: number[];
+}
+
+function normalizeWithMap(text: string): NormalizedText {
+  let normalized = '';
+  const startMap: number[] = [];
+  const endMap: number[] = [];
+  for (let index = 0; index < text.length; index += 1) {
+    const base = text[index]!
+      .normalize('NFD')
+      .replace(/\p{Diacritic}/gu, '')
+      .toLowerCase();
+    for (let offset = 0; offset < base.length; offset += 1) {
+      normalized += base[offset];
+      startMap.push(index);
+      endMap.push(index + 1);
+    }
+  }
+  return { text: normalized, startMap, endMap };
+}
+
+function normalizedSpans(
+  translated: NormalizedText,
+  candidates: string[],
+): LookupSpan[] {
+  const spans: LookupSpan[] = [];
+  for (const candidate of candidates) {
+    const needle = normalizeTerm(candidate);
+    if (needle.length < 3) {
+      continue;
+    }
+    let from = 0;
+    for (;;) {
+      const at = translated.text.indexOf(needle, from);
+      if (at < 0) {
+        break;
+      }
+      const before = translated.text[at - 1];
+      const after = translated.text[at + needle.length];
+      const cjk = isCjkTerm(candidate);
+      if (cjk || (!isWordCharacter(before) && !isWordCharacter(after))) {
+        spans.push({
+          start: translated.startMap[at]!,
+          end: translated.endMap[at + needle.length - 1]!,
+          text: '',
+        });
+      }
+      from = at + Math.max(1, needle.length);
+    }
+  }
+  return spans;
 }
 
 function sourceTermCandidates(result: {
@@ -235,7 +295,13 @@ function sourceTermCandidates(result: {
       .filter((text) => text.length > 0 && text.split(/\s+/).length <= 4),
     ...result.sourceText
       .split(/[^\p{L}\p{N}]+/u)
-      .filter((word) => word.length >= 2),
+      .filter(
+        (word) =>
+          word.length >= 2 &&
+          !COMMON_ENGLISH.has(
+            word.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase(),
+          ),
+      ),
   ];
 }
 
@@ -264,10 +330,9 @@ export function untranslatedTerms(result: {
     if (words.length === 0 || words.length > 4) {
       continue;
     }
-    if (
-      normalizeTerm(text).length >= 3 &&
-      containsTerm(result.translatedText, text)
-    ) {
+    const enough =
+      isCjkTerm(text) || normalizeTerm(text).length >= 3;
+    if (enough && containsTerm(result.translatedText, text)) {
       terms.push(text);
     }
   }
@@ -317,21 +382,54 @@ export function lookupSpans(result: {
   if (pattern) {
     for (const match of text.matchAll(pattern)) {
       const start = match.index ?? 0;
-      spans.push({ start, end: start + match[0].length, text: match[0] });
+      const matched = match[0];
+      const end = start + matched.length;
+      // The pattern is unbounded; drop matches inside a larger word unless the
+      // term is CJK/Thai (no word separators).
+      if (
+        !isCjkTerm(matched) &&
+        (isWordCharacter(text[start - 1]) || isWordCharacter(text[end]))
+      ) {
+        continue;
+      }
+      spans.push({ start, end, text: matched });
     }
+  }
+  const normalized = normalizeWithMap(text);
+  for (const span of normalizedSpans(
+    normalized,
+    sourceTermCandidates(result),
+  )) {
+    span.text = text.slice(span.start, span.end);
+    spans.push(span);
   }
   for (const span of romanTermSpans(text, sourceTermCandidates(result))) {
     spans.push({ start: span.start, end: span.end, text: span.word });
   }
   spans.sort(
-    (a, b) => a.start - b.start || (b.end - b.start) - (a.end - a.start),
+    (a, b) => a.start - b.start || b.end - a.end,
+  );
+  return spans;
+}
+
+/**
+ * Tappable term spans after price ranges win and overlaps resolve to the
+ * first-longest span. Kept separate from lookupSpans so a shorter term hidden
+ * under a priced line can survive once the priced span is removed.
+ */
+export function resolveTermSpans(
+  terms: LookupSpan[],
+  prices: Array<{ start: number; end: number }> = [],
+): LookupSpan[] {
+  const withoutPrices = terms.filter(
+    (term) => !prices.some((price) => term.start < price.end && term.end > price.start),
   );
   const kept: LookupSpan[] = [];
-  for (const span of spans) {
-    if (
-      !kept.some((existing) => span.start < existing.end && span.end > existing.start)
-    ) {
-      kept.push(span);
+  let lastEnd = 0;
+  for (const term of withoutPrices) {
+    if (term.start >= lastEnd) {
+      kept.push(term);
+      lastEnd = term.end;
     }
   }
   return kept;

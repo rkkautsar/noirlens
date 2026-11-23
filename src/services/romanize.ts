@@ -183,7 +183,7 @@ export interface RomanSpan {
  */
 // Common English translations of foreign words; a romanized source that lands
 // on one of these was translated, not retained, so it is not a lookup term.
-const COMMON_ENGLISH = new Set([
+export const COMMON_ENGLISH = new Set([
   'about', 'after', 'again', 'airport', 'ancient', 'another', 'bakery', 'bank',
   'beach', 'before', 'best', 'bridge', 'building', 'cafe', 'center', 'centre',
   'church', 'city', 'coffee', 'coffeeshop', 'food', 'famous', 'garden', 'great',
@@ -199,10 +199,15 @@ export function romanTermSpans(
   text: string,
   sourceTerms: string[],
 ): RomanSpan[] {
-  const romans = sourceTerms
-    .map((term) => romanize(term).toLowerCase())
-    .filter((roman) => roman.length >= 4);
-  if (romans.length === 0) {
+  const entries = sourceTerms
+    .map((term) => ({
+      roman: romanize(term).toLowerCase(),
+      // Latin source terms already match literally with word boundaries; the
+      // fuzzy prefix/suffix fallback is only for transliterations.
+      fuzzy: !/^[\p{Script=Latin}\p{N}\p{P}\p{Z}]+$/u.test(term),
+    }))
+    .filter((entry) => entry.roman.length >= 4);
+  if (entries.length === 0) {
     return [];
   }
   const spans: RomanSpan[] = [];
@@ -215,12 +220,15 @@ export function romanTermSpans(
     if (COMMON_ENGLISH.has(lower)) {
       continue;
     }
-    const hit = romans.some(
-      (roman) =>
-        roman.includes(lower) ||
-        lower.includes(roman) ||
-        (lower.length >= 6 &&
-          (roman.includes(lower.slice(-6)) || roman.includes(lower.slice(0, 6)))),
+    const hit = entries.some(
+      ({ roman, fuzzy }) =>
+        roman === lower ||
+        (fuzzy &&
+          (roman.includes(lower) ||
+            lower.includes(roman) ||
+            (lower.length >= 6 &&
+              (roman.includes(lower.slice(-6)) ||
+                roman.includes(lower.slice(0, 6)))))),
     );
     if (hit) {
       const start = match.index ?? 0;

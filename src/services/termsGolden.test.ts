@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { lookupSpans } from './lookup';
+import { lookupSpans, resolveTermSpans } from './lookup';
 import { TERMS_GOLDEN } from './termsGolden';
 
 interface Occurrence {
@@ -26,35 +26,53 @@ function overlaps(a: Occurrence, b: Occurrence): boolean {
 }
 
 describe('lookup terms golden set', () => {
-  it('meets the precision/recall floor on paired translations', () => {
+  it('meets the exact-term precision/recall floor on paired translations', () => {
     let tp = 0;
     let fp = 0;
     let fn = 0;
     const misses: string[] = [];
 
     for (const entry of TERMS_GOLDEN) {
-      const spans = lookupSpans({
-        sourceText: entry.blocks.join(' '),
-        translatedText: entry.translatedText,
-        blocks: entry.blocks.map((text) => ({ text })),
-      });
-      const expected = entry.expected.flatMap((term) =>
+      const priceRanges = (entry.prices ?? []).flatMap((term) =>
         occurrences(entry.translatedText, term),
       );
-      const caseTp = expected.filter((hit) =>
-        spans.some((span) => overlaps(span, hit)),
-      ).length;
-      const caseFp = spans.filter(
-        (span) => !expected.some((hit) => overlaps(span, hit)),
-      ).length;
+      const spans = resolveTermSpans(
+        lookupSpans({
+          sourceText: entry.blocks.join(' '),
+          translatedText: entry.translatedText,
+          blocks: entry.blocks.map((text) => ({ text })),
+        }),
+        priceRanges,
+      );
+      const predicted = new Set(
+        spans.map((span) => span.text.trim().toLowerCase()),
+      );
+      const expected = new Set(
+        entry.expected.map((term) => term.trim().toLowerCase()),
+      );
+      let caseTp = 0;
+      let caseFp = 0;
+      let caseFn = 0;
+      for (const term of expected) {
+        if (predicted.has(term)) {
+          caseTp += 1;
+        } else {
+          caseFn += 1;
+        }
+      }
+      for (const term of predicted) {
+        if (!expected.has(term)) {
+          caseFp += 1;
+        }
+      }
       tp += caseTp;
       fp += caseFp;
-      fn += expected.length - caseTp;
-      if (caseTp !== expected.length || caseFp > 0) {
+      fn += caseFn;
+      if (caseTp !== expected.size || caseFp > 0) {
         misses.push(
-          `${entry.id}: tp=${caseTp}/${expected.length} fp=${caseFp} spans=${JSON.stringify(
-            spans.map((span) => span.text),
-          )}`,
+          `${entry.id}: tp=${caseTp}/${expected.size} fp=${caseFp} predicted=${JSON.stringify([
+            ...predicted,
+          ])}`,
         );
       }
     }
@@ -71,9 +89,8 @@ describe('lookup terms golden set', () => {
         JSON.stringify({ tp, fp, fn, precision, recall, f1, misses }, null, 2),
       );
     }
-    // Keep the floor below the measured result; raise it as the detector improves.
-    expect(recall).toBeGreaterThanOrEqual(0.85);
-    expect(precision).toBeGreaterThanOrEqual(0.85);
-    expect(f1).toBeGreaterThanOrEqual(0.85);
+    expect(recall).toBeGreaterThanOrEqual(0.9);
+    expect(precision).toBeGreaterThanOrEqual(0.9);
+    expect(f1).toBeGreaterThanOrEqual(0.9);
   });
 });

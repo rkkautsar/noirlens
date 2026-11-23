@@ -1,5 +1,5 @@
 import * as Clipboard from 'expo-clipboard';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { languageLabel, languageShortLabel } from '@/constants/languages';
@@ -10,7 +10,7 @@ import {
   type PriceConversion,
 } from '@/services/currency';
 import { preferredCurrency } from '@/services/localeCurrency';
-import { lookupSpans } from '@/services/lookup';
+import { lookupSpans, resolveTermSpans } from '@/services/lookup';
 import { romanize } from '@/services/romanize';
 import { romanizeNative } from '@/services/romanizeNative';
 import { colors, typography } from '@/theme';
@@ -68,7 +68,10 @@ export function ResultBody({
       ? `The ${language} offline pack is not installed. Download it once, then scan again. You can still read the source below.`
       : '';
 
-  const termSpans = translated ? lookupSpans(result) : [];
+  const termSpans = useMemo(
+    () => (translated ? lookupSpans(result) : []),
+    [result, translated],
+  );
   const translationPrices = priceConversions(
     result.translatedText,
     result.sourceLanguage,
@@ -160,15 +163,20 @@ export function ResultBody({
     for (const price of translationPrices) {
       spans.push({ start: price.start, end: price.end, kind: 'price', price });
     }
-    const priceSpans = spans.filter((span) => span.kind === 'price');
-    const kept = spans.filter(
-      (span) =>
-        span.kind === 'price' ||
-        !priceSpans.some(
-          (price) => span.start < price.end && span.end > price.start,
-        ),
-    );
-    kept.sort((a, b) => a.start - b.start);
+    const termOnly = resolveTermSpans(termSpans, translationPrices);
+    const kept = [
+      ...termOnly.map((span) => ({
+        start: span.start,
+        end: span.end,
+        kind: 'term' as const,
+      })),
+      ...translationPrices.map((price) => ({
+        start: price.start,
+        end: price.end,
+        kind: 'price' as const,
+        price,
+      })),
+    ].sort((a, b) => a.start - b.start);
     const parts: React.ReactNode[] = [];
     let cursor = 0;
     for (const span of kept) {

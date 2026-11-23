@@ -205,18 +205,15 @@ enum TranslationBridge {
     var root = topViewController()
     // A sheet being dismissed (e.g. History -> result) still hosts the top
     // controller for a few frames. Presenting into that transition makes
-    // UIKit drop the presentation, so wait for the chain to settle first.
+    // UIKit drop the presentation, so wait for a controller that is fully
+    // attached, not presenting, and not moving through a transition.
     var waited = 0
-    while let current = root,
-          current.presentedViewController != nil
-            || current.transitionCoordinator != nil
-            || current.isBeingDismissed,
-          waited < 20 {
+    while !isReadyForPresentation(root), waited < 20 {
       try? await Task.sleep(nanoseconds: 100_000_000)
       root = topViewController()
       waited += 1
     }
-    guard let presenter = root, presenter.presentedViewController == nil else {
+    guard let presenter = root, isReadyForPresentation(presenter) else {
       throw Exception(
         name: "PresentationBusy",
         description: "A sheet is still closing; the translation host could not be presented.",
@@ -231,6 +228,19 @@ enum TranslationBridge {
       target: target,
       from: presenter
     )
+  }
+
+  @MainActor
+  private static func isReadyForPresentation(_ controller: UIViewController?) -> Bool {
+    guard let controller,
+          controller.presentedViewController == nil,
+          controller.transitionCoordinator == nil,
+          !controller.isBeingDismissed,
+          controller.view.window != nil
+    else {
+      return false
+    }
+    return true
   }
 
   @MainActor
@@ -254,6 +264,7 @@ private final class TranslationHostCoordinator {
   private var host: UIHostingController<TranslationHostView>?
   private var continuation: CheckedContinuation<String?, Error>?
   private var selfReference: TranslationHostCoordinator?
+  private var attachmentCheck: Task<Void, Never>?
 
   func run(
     text: String?,
@@ -277,9 +288,14 @@ private final class TranslationHostCoordinator {
       host.modalPresentationStyle = .overFullScreen
       host.view.backgroundColor = .clear
       self.host = host
-      root.present(host, animated: false) { @MainActor [weak self] in
-        guard let self else { return }
-        if root.presentedViewController !== host && host.view.window == nil {
+      root.present(host, animated: false)
+      // UIKit does not guarantee the present completion when it rejects an
+      // overlapping presentation, so verify attachment independently and
+      // fail the continuation rather than leaving it unresolved.
+      self.attachmentCheck = Task { @MainActor [weak self] in
+        try? await Task.sleep(nanoseconds: 800_000_000)
+        guard let self, self.host === host else { return }
+        if host.presentingViewController == nil && host.view.window == nil {
           self.finish(
             .failure(
               Exception(
@@ -295,6 +311,8 @@ private final class TranslationHostCoordinator {
   }
 
   private func finish(_ result: Result<String?, Error>) {
+    attachmentCheck?.cancel()
+    attachmentCheck = nil
     host?.dismiss(animated: false)
     host = nil
     selfReference = nil

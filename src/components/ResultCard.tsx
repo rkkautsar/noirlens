@@ -145,10 +145,15 @@ export function ResultCard({
           key={`source-price-${price.start}`}
           style={styles.priceTerm}
           onPress={(event) => {
+            const native = (
+              event as
+                | { nativeEvent?: { pageX?: number; pageY?: number } }
+                | undefined
+            )?.nativeEvent;
             setPriceTip({
               price,
-              x: event.nativeEvent.pageX,
-              y: event.nativeEvent.pageY,
+              x: native?.pageX ?? Number.NaN,
+              y: native?.pageY ?? Number.NaN,
             });
           }}
         >
@@ -238,10 +243,15 @@ export function ResultCard({
           style={span.kind === 'price' ? styles.priceTerm : styles.lookupTerm}
           onPress={(event) => {
             if (span.kind === 'price' && span.price) {
+              const native = (
+                event as
+                  | { nativeEvent?: { pageX?: number; pageY?: number } }
+                  | undefined
+              )?.nativeEvent;
               setPriceTip({
                 price: span.price,
-                x: event.nativeEvent.pageX,
-                y: event.nativeEvent.pageY,
+                x: native?.pageX ?? Number.NaN,
+                y: native?.pageY ?? Number.NaN,
               });
             } else {
               onLookUp(slice);

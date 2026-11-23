@@ -30,12 +30,14 @@ export function PriceTooltip({
   onClose: () => void;
 }) {
   const { width, height } = useWindowDimensions();
+  const cx = Number.isFinite(x) ? x : width / 2;
+  const cy = Number.isFinite(y) ? y : height / 2;
   const left = Math.max(
     12,
-    Math.min(x - CARD_WIDTH / 2, width - CARD_WIDTH - 12),
+    Math.min(cx - CARD_WIDTH / 2, width - CARD_WIDTH - 12),
   );
-  const below = y + 110 < height;
-  const top = below ? y + 18 : y - 96;
+  const below = cy + 110 < height;
+  const top = below ? cy + 18 : cy - 96;
 
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="box-none">

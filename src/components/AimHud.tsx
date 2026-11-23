@@ -34,11 +34,18 @@ export function AimHud({
     if (size <= 0 || windowWidth <= 0 || windowHeight <= 0) {
       return;
     }
+    // OCR sees a margin of context around the framed box, so the capture
+    // crop is larger than the reticle while the reticle stays small.
+    const pad = size * 0.16;
+    const left = Math.max(0, x + (width - size) / 2 - pad);
+    const top = Math.max(0, y + (height - size) / 2 - pad);
+    const cropWidth = Math.min(windowWidth - left, size + pad * 2);
+    const cropHeight = Math.min(windowHeight - top, size + pad * 2);
     onReticleFrame({
-      x: (x + (width - size) / 2) / windowWidth,
-      y: (y + (height - size) / 2) / windowHeight,
-      width: size / windowWidth,
-      height: size / windowHeight,
+      x: left / windowWidth,
+      y: top / windowHeight,
+      width: cropWidth / windowWidth,
+      height: cropHeight / windowHeight,
     });
   };
 

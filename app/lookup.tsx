@@ -116,7 +116,11 @@ export default function LookupScreen() {
           label="CLOSE"
           icon="close"
           onPress={() => {
-            router.back();
+            if (router.canGoBack()) {
+              router.back();
+            } else {
+              router.replace('/preview');
+            }
           }}
         />
       </View>

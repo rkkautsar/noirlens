@@ -75,23 +75,54 @@ export interface NativeVisionTranslatorModule extends NativeModule {
   getSupportedLanguages(): Promise<string[]>;
 }
 
+const WEB_MOCK_OCR: OcrPayload = {
+  text: 'Bánh mì thịt — 45.000đ',
+  sourceLanguage: 'vi',
+  confidence: 0.95,
+  blocks: [
+    {
+      text: 'Bánh mì thịt',
+      confidence: 0.95,
+      x: 0.12,
+      y: 0.25,
+      width: 0.76,
+      height: 0.1,
+    },
+    {
+      text: '45.000đ',
+      confidence: 0.9,
+      x: 0.6,
+      y: 0.5,
+      width: 0.3,
+      height: 0.07,
+    },
+  ],
+  imageWidth: 1000,
+  imageHeight: 1000,
+  sourceHash: 'web-mock',
+};
+
+const WEB_MOCK_TRANSLATION =
+  'Bánh mì thịt is a Vietnamese sandwich with pork, pâté and pickled vegetables. It costs 45,000 VND.';
+
 const webMock = {
   startCamera: async () => {},
   stopCamera: async () => {},
   setTorch: async () => {},
-  recognizeLast: async () => {
-    throw new Error('Camera is not available in the web preview.');
-  },
+  recognizeLast: async () => WEB_MOCK_OCR,
   getCameraStatus: async () => ({
-    authorized: false,
-    running: false,
-    hasDevice: false,
+    authorized: true,
+    running: true,
+    hasDevice: true,
     adjustingFocus: false,
     adjustingExposure: false,
-    settled: false,
+    settled: true,
   }),
   captureFrame: async () => {
-    throw new Error('Camera is not available in the web preview.');
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, 600);
+    });
+    return WEB_MOCK_OCR;
   },
   translate: async ({
     sourceLanguage,
@@ -99,7 +130,7 @@ const webMock = {
     text: string;
     sourceLanguage: string;
   }) => ({
-    translatedText: '',
+    translatedText: WEB_MOCK_TRANSLATION,
     sourceLanguage,
     targetLanguage: 'en',
     cached: false,
@@ -107,11 +138,13 @@ const webMock = {
   checkLanguagePackStatus: async (language: string) => ({
     language,
     targetLanguage: 'en',
-    status: 'unsupported' as const,
+    status: 'installed' as const,
   }),
-  prepareLanguagePack: async () => {
-    throw new Error('Language packs are unavailable in the web preview.');
-  },
+  prepareLanguagePack: async (language: string) => ({
+    language,
+    targetLanguage: 'en',
+    status: 'installed' as const,
+  }),
   getSupportedLanguages: async () => [],
 } as unknown as NativeVisionTranslatorModule;
 

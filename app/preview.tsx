@@ -1,4 +1,4 @@
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
@@ -19,40 +19,50 @@ type Mode = 'standby' | 'aim' | 'result' | 'original';
 
 const RESULT: ScanResult = {
   kind: 'translated',
-  sourceText: '금연 · 담배는 건강에 해롭습니다',
+  sourceText: 'Bánh mì thịt — 45.000đ',
   translatedText:
-    'No smoking. Cigarettes are harmful to your health and the people around you.',
-  sourceLanguage: 'ko',
+    'Bánh mì thịt is a Vietnamese sandwich with pork, pâté and pickled vegetables. It costs 45,000 VND.',
+  sourceLanguage: 'vi',
   sourceHash: 'preview',
   blocks: [
-    { text: '금연', confidence: 0.94, x: 0.31, y: 0.3, width: 0.38, height: 0.07 },
     {
-      text: '담배는 건강에 해롭습니다',
-      confidence: 0.88,
-      x: 0.2,
-      y: 0.4,
-      width: 0.6,
-      height: 0.06,
+      text: 'Bánh mì thịt',
+      confidence: 0.95,
+      x: 0.12,
+      y: 0.25,
+      width: 0.76,
+      height: 0.1,
     },
     {
-      text: '간접흡연도 위험합니다',
-      confidence: 0.81,
-      x: 0.22,
-      y: 0.49,
-      width: 0.56,
-      height: 0.06,
+      text: '45.000đ',
+      confidence: 0.9,
+      x: 0.6,
+      y: 0.5,
+      width: 0.3,
+      height: 0.07,
     },
   ],
-  imageWidth: 720,
-  imageHeight: 1280,
+  imageWidth: 1000,
+  imageHeight: 1000,
   cached: false,
-  previewJpegBase64:
-    '/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/wAALCAABAAEBAREA/8QAFAABAAAAAAAAAAAAAAAAAAAACf/EABQQAQAAAAAAAAAAAAAAAAAAAAD/2gAIAQEAAD8AKp//2Q==',
 };
 
 export default function PreviewScreen() {
-  const [mode, setMode] = useState<Mode>('standby');
+  const params = useLocalSearchParams<{ mode?: string }>();
+  const [mode, setMode] = useState<Mode>(
+    params.mode === 'result'
+      ? 'result'
+      : params.mode === 'original'
+        ? 'original'
+        : 'standby',
+  );
   const router = useRouter();
+  const lookUp = (phrase: string, alt?: string) => {
+    router.push({
+      pathname: '/lookup',
+      params: alt ? { q: phrase, alt } : { q: phrase },
+    });
+  };
   const source = useSourceLanguage();
   const [ecoMode, setEcoMode] = useState(true);
   const [pressing, setPressing] = useState(false);
@@ -122,7 +132,7 @@ export default function PreviewScreen() {
                   setMode('standby');
                 }}
                 onOpenLanguages={noop}
-                onLookUp={noop}
+                onLookUp={lookUp}
               />
             ) : (
               <ResultCard
@@ -136,7 +146,7 @@ export default function PreviewScreen() {
                   setMode('original');
                 }}
                 onOpenLanguages={noop}
-                onLookUp={noop}
+                onLookUp={lookUp}
               />
             )}
           </ResultSheet>

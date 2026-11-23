@@ -10,6 +10,7 @@ import {
   priceConversions,
 } from '@/services/currency';
 import { preferredCurrency } from '@/services/localeCurrency';
+import { termPattern, untranslatedTerms } from '@/services/lookup';
 import { colors, typography } from '@/theme';
 import { PriceEstimate } from './PriceEstimate';
 import { ChipButton, Hairline, MicroLabel, SolidButton } from './ui';
@@ -104,6 +105,34 @@ export function ResultCard({
     null,
   );
   const lookupPhrase = mainBlock?.text.trim() || result.sourceText;
+  const lookupTerms = translated ? untranslatedTerms(result) : [];
+  const lookupPattern = termPattern(lookupTerms);
+  const normalizedTerm = (value: string) =>
+    value
+      .normalize('NFD')
+      .replace(/\p{Diacritic}/gu, '')
+      .toLowerCase();
+  const lookupTermSet = new Set(lookupTerms.map(normalizedTerm));
+  const renderTranslation = () => {
+    if (!lookupPattern) {
+      return result.translatedText;
+    }
+    return result.translatedText.split(lookupPattern).map((part, index) =>
+      lookupTermSet.has(normalizedTerm(part)) ? (
+        <Text
+          key={`${part}-${index}`}
+          style={styles.lookupTerm}
+          onPress={() => {
+            onLookUp(part);
+          }}
+        >
+          {part}
+        </Text>
+      ) : (
+        part
+      ),
+    );
+  };
 
   return (
     <View style={styles.container}>
@@ -127,7 +156,7 @@ export function ResultCard({
 
         {translated ? (
           <Text style={styles.resultText} selectable>
-            {result.translatedText}
+            {renderTranslation()}
           </Text>
         ) : (
           <View style={styles.noticeBlock}>
@@ -244,6 +273,11 @@ const styles = StyleSheet.create({
   resultText: {
     ...typography.result,
     color: colors.foreground,
+  },
+  lookupTerm: {
+    color: colors.accent,
+    textDecorationLine: 'underline',
+    textDecorationColor: colors.accent,
   },
   noticeBlock: {
     borderLeftWidth: 2,

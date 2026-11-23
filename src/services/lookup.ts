@@ -190,3 +190,74 @@ export async function lookUp(phrase: string): Promise<LookupResult | null> {
   }
   return result;
 }
+
+function normalizeTerm(value: string): string {
+  return value
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .toLowerCase()
+    .trim();
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Terms in the result that were passed through rather than translated:
+ * short OCR blocks whose text still appears in the translation (dish names,
+ * brands), plus retained source words as a fallback. These get an inline,
+ * tappable underline in the result.
+ */
+export function untranslatedTerms(result: {
+  sourceText: string;
+  translatedText: string;
+  blocks: Array<{ text: string }>;
+}): string[] {
+  const translated = normalizeTerm(result.translatedText);
+  if (!translated) {
+    return [];
+  }
+  const terms: string[] = [];
+  for (const block of result.blocks) {
+    const text = block.text.trim();
+    if (!text) {
+      continue;
+    }
+    const words = text.split(/\s+/).filter(Boolean);
+    if (words.length === 0 || words.length > 4) {
+      continue;
+    }
+    const normalized = normalizeTerm(text);
+    if (normalized.length >= 3 && translated.includes(normalized)) {
+      terms.push(text);
+    }
+  }
+  const sourceWords = result.sourceText
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter((word) => word.length >= 4);
+  for (const word of sourceWords) {
+    const normalized = normalizeTerm(word);
+    if (normalized.length >= 4 && translated.includes(normalized)) {
+      terms.push(word);
+    }
+  }
+  // Longest first so "Bánh mì" wins over "Bánh".
+  const unique = Array.from(new Set(terms)).sort((a, b) => b.length - a.length);
+  return unique.filter(
+    (term, index) =>
+      !unique
+        .slice(0, index)
+        .some((longer) => normalizeTerm(longer).includes(normalizeTerm(term))),
+  );
+}
+
+export function termPattern(terms: string[]): RegExp | null {
+  if (terms.length === 0) {
+    return null;
+  }
+  return new RegExp(
+    `(${terms.map(escapeRegExp).join('|')})`,
+    'giu',
+  );
+}

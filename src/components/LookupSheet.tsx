@@ -116,9 +116,6 @@ export function LookupSheet({
           </View>
         ) : null}
       </ScrollView>
-      <View style={styles.footer}>
-        <SolidButton label="CLOSE" icon="close" onPress={onClose} />
-      </View>
     </View>
   );
 }

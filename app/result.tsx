@@ -6,6 +6,7 @@ import { LanguagesSheet } from '@/components/LanguagesSheet';
 import { LookupSheet } from '@/components/LookupSheet';
 import { OverlaySheet } from '@/components/OverlaySheet';
 import { ResultCard } from '@/components/ResultCard';
+import { ScanShutter } from '@/components/ScanShutter';
 import { SolidButton } from '@/components/ui';
 import { TopBar } from '@/components/TopBar';
 import type { ScanResult } from '@/scanner/machine';
@@ -124,6 +125,15 @@ export default function ResultScreen() {
         unlimited
         onOpenPaywall={() => {}}
         showNavigation={false}
+      />
+      <ScanShutter
+        next
+        active={false}
+        scanning={false}
+        onStart={close}
+        onCapture={() => {}}
+        onCancel={close}
+        onLanguages={() => setOverlay({ kind: 'languages' })}
       />
       {overlay ? (
         <OverlaySheet onClose={() => setOverlay(null)}>

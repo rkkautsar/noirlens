@@ -1,6 +1,7 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Animated,
+  PanResponder,
   Pressable,
   StyleSheet,
   View,
@@ -20,6 +21,7 @@ export function OverlaySheet({
 }) {
   const translateY = useRef(new Animated.Value(64)).current;
   const backdropOpacity = useRef(new Animated.Value(0)).current;
+  const [expanded, setExpanded] = useState(false);
 
   useEffect(() => {
     Animated.parallel([
@@ -38,6 +40,22 @@ export function OverlaySheet({
     ]).start();
   }, [backdropOpacity, translateY]);
 
+  const pan = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, gesture) =>
+        Math.abs(gesture.dy) > 6,
+      onPanResponderRelease: (_, gesture) => {
+        if (gesture.dy > 60) {
+          onClose();
+          return;
+        }
+        if (gesture.dy < -30) {
+          setExpanded(true);
+        }
+      },
+    }),
+  ).current;
+
   return (
     <View style={styles.fill}>
       <Animated.View
@@ -52,10 +70,21 @@ export function OverlaySheet({
       <Animated.View
         style={[
           styles.sheet,
+          expanded ? styles.sheetExpanded : styles.sheetCompact,
           sheetStyle,
           { transform: [{ translateY }] },
         ]}
       >
+        <View {...pan.panHandlers} style={styles.grabberWrap}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={expanded ? 'Collapse sheet' : 'Expand sheet'}
+            onPress={() => setExpanded((value) => !value)}
+            style={styles.grabberPress}
+          >
+            <View style={styles.grabber} />
+          </Pressable>
+        </View>
         {children}
       </Animated.View>
     </View>
@@ -88,13 +117,32 @@ const styles = StyleSheet.create({
     bottom: 0,
   },
   sheet: {
-    height: '72%',
     backgroundColor: colors.background,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderSoft,
-    maxHeight: '85%',
     overflow: 'hidden',
+  },
+  sheetCompact: {
+    height: '72%',
+  },
+  sheetExpanded: {
+    height: '94%',
+  },
+  grabberWrap: {
+    paddingTop: 10,
+    paddingBottom: 6,
+    alignItems: 'center',
+  },
+  grabberPress: {
+    paddingHorizontal: 24,
+    paddingVertical: 4,
+  },
+  grabber: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: colors.border,
   },
 });

@@ -1,9 +1,11 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import {
   ActivityIndicator,
   Image,
   Linking,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -85,17 +87,27 @@ export default function LookupScreen() {
         {termList.length > 0 ? (
           <View style={styles.block}>
             {termList.map((term) => (
-              <ChipButton
+              <Pressable
                 key={term}
-                label={term}
-                icon="book-outline"
+                accessibilityRole="button"
                 onPress={() => {
                   router.push({
                     pathname: '/lookup',
                     params: { q: term },
                   });
                 }}
-              />
+                style={({ pressed }) => [
+                  styles.termRow,
+                  pressed && styles.termRowPressed,
+                ]}
+              >
+                <Text style={styles.termText}>{term}</Text>
+                <Ionicons
+                  name="chevron-forward"
+                  size={16}
+                  color={colors.muted}
+                />
+              </Pressable>
             ))}
           </View>
         ) : loading ? (
@@ -216,6 +228,24 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 8,
     flexWrap: 'wrap',
+  },
+  termRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    paddingVertical: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.borderSoft,
+  },
+  termRowPressed: {
+    opacity: 0.6,
+  },
+  termText: {
+    ...typography.title,
+    fontSize: 18,
+    color: colors.foreground,
+    flexShrink: 1,
   },
   footer: {
     paddingHorizontal: 20,

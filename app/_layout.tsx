@@ -62,6 +62,16 @@ export default function RootLayout() {
             contentStyle: { backgroundColor: colors.background },
           }}
         />
+        <Stack.Screen
+          name="prices"
+          options={{
+            presentation: 'formSheet',
+            sheetAllowedDetents: [0.5, 1],
+            sheetGrabberVisible: true,
+            sheetCornerRadius: 24,
+            contentStyle: { backgroundColor: colors.background },
+          }}
+        />
         <Stack.Screen name="preview" />
       </Stack>
     </SafeAreaProvider>

@@ -8,6 +8,7 @@ import type { ScanResult } from '@/scanner/machine';
 import {
   formatCurrency,
   priceConversions,
+  type PriceConversion,
 } from '@/services/currency';
 import { preferredCurrency } from '@/services/localeCurrency';
 import { termPattern, untranslatedTerms } from '@/services/lookup';
@@ -24,6 +25,7 @@ export function ResultCard({
   onOpenLanguages,
   onLookUp,
   onLookUpTerms,
+  onOpenPrices,
 }: {
   result: ScanResult;
   remaining: number | null;
@@ -33,6 +35,7 @@ export function ResultCard({
   onOpenLanguages: () => void;
   onLookUp: (phrase: string, alt?: string) => void;
   onLookUpTerms: (terms: string[]) => void;
+  onOpenPrices: (prices: PriceConversion[]) => void;
 }) {
   const insets = useSafeAreaInsets();
   const [copied, setCopied] = useState(false);
@@ -115,6 +118,32 @@ export function ResultCard({
       .replace(/\p{Diacritic}/gu, '')
       .toLowerCase();
   const lookupTermSet = new Set(lookupTerms.map(normalizedTerm));
+  const renderSource = () => {
+    if (prices.length === 0) {
+      return result.sourceText;
+    }
+    const segments: React.ReactNode[] = [];
+    let cursor = 0;
+    for (const price of prices) {
+      if (price.start > cursor) {
+        segments.push(result.sourceText.slice(cursor, price.start));
+      }
+      segments.push(
+        <Text
+          key={`${price.start}-${price.source}`}
+          style={styles.priceTerm}
+          onPress={() => {
+            onOpenPrices(prices);
+          }}
+        >
+          {result.sourceText.slice(price.start, price.end)}
+        </Text>,
+      );
+      cursor = price.end;
+    }
+    segments.push(result.sourceText.slice(cursor));
+    return segments;
+  };
   const renderTranslation = () => {
     if (!lookupPattern) {
       return result.translatedText;
@@ -167,12 +196,6 @@ export function ResultCard({
           </View>
         )}
 
-        <PriceEstimate
-          rows={prices}
-          target={preferred.code}
-          locale={preferred.locale}
-        />
-
         <Hairline />
 
         <View style={styles.sourceBlock}>
@@ -181,7 +204,7 @@ export function ResultCard({
             numberOfLines={translated ? 3 : 6}
             selectable
           >
-            {result.sourceText}
+            {renderSource()}
           </Text>
         </View>
 
@@ -224,6 +247,16 @@ export function ResultCard({
             onPress={onScanAgain}
           />
         )}
+        {prices.length > 0 ? (
+          <ChipButton
+            label="Prices"
+            icon="cash-outline"
+            iconOnly
+            onPress={() => {
+              onOpenPrices(prices);
+            }}
+          />
+        ) : null}
         <ChipButton
           label="Look up"
           icon="book-outline"
@@ -284,6 +317,11 @@ const styles = StyleSheet.create({
     color: colors.accent,
     textDecorationLine: 'underline',
     textDecorationColor: colors.accent,
+  },
+  priceTerm: {
+    color: colors.success,
+    textDecorationLine: 'underline',
+    textDecorationColor: colors.success,
   },
   noticeBlock: {
     borderLeftWidth: 2,

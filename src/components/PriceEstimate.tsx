@@ -2,7 +2,6 @@ import { StyleSheet, Text, View } from 'react-native';
 
 import {
   formatCurrency,
-  formatRate,
   RATES_AS_OF,
   type PriceConversion,
 } from '@/services/currency';
@@ -37,17 +36,8 @@ export function PriceEstimate({
               {formatCurrency(row.converted, row.target, locale)}
             </Text>
           </Text>
-          {row.source !== row.target ? (
-            <MicroLabel tone="dim">
-              1 {row.source} ≈ {formatRate(row.rate, locale)} {row.target}
-            </MicroLabel>
-          ) : null}
         </View>
       ))}
-
-      <MicroLabel tone="dim">
-        Approximate rate; confirm before paying.
-      </MicroLabel>
     </View>
   );
 }

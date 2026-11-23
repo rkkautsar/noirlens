@@ -66,6 +66,17 @@ export default function PreviewScreen() {
         : 'standby',
   );
   const router = useRouter();
+  const openPrices = (
+    prices: import('@/services/currency').PriceConversion[],
+  ) => {
+    if (prices.length === 0) {
+      return;
+    }
+    router.push({
+      pathname: '/prices',
+      params: { rows: JSON.stringify(prices) },
+    });
+  };
   const lookUpTerms = (terms: string[]) => {
     if (terms.length === 0) {
       return;
@@ -166,6 +177,7 @@ export default function PreviewScreen() {
                 onOpenLanguages={noop}
                 onLookUp={lookUp}
                 onLookUpTerms={lookUpTerms}
+                onOpenPrices={openPrices}
               />
             )}
           </ResultSheet>

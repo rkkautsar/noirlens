@@ -115,6 +115,16 @@ export default function ScannerScreen() {
     });
   };
 
+  const openPrices = (prices: import('@/services/currency').PriceConversion[]) => {
+    if (prices.length === 0) {
+      return;
+    }
+    router.push({
+      pathname: '/prices',
+      params: { rows: JSON.stringify(prices) },
+    });
+  };
+
   const openPaywall = () => {
     router.push('/paywall');
   };
@@ -180,6 +190,7 @@ export default function ScannerScreen() {
               onOpenLanguages={openLanguages}
               onLookUp={openLookup}
               onLookUpTerms={openTerms}
+              onOpenPrices={openPrices}
             />
           )}
         </ResultSheet>

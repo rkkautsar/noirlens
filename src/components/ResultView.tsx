@@ -22,11 +22,15 @@ export function ResultBody({
   result,
   remaining,
   unlimited,
+  onPreparePack,
+  packBusy = false,
   onLookUp,
 }: {
   result: ScanResult;
   remaining: number | null;
   unlimited: boolean;
+  onPreparePack?: () => void;
+  packBusy?: boolean;
   onLookUp: (phrase: string, alt?: string) => void;
 }) {
   const [priceTip, setPriceTip] = useState<{
@@ -241,6 +245,23 @@ export function ResultBody({
       ) : (
         <View style={styles.noticeBlock}>
           <Text style={styles.noticeText}>{notice}</Text>
+          {packMissing && onPreparePack ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Download language pack"
+              disabled={packBusy}
+              onPress={onPreparePack}
+              style={({ pressed }) => [
+                styles.packAction,
+                packBusy && styles.packActionBusy,
+                pressed && styles.pressed,
+              ]}
+            >
+              <Text style={styles.packActionText}>
+                {packBusy ? 'INSTALLING…' : 'DOWNLOAD PACK'}
+              </Text>
+            </Pressable>
+          ) : null}
           <MicroLabel tone="dim">NOT CHARGED AS A SCAN</MicroLabel>
         </View>
       )}
@@ -293,6 +314,7 @@ export function ResultBody({
 export function ResultActions({
   result,
   onScanAgain,
+  onBack,
   onShowOriginal,
   thumbnail,
   onOpenLanguages,
@@ -300,6 +322,7 @@ export function ResultActions({
 }: {
   result: ScanResult;
   onScanAgain: () => void;
+  onBack?: () => void;
   onShowOriginal?: () => void;
   thumbnail?: string;
   onOpenLanguages: () => void;
@@ -352,7 +375,7 @@ export function ResultActions({
         : 'language-outline';
   const primaryAction =
     primary === 'close'
-      ? onScanAgain
+      ? onBack ?? onScanAgain
       : translated
         ? onScanAgain
         : onOpenLanguages;
@@ -434,6 +457,24 @@ const styles = StyleSheet.create({
     fontSize: 17,
     lineHeight: 24,
     color: colors.foreground,
+  },
+  packAction: {
+    alignSelf: 'flex-start',
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  packActionBusy: {
+    opacity: 0.6,
+  },
+  packActionText: {
+    ...typography.micro,
+    color: colors.accent,
+  },
+  pressed: {
+    opacity: 0.7,
   },
   sourceBlock: {
     gap: 8,

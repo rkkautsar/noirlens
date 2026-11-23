@@ -63,8 +63,23 @@ export async function translateText({
             text: retry.translatedText,
             cached: retry.cached ?? false,
           };
-        } catch {
-          return { status: 'failed', message };
+        } catch (retryError) {
+          if (isUnsupportedLanguagePair(retryError)) {
+            return {
+              status: 'unsupported',
+              message: `${languageLabel(sourceLanguage)} to ${languageLabel(targetLanguage)} is not supported on this device.`,
+            };
+          }
+          if (isLanguagePackFailure(retryError)) {
+            return {
+              status: 'failed',
+              message: `The ${languageLabel(sourceLanguage)} pack is installed, but this text could not be translated.`,
+            };
+          }
+          return {
+            status: 'failed',
+            message: describeNativeError(retryError, sourceLanguage).message,
+          };
         }
       }
       return { status: 'pack_missing', message };

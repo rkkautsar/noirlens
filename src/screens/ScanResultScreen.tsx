@@ -20,7 +20,7 @@ import {
 import type { ScanResult } from '@/scanner/machine';
 import { captures, useCaptures } from '@/services/captures';
 import { useScanAllowance } from '@/services/allowance';
-import { translateText } from '@/services/translationTask';
+import { installPack, translateText } from '@/services/translationTask';
 import type { CaptureRecord } from '@/services/captureModel';
 import { rerunCaptureOcr, retryCapture } from '@/services/captureProcessing';
 import { DEMO_HISTORY } from '@/services/demoHistory';
@@ -87,6 +87,8 @@ export function ScanResultScreen({
   const [captureResult, setCaptureResult] = useState<ScanResult | null>(null);
   const [captureError, setCaptureError] = useState<string | null>(null);
   const [translating, setTranslating] = useState(false);
+  const [packBusy, setPackBusy] = useState(false);
+  const packBusyRef = useRef(false);
   const [languageBusy, setLanguageBusy] = useState(false);
   const [captureNonce, setCaptureNonce] = useState(0);
   const [ocrError, setOcrError] = useState<string | null>(null);
@@ -244,6 +246,30 @@ export function ScanResultScreen({
     }
   };
 
+  const preparePack = async () => {
+    if (!record || packBusyRef.current) {
+      return;
+    }
+    packBusyRef.current = true;
+    setPackBusy(true);
+    setCaptureError(null);
+    try {
+      const outcome = await installPack(
+        record.language || record.hint || 'und',
+        'en',
+      );
+      if (outcome !== 'installed') {
+        setCaptureError('The pack did not finish installing. Try again.');
+        return;
+      }
+      translatedKey.current = null;
+      setCaptureNonce((value) => value + 1);
+    } finally {
+      packBusyRef.current = false;
+      setPackBusy(false);
+    }
+  };
+
   const retryOcrLanguage = () => {
     const next = pendingHint.current;
     if (next === null || !record) {
@@ -319,6 +345,7 @@ export function ScanResultScreen({
               result={result}
               primary="close"
               onScanAgain={newScan}
+              onBack={close}
               onShowOriginal={
                 captureId && record ? () => setInspect(true) : undefined
               }
@@ -352,6 +379,8 @@ export function ScanResultScreen({
               result={result}
               remaining={remaining}
               unlimited={unlimited}
+              onPreparePack={captureId ? preparePack : undefined}
+              packBusy={packBusy}
               onLookUp={(phrase, alt) => {
                 const q = phrase.trim();
                 if (q) {

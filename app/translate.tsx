@@ -4,6 +4,7 @@ import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 import { useEffect, useReducer, useRef, useState } from 'react';
 import {
+  Dimensions,
   Keyboard,
   Platform,
   Pressable,
@@ -68,13 +69,18 @@ export default function TranslateScreen() {
   );
 
   useEffect(() => {
-    const show = Keyboard.addListener(
-      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
-      (event) => setKeyboardHeight(event.endCoordinates.height),
-    );
-    const hide = Keyboard.addListener(
-      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
-      () => setKeyboardHeight(0),
+    if (Platform.OS !== 'ios') {
+      return undefined;
+    }
+    const update = (event: { endCoordinates: { screenY: number } }) => {
+      const windowHeight = Dimensions.get('window').height;
+      setKeyboardHeight(
+        Math.max(0, windowHeight - event.endCoordinates.screenY),
+      );
+    };
+    const show = Keyboard.addListener('keyboardWillChangeFrame', update);
+    const hide = Keyboard.addListener('keyboardWillHide', () =>
+      setKeyboardHeight(0),
     );
     return () => {
       show.remove();
@@ -338,7 +344,7 @@ export default function TranslateScreen() {
           style={[
             styles.composer,
             {
-              paddingBottom: insets.bottom + 8,
+              paddingBottom: keyboardHeight > 0 ? 8 : insets.bottom + 8,
               marginBottom: keyboardHeight,
             },
           ]}

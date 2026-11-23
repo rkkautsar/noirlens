@@ -1,4 +1,3 @@
-import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ScrollView, StyleSheet, View } from 'react-native';
 
 import { PriceEstimate } from '@/components/PriceEstimate';
@@ -8,28 +7,15 @@ import { type PriceConversion } from '@/services/currency';
 import { preferredCurrency } from '@/services/localeCurrency';
 import { colors } from '@/theme';
 
-export default function PricesScreen() {
-  const router = useRouter();
-  const { rows } = useLocalSearchParams<{ rows?: string }>();
+export function PricesSheet({
+  rows,
+  onClose,
+}: {
+  rows: PriceConversion[];
+  onClose: () => void;
+}) {
   const preferred = preferredCurrency();
-
-  let prices: PriceConversion[] = [];
-  if (typeof rows === 'string' && rows) {
-    try {
-      const parsed: unknown = JSON.parse(rows);
-      if (Array.isArray(parsed)) {
-        prices = parsed.filter(
-          (row): row is PriceConversion =>
-            typeof row === 'object' &&
-            row !== null &&
-            typeof (row as PriceConversion).raw === 'string' &&
-            typeof (row as PriceConversion).converted === 'number',
-        );
-      }
-    } catch {
-      prices = [];
-    }
-  }
+  const prices = rows;
 
   return (
     <View style={styles.screen}>
@@ -42,17 +28,7 @@ export default function PricesScreen() {
         />
       </ScrollView>
       <View style={styles.footer}>
-        <SolidButton
-          label="CLOSE"
-          icon="close"
-          onPress={() => {
-            if (router.canGoBack()) {
-              router.back();
-            } else {
-              router.replace('/preview');
-            }
-          }}
-        />
+        <SolidButton label="CLOSE" icon="close" onPress={onClose} />
       </View>
     </View>
   );
@@ -60,8 +36,7 @@ export default function PricesScreen() {
 
 const styles = StyleSheet.create({
   screen: {
-    flex: 1,
-    backgroundColor: colors.background,
+    maxHeight: '100%',
   },
   scroll: {
     flex: 1,

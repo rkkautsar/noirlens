@@ -6,6 +6,9 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { AimHud } from '@/components/AimHud';
 import { OriginalView } from '@/components/OriginalView';
 import { ResultCard } from '@/components/ResultCard';
+import { LookupSheet } from '@/components/LookupSheet';
+import { OverlaySheet } from '@/components/OverlaySheet';
+import { PricesSheet } from '@/components/PricesSheet';
 import { ResultSheet } from '@/components/ResultSheet';
 import { ScanShutter } from '@/components/ScanShutter';
 import { Standby } from '@/components/Standby';
@@ -66,22 +69,21 @@ export default function PreviewScreen() {
         : 'standby',
   );
   const router = useRouter();
+  const [overlay, setOverlay] = useState<
+    | { kind: 'lookup'; q: string; alt?: string }
+    | { kind: 'prices'; rows: import('@/services/currency').PriceConversion[] }
+    | null
+  >(null);
   const openPrices = (
     prices: import('@/services/currency').PriceConversion[],
   ) => {
     if (prices.length === 0) {
       return;
     }
-    router.push({
-      pathname: '/prices',
-      params: { rows: JSON.stringify(prices) },
-    });
+    setOverlay({ kind: 'prices', rows: prices });
   };
   const lookUp = (phrase: string, alt?: string) => {
-    router.push({
-      pathname: '/lookup',
-      params: alt ? { q: phrase, alt } : { q: phrase },
-    });
+    setOverlay({ kind: 'lookup', q: phrase, alt });
   };
   const source = useSourceLanguage();
   const [ecoMode, setEcoMode] = useState(true);
@@ -127,6 +129,22 @@ export default function PreviewScreen() {
   return (
     <View style={styles.page}>
       <View style={styles.phone}>
+        {overlay ? (
+          <OverlaySheet onClose={() => setOverlay(null)}>
+            {overlay.kind === 'lookup' ? (
+              <LookupSheet
+                q={overlay.q}
+                alt={overlay.alt}
+                onClose={() => setOverlay(null)}
+              />
+            ) : (
+              <PricesSheet
+                rows={overlay.rows}
+                onClose={() => setOverlay(null)}
+              />
+            )}
+          </OverlaySheet>
+        ) : null}
         <Standby
           hidden={mode === 'aim'}
           remaining={15}

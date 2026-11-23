@@ -1,4 +1,3 @@
-import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -19,9 +18,15 @@ import {
 } from '@/services/lookup';
 import { colors, typography } from '@/theme';
 
-export default function LookupScreen() {
-  const router = useRouter();
-  const { q, alt } = useLocalSearchParams<{ q?: string; alt?: string }>();
+export function LookupSheet({
+  q,
+  alt,
+  onClose,
+}: {
+  q?: string;
+  alt?: string;
+  onClose: () => void;
+}) {
   const [result, setResult] = useState<LookupResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
@@ -112,17 +117,7 @@ export default function LookupScreen() {
         ) : null}
       </ScrollView>
       <View style={styles.footer}>
-        <SolidButton
-          label="CLOSE"
-          icon="close"
-          onPress={() => {
-            if (router.canGoBack()) {
-              router.back();
-            } else {
-              router.replace('/preview');
-            }
-          }}
-        />
+        <SolidButton label="CLOSE" icon="close" onPress={onClose} />
       </View>
     </View>
   );
@@ -130,8 +125,7 @@ export default function LookupScreen() {
 
 const styles = StyleSheet.create({
   screen: {
-    flex: 1,
-    backgroundColor: colors.background,
+    maxHeight: '100%',
   },
   scroll: {
     flex: 1,

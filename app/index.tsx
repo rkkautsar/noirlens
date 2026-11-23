@@ -6,6 +6,9 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AimHud } from '@/components/AimHud';
+import { LookupSheet } from '@/components/LookupSheet';
+import { OverlaySheet } from '@/components/OverlaySheet';
+import { PricesSheet } from '@/components/PricesSheet';
 import { OriginalView } from '@/components/OriginalView';
 import { ResultCard } from '@/components/ResultCard';
 import { ScanShutter } from '@/components/ScanShutter';
@@ -31,6 +34,11 @@ export default function ScannerScreen() {
   // and the native side only lights it while the camera session runs.
   const [torch, setTorch] = useState(false);
   const [showOriginal, setShowOriginal] = useState(false);
+  const [overlay, setOverlay] = useState<
+    | { kind: 'lookup'; q: string; alt?: string }
+    | { kind: 'prices'; rows: import('@/services/currency').PriceConversion[] }
+    | null
+  >(null);
 
   const { snapshot } = scanner;
   const { state, result } = snapshot;
@@ -98,20 +106,14 @@ export default function ScannerScreen() {
     if (!query) {
       return;
     }
-    router.push({
-      pathname: '/lookup',
-      params: alt ? { q: query, alt } : { q: query },
-    });
+    setOverlay({ kind: 'lookup', q: query, alt });
   };
 
   const openPrices = (prices: import('@/services/currency').PriceConversion[]) => {
     if (prices.length === 0) {
       return;
     }
-    router.push({
-      pathname: '/prices',
-      params: { rows: JSON.stringify(prices) },
-    });
+    setOverlay({ kind: 'prices', rows: prices });
   };
 
   const openPaywall = () => {
@@ -180,7 +182,7 @@ export default function ScannerScreen() {
         />
       ) : null}
 
-      {!exhausted && !locked ? (
+      {!exhausted ? (
         <ScanShutter
           next={locked}
           active={state === 'PREWARM'}
@@ -191,6 +193,7 @@ export default function ScannerScreen() {
           onLanguages={openLanguages}
         />
       ) : null}
+
 
       {!exhausted && !locked ? (
         <View style={[styles.sourceRow, { bottom: insets.bottom + 92 }]}>
@@ -305,6 +308,22 @@ export default function ScannerScreen() {
           unlimited={snapshot.unlimited}
           onOpenPaywall={openPaywall}
         />
+      {overlay ? (
+        <OverlaySheet onClose={() => setOverlay(null)}>
+          {overlay.kind === 'lookup' ? (
+            <LookupSheet
+              q={overlay.q}
+              alt={overlay.alt}
+              onClose={() => setOverlay(null)}
+            />
+          ) : (
+            <PricesSheet
+              rows={overlay.rows}
+              onClose={() => setOverlay(null)}
+            />
+          )}
+        </OverlaySheet>
+      ) : null}
       </View>
     </View>
   );

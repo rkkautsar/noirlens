@@ -169,7 +169,7 @@ export function ResultCard({
           styles.content,
           {
             paddingTop: insets.top + 56,
-            paddingBottom: insets.bottom + 96,
+            paddingBottom: insets.bottom + 190,
           },
         ]}
       >
@@ -220,7 +220,7 @@ export function ResultCard({
         style={[
           styles.actions,
           styles.fixedActions,
-          { bottom: insets.bottom + 16 },
+          { bottom: insets.bottom + 94 },
         ]}
       >
         <ChipButton

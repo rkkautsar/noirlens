@@ -32,7 +32,7 @@ export function ResultCard({
   remaining: number | null;
   unlimited: boolean;
   onScanAgain: () => void;
-  onShowOriginal: () => void;
+  onShowOriginal?: () => void;
   onOpenLanguages: () => void;
   onLookUp: (phrase: string, alt?: string) => void;
   onOpenPrices: (prices: PriceConversion[], selectedStart?: number) => void;
@@ -320,12 +320,14 @@ export function ResultCard({
           { bottom: insets.bottom + 94 },
         ]}
       >
-        <ChipButton
-          label="INSPECT"
-          icon="search-outline"
-          iconOnly
-          onPress={onShowOriginal}
-        />
+        {onShowOriginal ? (
+          <ChipButton
+            label="INSPECT"
+            icon="search-outline"
+            iconOnly
+            onPress={onShowOriginal}
+          />
+        ) : null}
         <ChipButton
           label={copied ? 'COPIED' : 'COPY'}
           icon={copied ? 'checkmark' : 'copy-outline'}

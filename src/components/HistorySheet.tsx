@@ -1,4 +1,5 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { useRouter } from 'expo-router';
 import * as Clipboard from 'expo-clipboard';
 import { useEffect, useState } from 'react';
 import {
@@ -65,6 +66,7 @@ export function HistorySheet({
   onClose: () => void;
 }) {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const [entries, setEntries] = useState<ScanHistoryEntry[]>([]);
   const [copied, setCopied] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -144,12 +146,16 @@ export function HistorySheet({
                 <Pressable
                   key={entry.id}
                   accessibilityRole="button"
-                  accessibilityLabel={`Copy scan: ${
+                  accessibilityLabel={`Open scan: ${
                     entry.translatedText || entry.sourceText
                   }`}
-                  accessibilityHint="Copies the result and prices"
+                  accessibilityHint="Opens the result to look up again"
                   onPress={() => {
-                    void copy(entry);
+                    onClose();
+                    router.push({
+                      pathname: '/result',
+                      params: { id: entry.id },
+                    });
                   }}
                   style={({ pressed }) => [
                     styles.entry,
@@ -176,12 +182,21 @@ export function HistorySheet({
                       {entry.sourceText}
                     </Text>
                   ) : null}
-                  <Ionicons
-                    name={isCopied ? 'checkmark' : 'copy-outline'}
-                    size={15}
-                    color={isCopied ? colors.success : colors.muted}
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={isCopied ? 'Copied' : 'Copy scan'}
+                    hitSlop={10}
+                    onPress={() => {
+                      void copy(entry);
+                    }}
                     style={styles.copyIcon}
-                  />
+                  >
+                    <Ionicons
+                      name={isCopied ? 'checkmark' : 'copy-outline'}
+                      size={15}
+                      color={isCopied ? colors.success : colors.muted}
+                    />
+                  </Pressable>
                 </Pressable>
               );
             })}

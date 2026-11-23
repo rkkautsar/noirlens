@@ -11,7 +11,7 @@ describe('romanize', () => {
   });
 
   it('leaves non-Hangul text alone', () => {
-    expect(romanize('3,500원')).toBe('3,500won');
+    expect(romanize('3,500원')).toBe('3,500 won');
   });
 });
 

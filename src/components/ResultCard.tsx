@@ -121,23 +121,16 @@ export function ResultCard({
     result.sourceLanguage,
     preferred.code,
   );
-  const containerRef = useRef<React.ComponentRef<typeof View>>(null);
-  const [cardBox, setCardBox] = useState({ x: 0, y: 0, width: 0, height: 0 });
   const [priceTip, setPriceTip] = useState<{
     price: PriceConversion;
     x: number;
     y: number;
   } | null>(null);
-  const measureCard = () => {
-    containerRef.current?.measureInWindow((x, y, width, height) => {
-      setCardBox({ x, y, width, height });
-    });
-  };
   const tipAt = (price: PriceConversion, pageX?: number, pageY?: number) => {
     setPriceTip({
       price,
-      x: pageX === undefined ? Number.NaN : pageX - cardBox.x,
-      y: pageY === undefined ? Number.NaN : pageY - cardBox.y,
+      x: pageX ?? Number.NaN,
+      y: pageY ?? Number.NaN,
     });
   };
 
@@ -277,7 +270,7 @@ export function ResultCard({
   };
 
   return (
-    <View style={styles.container} ref={containerRef} onLayout={measureCard}>
+    <View style={styles.container}>
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={[
@@ -395,8 +388,6 @@ export function ResultCard({
           locale={preferred.locale}
           x={priceTip.x}
           y={priceTip.y}
-          width={cardBox.width}
-          height={cardBox.height}
           onClose={() => setPriceTip(null)}
         />
       ) : null}

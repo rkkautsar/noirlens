@@ -1,4 +1,4 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Modal, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 
 import {
   formatCurrency,
@@ -15,19 +15,17 @@ export function PriceTooltip({
   locale,
   x,
   y,
-  width,
-  height,
   onClose,
 }: {
   price: PriceConversion;
   locale: string;
   x: number;
   y: number;
-  width: number;
-  height: number;
   onClose: () => void;
 }) {
-  // Local to the ResultCard; the caller converts page coords by the card origin.
+  // Page coordinates: the modal hosts above every route-level sibling, so the
+  // backdrop reliably dismisses before the shutter or top bar can act.
+  const { width, height } = useWindowDimensions();
   const cx = Number.isFinite(x) ? x : width / 2;
   const cy = Number.isFinite(y) ? y : height / 2;
   const left = Math.max(
@@ -39,6 +37,13 @@ export function PriceTooltip({
   const top = below ? cy + 18 : cy - 96;
 
   return (
+    <Modal
+      transparent
+      visible
+      animationType="fade"
+      statusBarTranslucent
+      onRequestClose={onClose}
+    >
     <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
       <Pressable
         accessibilityLabel="Dismiss price"
@@ -61,6 +66,7 @@ export function PriceTooltip({
         </MicroLabel>
       </View>
     </View>
+    </Modal>
   );
 }
 

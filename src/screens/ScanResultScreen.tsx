@@ -89,6 +89,7 @@ export function ScanResultScreen({
   const [translating, setTranslating] = useState(false);
   const [packBusy, setPackBusy] = useState(false);
   const [packError, setPackError] = useState<string | null>(null);
+  const revisionRef = useRef('');
   const packBusyRef = useRef(false);
   const [languageBusy, setLanguageBusy] = useState(false);
   const [captureNonce, setCaptureNonce] = useState(0);
@@ -96,6 +97,9 @@ export function ScanResultScreen({
   const allowance = useScanAllowance();
   const unlimited = allowance.unlimited;
   const pendingHint = useRef<string | null>(null);
+  revisionRef.current = record
+    ? `${record.id}:${record.ocrRevision}:${record.language}`
+    : '';
   const translatedKey = useRef<string | null>(null);
   const requestToken = useRef(0);
 
@@ -120,6 +124,10 @@ export function ScanResultScreen({
       active = false;
     };
   }, [scanId]);
+
+  useEffect(() => {
+    setPackError(null);
+  }, [record?.id, record?.ocrRevision, record?.language]);
 
   // Mark a reviewed capture once its OCR is done.
   useEffect(() => {
@@ -251,6 +259,7 @@ export function ScanResultScreen({
     if (!record || packBusyRef.current) {
       return;
     }
+    const startedRevision = revisionRef.current;
     packBusyRef.current = true;
     setPackBusy(true);
     setPackError(null);
@@ -259,6 +268,9 @@ export function ScanResultScreen({
         record.language || record.hint || 'und',
         'en',
       );
+      if (revisionRef.current !== startedRevision) {
+        return;
+      }
       if (outcome !== 'installed') {
         setPackError('The pack did not finish installing. Try again.');
         return;
@@ -266,7 +278,9 @@ export function ScanResultScreen({
       translatedKey.current = null;
       setCaptureNonce((value) => value + 1);
     } catch {
-      setPackError('The pack could not be installed. Try again.');
+      if (revisionRef.current === startedRevision) {
+        setPackError('The pack could not be installed. Try again.');
+      }
     } finally {
       packBusyRef.current = false;
       setPackBusy(false);

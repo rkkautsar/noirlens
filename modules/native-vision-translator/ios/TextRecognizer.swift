@@ -26,10 +26,16 @@ enum TextRecognizer {
     let box: CGRect
   }
 
+  // Everything Vision's accurate mode supports (macOS/iOS 26). The first
+  // language of each request selects the recognition model, so the passes
+  // below are grouped by model family, not by language.
   private static let preferredLanguageCodes = [
-    "th-TH", "ko-KR", "ja-JP", "zh-Hans", "zh-Hant",
-    "de-DE", "fr-FR", "es-ES", "vi-VN", "id-ID",
-    "en-US",
+    "en-US", "fr-FR", "de-DE", "it-IT", "es-ES", "pt-BR", "nl-NL",
+    "da-DK", "sv-SE", "no-NO", "nb-NO", "nn-NO",
+    "cs-CZ", "pl-PL", "ro-RO", "ru-RU", "uk-UA",
+    "zh-Hans", "zh-Hant", "yue-Hans", "yue-Hant",
+    "ja-JP", "ko-KR", "th-TH", "vi-VN", "id-ID", "ms-MY",
+    "ar-SA", "ars-SA", "tr-TR",
   ]
   private static let ciContext = CIContext(options: [.useSoftwareRenderer: false])
   private static let punctuationNoise = CharacterSet(
@@ -301,7 +307,7 @@ enum TextRecognizer {
       ranges = [0xAC00...0xD7AF, 0x1100...0x11FF, 0x3130...0x318F]
     case "ja":
       ranges = [0x3040...0x30FF, 0x4E00...0x9FFF]
-    case "zh":
+    case "zh", "yu":
       ranges = [0x4E00...0x9FFF, 0x3400...0x4DBF]
     case "th":
       ranges = [0x0E00...0x0E7F]
@@ -453,7 +459,15 @@ enum TextRecognizer {
       return []
     }
     let supportedSet = Set(supported)
-    let filtered = preferredLanguageCodes.filter { supportedSet.contains($0) }
+    // Match exact codes first, then the same language prefix (Vision's codes
+    // drift between OS versions, e.g. vi-VT vs vi-VN).
+    let filtered = preferredLanguageCodes.compactMap { code -> String? in
+      if supportedSet.contains(code) {
+        return code
+      }
+      let prefix = code.split(separator: "-").first.map(String.init) ?? code
+      return supported.first { $0.lowercased().hasPrefix(prefix.lowercased()) }
+    }
     NSLog("[NoirLens] OCR preferred languages available=%d", filtered.count)
     return filtered
   }

@@ -291,13 +291,11 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     paddingHorizontal: 16,
-    paddingTop: 8,
+    paddingTop: 28,
   },
   bar: {
     minHeight: 64,
     borderRadius: 22,
-    borderWidth: 1,
-    borderColor: colors.borderSoft,
     backgroundColor: 'rgba(9,9,10,0.92)',
     paddingHorizontal: 18,
     paddingVertical: 12,
@@ -308,7 +306,6 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   barActive: {
-    borderColor: colors.accent,
     backgroundColor: colors.accentSoft,
   },
   barBusy: {

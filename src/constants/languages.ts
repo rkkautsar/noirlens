@@ -14,6 +14,14 @@ export const TRAVELER_LANGUAGES: LanguageOption[] = [
   { code: 'es', name: 'Spanish', nativeName: 'Español' },
   { code: 'vi', name: 'Vietnamese', nativeName: 'Tiếng Việt' },
   { code: 'id', name: 'Indonesian', nativeName: 'Bahasa Indonesia' },
+  { code: 'it', name: 'Italian', nativeName: 'Italiano' },
+  { code: 'pt', name: 'Portuguese', nativeName: 'Português' },
+  { code: 'nl', name: 'Dutch', nativeName: 'Nederlands' },
+  { code: 'pl', name: 'Polish', nativeName: 'Polski' },
+  { code: 'ru', name: 'Russian', nativeName: 'Русский' },
+  { code: 'ar', name: 'Arabic', nativeName: 'العربية' },
+  { code: 'tr', name: 'Turkish', nativeName: 'Türkçe' },
+  { code: 'zh-Hant', name: 'Chinese (Traditional)', nativeName: '繁體中文' },
 ];
 
 const LABELS: Record<string, string> = {
@@ -28,6 +36,9 @@ const LABELS: Record<string, string> = {
   th: 'THAI',
   vi: 'VIETNAMESE',
   id: 'INDONESIAN',
+  nl: 'DUTCH',
+  pl: 'POLISH',
+  tr: 'TURKISH',
   pt: 'PORTUGUESE',
   it: 'ITALIAN',
   ru: 'RUSSIAN',
@@ -50,6 +61,14 @@ const SHORT_LABELS: Record<string, string> = {
   th: 'TH',
   vi: 'VI',
   id: 'ID',
+  it: 'IT',
+  pt: 'PT',
+  nl: 'NL',
+  pl: 'PL',
+  ru: 'RU',
+  ar: 'AR',
+  tr: 'TR',
+  'zh-Hant': 'ZH-T',
 };
 
 export function languageShortLabel(code: string): string {

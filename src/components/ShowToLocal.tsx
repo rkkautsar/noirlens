@@ -50,11 +50,11 @@ export function ShowToLocal({
         ]}
       >
         <View style={styles.inner} accessibilityViewIsModal>
-          <ScrollView
-            style={styles.scroll}
-            contentContainerStyle={styles.scrollContent}
-          >
-            <View style={flipped && styles.flippedText}>
+          <View style={[styles.viewport, flipped && styles.flippedViewport]}>
+            <ScrollView
+              style={styles.scroll}
+              contentContainerStyle={styles.scrollContent}
+            >
               <Text
                 selectable
                 style={[
@@ -69,8 +69,8 @@ export function ShowToLocal({
                   {original}
                 </Text>
               ) : null}
-            </View>
-          </ScrollView>
+            </ScrollView>
+          </View>
 
           <View style={styles.controls}>
             <ChipButton
@@ -101,7 +101,10 @@ const styles = StyleSheet.create({
   inner: {
     flex: 1,
   },
-  flippedText: {
+  viewport: {
+    flex: 1,
+  },
+  flippedViewport: {
     transform: [{ rotate: '180deg' }],
   },
   scroll: {

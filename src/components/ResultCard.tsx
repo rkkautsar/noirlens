@@ -12,7 +12,7 @@ import {
 } from '@/services/currency';
 import { preferredCurrency } from '@/services/localeCurrency';
 import { termPattern, untranslatedTerms } from '@/services/lookup';
-import { romanTermSpans } from '@/services/romanize';
+import { isRomanizable, romanize, romanTermSpans } from '@/services/romanize';
 import { colors, typography } from '@/theme';
 import { PriceEstimate } from './PriceEstimate';
 import { ChipButton, Hairline, MicroLabel, SolidButton } from './ui';
@@ -125,6 +125,9 @@ export function ResultCard({
   const sheetPrices =
     translationPrices.length > 0 ? translationPrices : prices;
   const renderSource = () => result.sourceText;
+  const romanizedSource = isRomanizable(result.sourceText)
+    ? romanize(result.sourceText)
+    : '';
 
   const renderTranslation = () => {
     const text = result.translatedText;
@@ -217,6 +220,13 @@ export function ResultCard({
             <MicroLabel tone="dim">NOT CHARGED AS A SCAN</MicroLabel>
           </View>
         )}
+
+        {translated && romanizedSource ? (
+          <View style={styles.romanizedBlock}>
+            <MicroLabel tone="dim">ROMANIZED · APPROX.</MicroLabel>
+            <Text style={styles.romanizedText}>{romanizedSource}</Text>
+          </View>
+        ) : null}
 
         <Hairline />
 
@@ -337,6 +347,14 @@ const styles = StyleSheet.create({
   },
   sourceBlock: {
     gap: 8,
+  },
+  romanizedBlock: {
+    gap: 6,
+  },
+  romanizedText: {
+    ...typography.body,
+    color: colors.muted,
+    lineHeight: 22,
   },
   sourceText: {
     ...typography.body,

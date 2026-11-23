@@ -40,3 +40,17 @@ describe('romanTermSpans', () => {
     );
   });
 });
+
+describe('other scripts', () => {
+  it('transliterates Cyrillic', () => {
+    expect(romanize('россия')).toBe('rossiya');
+  });
+  it('transliterates Arabic consonants', () => {
+    expect(romanize('مطعم')).toBe('mṭʿm');
+  });
+  it('romanizes kana and leaves kanji', () => {
+    expect(romanize('こんにちは')).toBe('konnichiha');
+    expect(romanize('カタカナ')).toBe('katakana');
+    expect(romanize('東京')).toBe('東京');
+  });
+});

@@ -253,7 +253,7 @@ const styles = StyleSheet.create({
     borderTopColor: colors.border,
     backgroundColor: colors.background,
     paddingTop: 14,
-    paddingHorizontal: 16,
+    paddingHorizontal: 20,
     gap: 10,
   },
   pickedScroll: {

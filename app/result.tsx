@@ -296,7 +296,6 @@ export default function ResultScreen() {
           result={result}
           remaining={null}
           unlimited
-          readOnly
           onScanAgain={close}
           onShowOriginal={captureId && record ? () => setInspect(true) : undefined}
           thumbnail={captureId && record ? captures.uriFor(record.thumb) : undefined}
@@ -412,7 +411,6 @@ export default function ResultScreen() {
             captureId ? { kind: 'languagePicker' } : { kind: 'languages' },
           )
         }
-        readOnly
       />
       <ModeTabs
         active="camera"

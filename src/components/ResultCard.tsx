@@ -28,7 +28,6 @@ export function ResultCard({
   onOpenLanguages,
   onLookUp,
   onPreparePack,
-  readOnly = false,
 }: {
   result: ScanResult;
   remaining: number | null;
@@ -41,8 +40,6 @@ export function ResultCard({
   onLookUp: (phrase: string, alt?: string) => void;
   /** Capture card: install the missing pack and retry this result. */
   onPreparePack?: () => void;
-  /** History replay: the primary action closes instead of rescanning. */
-  readOnly?: boolean;
 }) {
   const insets = useSafeAreaInsets();
   const [copied, setCopied] = useState(false);
@@ -100,31 +97,25 @@ export function ResultCard({
   const primaryLabel =
     packMissing && onPreparePack
       ? `GET ${shortLanguage} PACK`
-      : readOnly
-        ? 'CLOSE'
-        : translated
-          ? 'SCAN AGAIN'
-          : packMissing
-            ? `GET ${shortLanguage} PACK`
-            : 'CHOOSE LANGUAGE';
+      : translated
+        ? 'SCAN AGAIN'
+        : packMissing
+          ? `GET ${shortLanguage} PACK`
+          : 'CHOOSE LANGUAGE';
   const primaryIcon =
     packMissing && onPreparePack
       ? 'cloud-download-outline'
-      : readOnly
-        ? 'close'
-        : translated
-          ? 'refresh'
-          : packMissing
-            ? 'cloud-download-outline'
-            : 'language-outline';
+      : translated
+        ? 'refresh'
+        : packMissing
+          ? 'cloud-download-outline'
+          : 'language-outline';
   const primaryAction =
     packMissing && onPreparePack
       ? onPreparePack
-      : readOnly
+      : translated
         ? onScanAgain
-        : translated
-          ? onScanAgain
-          : onOpenLanguages;
+        : onOpenLanguages;
   const lookupTerms = translated ? untranslatedTerms(result) : [];
   const lookupPattern = termPattern(lookupTerms);
   const sourceTerms = [
@@ -377,18 +368,10 @@ export function ResultCard({
             void copy();
           }}
         />
-        {translated && !readOnly ? (
+        {translated ? (
           <ChipButton
             label="SCAN AGAIN"
             icon="refresh"
-            iconOnly
-            onPress={onScanAgain}
-          />
-        ) : null}
-        {!translated && readOnly ? (
-          <ChipButton
-            label="CLOSE"
-            icon="close"
             iconOnly
             onPress={onScanAgain}
           />

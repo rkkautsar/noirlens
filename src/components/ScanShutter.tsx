@@ -47,7 +47,6 @@ export function ScanShutter({
   onCancel,
   onLanguages,
   collect = false,
-  readOnly = false,
 }: {
   active: boolean;
   scanning: boolean;
@@ -57,7 +56,6 @@ export function ScanShutter({
   onCancel: () => void;
   onLanguages: () => void;
   collect?: boolean;
-  readOnly?: boolean;
 }) {
   const insets = useSafeAreaInsets();
   const [zone, setZone] = useState<Zone | null>(null);
@@ -218,11 +216,9 @@ export function ScanShutter({
     outputRange: [0.4, 1],
   });
 
-  const label = readOnly
-    ? 'CLOSE'
-    : scanning
-      ? 'READING ON-DEVICE'
-      : active
+  const label = scanning
+    ? 'READING ON-DEVICE'
+    : active
       ? collect
         ? 'RELEASE TO COLLECT'
         : 'RELEASE TO CAPTURE'
@@ -231,11 +227,9 @@ export function ScanShutter({
         : collect
           ? 'HOLD TO COLLECT'
           : 'HOLD TO SCAN';
-  const icon: React.ComponentProps<typeof Ionicons>['name'] = readOnly
-    ? 'close'
-    : scanning
-      ? 'hourglass-outline'
-      : active
+  const icon: React.ComponentProps<typeof Ionicons>['name'] = scanning
+    ? 'hourglass-outline'
+    : active
       ? 'radio-button-on'
       : next
         ? 'refresh'

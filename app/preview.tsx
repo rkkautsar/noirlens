@@ -122,6 +122,7 @@ export default function PreviewScreen() {
                   setMode('standby');
                 }}
                 onOpenLanguages={noop}
+                onLookUp={noop}
               />
             ) : (
               <ResultCard
@@ -135,6 +136,7 @@ export default function PreviewScreen() {
                   setMode('original');
                 }}
                 onOpenLanguages={noop}
+                onLookUp={noop}
               />
             )}
           </ResultSheet>

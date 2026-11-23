@@ -21,6 +21,7 @@ export function ResultCard({
   onScanAgain,
   onShowOriginal,
   onOpenLanguages,
+  onLookUp,
 }: {
   result: ScanResult;
   remaining: number | null;
@@ -28,6 +29,7 @@ export function ResultCard({
   onScanAgain: () => void;
   onShowOriginal: () => void;
   onOpenLanguages: () => void;
+  onLookUp: (phrase: string, alt?: string) => void;
 }) {
   const insets = useSafeAreaInsets();
   const [copied, setCopied] = useState(false);
@@ -93,6 +95,15 @@ export function ResultCard({
       ? 'cloud-download-outline'
       : 'language-outline';
   const primaryAction = translated ? onScanAgain : onOpenLanguages;
+  const mainBlock = result.blocks.reduce<ScanResult['blocks'][number] | null>(
+    (best, block) =>
+      !best ||
+      block.width * block.height > best.width * best.height
+        ? block
+        : best,
+    null,
+  );
+  const lookupPhrase = mainBlock?.text.trim() || result.sourceText;
 
   return (
     <View style={styles.container}>
@@ -182,6 +193,14 @@ export function ResultCard({
             onPress={onScanAgain}
           />
         )}
+        <ChipButton
+          label="Look up"
+          icon="book-outline"
+          iconOnly
+          onPress={() => {
+            onLookUp(lookupPhrase, result.translatedText);
+          }}
+        />
         <ChipButton
           label="Change language"
           icon="language-outline"

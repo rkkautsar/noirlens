@@ -22,11 +22,13 @@ export function OriginalView({
   onClose,
   onScanAgain,
   onOpenLanguages,
+  onLookUp,
 }: {
   result: ScanResult;
   onClose: () => void;
   onScanAgain: () => void;
   onOpenLanguages: () => void;
+  onLookUp: (phrase: string, alt?: string) => void;
 }) {
   const insets = useSafeAreaInsets();
   const [stage, setStage] = useState({ width: 0, height: 0 });
@@ -188,6 +190,17 @@ export function OriginalView({
             icon="chevron-back"
             iconOnly
             onPress={onClose}
+          />
+          <ChipButton
+            label="Look up"
+            icon="book-outline"
+            iconOnly
+            disabled={!picked}
+            onPress={() => {
+              if (picked) {
+                onLookUp(picked.text, translation ?? undefined);
+              }
+            }}
           />
           <ChipButton
             label="Change language"

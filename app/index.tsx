@@ -94,6 +94,17 @@ export default function ScannerScreen() {
   const openLanguages = () => {
     router.push('/languages');
   };
+  const openLookup = (phrase: string, alt?: string) => {
+    const query = phrase.trim();
+    if (!query) {
+      return;
+    }
+    router.push({
+      pathname: '/lookup',
+      params: alt ? { q: query, alt } : { q: query },
+    });
+  };
+
   const openPaywall = () => {
     router.push('/paywall');
   };
@@ -145,6 +156,7 @@ export default function ScannerScreen() {
               }}
               onScanAgain={scanner.scanAgain}
               onOpenLanguages={openLanguages}
+              onLookUp={openLookup}
             />
           ) : (
             <ResultCard
@@ -156,6 +168,7 @@ export default function ScannerScreen() {
                 setShowOriginal(true);
               }}
               onOpenLanguages={openLanguages}
+              onLookUp={openLookup}
             />
           )}
         </ResultSheet>

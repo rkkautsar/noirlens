@@ -52,6 +52,16 @@ export default function RootLayout() {
             animation: 'slide_from_bottom',
           }}
         />
+        <Stack.Screen
+          name="lookup"
+          options={{
+            presentation: 'formSheet',
+            sheetAllowedDetents: [0.5, 1],
+            sheetGrabberVisible: true,
+            sheetCornerRadius: 24,
+            contentStyle: { backgroundColor: colors.background },
+          }}
+        />
         <Stack.Screen name="preview" />
       </Stack>
     </SafeAreaProvider>

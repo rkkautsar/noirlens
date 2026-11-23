@@ -1,39 +1,56 @@
 # NoirLens
 
-Battery-first, offline-only live camera translator for iOS 18+. Point the phone at a sign, read the English, lower the phone. The camera sensor is off whenever you are not actively scanning.
+Offline translator for iOS 18+. Point the phone at a sign and read English, type text when there is nothing to point at, or collect a few signs and translate them later. Apple's `Vision` and `Translation` frameworks do the work on-device.
 
-No accounts. No uploads. No server. Apple's `Vision` and `Translation` frameworks do the work on-device.
+No accounts. No uploads. No server. Camera frames and text stay in the app's private storage.
 
-## How it behaves
+## Modes
+
+Two top tabs, **Camera** and **Translate**. The active tab is the only accent element; there is no tab container or border.
+
+### Camera
+
+Two capture behaviors, switched with the layers button beside the torch. The choice persists between launches.
+
+**Read** — hold anywhere (or the HOLD bar), aim through the reticle, release. The app grabs the sharpest of three frames, crops to the reticle, runs OCR, translates to English, and shows the result. The sensor stops before OCR starts.
 
 | State | Camera | Screen | Moves on |
 | --- | --- | --- | --- |
-| `SLEEP` | `stopRunning()`; sensor, AF/OIS and ISP powered down | Pure `#000000`; hold anywhere on the screen; auto-brightness untouched | Press and hold anywhere |
-| `PREWARM` | 1280×720, 30 fps, continuous AF/AE, no HDR/multi-cam | Color preview by default; **NOIR** toggles the warm-white edge HUD. Release-to-capture shutter; STOP | Release the shutter |
-| `SCANNING` | One raw frame grabbed, then `stopRunning()` immediately | "Reading on-device" | OCR + translation finish |
-| `LOCKED_READ` | Off | Black result card; selectable text and COPY; frozen-frame toggle; bottom **HOLD FOR NEXT SCAN** bar | Hold the bottom bar (or tap SCAN AGAIN); lowering or walking never clears it |
+| `SLEEP` | off | standby; hold anywhere | press and hold |
+| `PREWARM` | 720p, 30 fps | preview and reticle while holding | release |
+| `SCANNING` | one frame, then off | "Reading on-device" | OCR + translation |
+| `LOCKED_READ` | off | result card; copy, speak, next scan | hold for next scan |
 
-The transition table is implemented as a pure reducer in `src/scanner/machine.ts`. There is no motion gesture: the hold shutter is the only camera trigger.
+The transition table is a pure reducer in `src/scanner/machine.ts`; `src/scanner/useScanner.ts` executes its hardware effects. A frozen result is never interrupted by lowering the phone.
 
-**Hold to scan:** press and hold almost anywhere on the standby or aiming screen (top-bar chips and buttons still take their own taps). The camera opens while your finger is down; aim at the sign through the reticle, then release to capture. A normal hold is under a second. **OCR reads only the square inside the reticle**, not the full sensor frame, so browser URL bars and page chrome outside the aim area cannot leak into the result; the frozen **ORIGINAL** view shows that same crop. URL/percent-encoded query lines are also dropped even if they fall inside the reticle.
+**Collect** — the same hold and release, but the selected frame is saved as a JPEG plus a 480 px thumbnail under `Documents/captures`, then queued for OCR. There is no result screen: the History badge increments and a thumbnail of the real capture flies into the History icon. Each capture is an intentional hold; Collect captures do not use the daily translation allowance. Opening a capture marks it reviewed.
 
-The result stays on screen when you lower the phone to read it. On the result, the bottom bar is **HOLD FOR NEXT SCAN**; the translated/source text is selectable and **COPY** copies the shown text plus any price estimates. Tapping **SCAN AGAIN** returns to standby if you prefer tapping over holding.
+Metadata lives in AsyncStorage (`captures.v1`) and images live as files, never base64 in storage. At most 100 records are kept; the oldest is evicted with its files. Unfinished OCR resumes on the next launch. On a successful startup read, JPEGs older than ten minutes that no record references are removed. Captures are excluded from iCloud backup.
 
+**Review** — History → CAPTURES, or the History button while in Collect. Rows show the thumbnail, timestamp, OCR status, and a text preview. A row opens the full image with its OCR boxes: tap a box to translate it, or translate the whole capture. Copy, retry, delete, and clear all work offline. Missing packs use the same native download prompt as Read.
 
-**Source language** is selectable from the top-bar language chip. The default is **AUTO**, which never claims English: an English-only scene shows a short notice instead of a fake translation, and mixed text prefers the non-English language. AUTO picks the best of the nine supported source languages, plus script and German function-word hints, so a short umlaut-free German sign is not misread as Romanian or Polish; unsupported detections are reported as unknown rather than offering a pack this app cannot install. Choosing a specific language forces that source and also makes it the first OCR language (English stays as a secondary model for embedded Latin text); explicit-source scans use a lower 0.35 floor for long small print. AUTO runs OCR in script priority: Thai, Korean, Japanese, Chinese, then the Latin traveler languages, with en-US last. The language sheet uses the same order, so a Latin watermark cannot outrank a non-Latin sign while an English-only frame still shows the English notice. If AUTO detects a language whose pack is not installed and OCR confidence is below 0.65, the app tries the already-installed source packs before prompting for a download. If the needed offline pack is missing, the result still shows the captured source text with a one-tap pack prompt — it is not treated as a failed scan and does not consume a free scan. Only a completed translation counts against the daily limit.
+Delete removes the record and both files. If the metadata store cannot be read, the app refuses to write over it and History says so instead of showing an empty library.
 
-**Prices** are detected from the source text when a currency symbol or ISO code is present and converted to the phone locale's currency (falling back to USD). The bundled table is USD-based, so any pair converts through USD; every conversion is labelled **EST. FX · Nov 2026** and should be treated as approximate, not a live quote.
+### Translate
+
+Type or paste text, choose source and target (target defaults to English), swap, translate. Both languages are explicit; there is no auto-detect here. The text box and TRANSLATE button are docked above the safe area so the whole flow is reachable with one hand.
+
+Results offer COPY, SPEAK, and SHOW. Speech is `AVSpeechSynthesizer`: one voice per language, one utterance at a time, stopped when leaving the screen or changing the target. SHOW is a full-screen, high-contrast presentation with a font size fitted to the text and viewport, scrolling for long text, the original in smaller type, a 180° flip for facing someone else, and no automatic playback.
+
+The camera never starts from this tab.
 
 ## Stack
 
 - Expo SDK 58, React Native 0.88, React 19, TypeScript strict, New Architecture
-- `expo-router`, `expo-localization`, `expo-keep-awake`, `expo-sqlite`
+- `expo-router`, `expo-clipboard`, `expo-haptics`, `expo-keep-awake`, `expo-localization`, `@react-native-async-storage/async-storage`
 - Local Expo module `modules/native-vision-translator` (Swift, iOS 18 deployment target)
-  - `AVCaptureSession` power lifecycle
+  - `AVCaptureSession` power lifecycle, 720p/30 fps
   - CoreImage luma-edge HUD (`CIEdges` + `CIColorMonochrome`, 15 fps)
-  - `VNRecognizeTextRequest` (accurate, traveler-language list with auto-detect fallback, confidence/noise filters, paragraph and vertical-CJK grouping)
-  - Apple `Translation` (`TranslationSession`, `LanguageAvailability`) with a system download prompt for packs
-- SQLite: translation cache by SHA-256 source hash, daily scan ledger, entitlement state
+  - Three-frame capture with an edge-sharpness pick, reticle crop, JPEG + thumbnail encoding
+  - `VNRecognizeTextRequest` with paragraph and vertical-CJK grouping, confidence/noise filters
+  - Apple `Translation` (`TranslationSession`, `LanguageAvailability`) with the system pack download prompt, for any source→target pair
+  - `AVSpeechSynthesizer` for spoken results
+- AsyncStorage for scan history, capture metadata, mode and language preferences, and the entitlement record. There is no SQLite database in this app.
 
 ## Run it
 
@@ -44,6 +61,10 @@ npm install
 npm test
 npx tsc --noEmit
 ```
+
+### Web preview
+
+`npx expo start --web` renders the screens with a mock camera, OCR, and translation. It is useful for layout and flow checks; the camera, OCR, language packs, speech, and file persistence only exist on a device.
 
 ### Development build (Windows, no Mac)
 
@@ -65,7 +86,7 @@ EAS device builds need an Apple Developer account for provisioning. The unsigned
 
 ### Unsigned IPA (free Apple ID)
 
-`.github/workflows/ios-unsigned-build.yml` builds a signed-nothing Release `.app` on `macos-latest`, zips it as `NoirLens-unsigned.ipa`, and uploads it as an artifact.
+`.github/workflows/ios-unsigned-build.yml` builds an unsigned Release `.app` on `macos-latest`, zips it as `NoirLens-unsigned.ipa`, and uploads it as an artifact.
 
 1. Push the repo to GitHub and run **iOS unsigned IPA** from the Actions tab.
 2. Download the `NoirLens-unsigned-ipa` artifact on Windows.
@@ -75,17 +96,17 @@ With a free Apple ID the signature expires after 7 days; re-sideload to renew. T
 
 ## Offline language packs
 
-Open **PACKS** and download the languages you need before traveling. iOS fetches each model once through a system prompt; after that the app makes no network requests. Included in the list: Japanese, Korean, Chinese (Simplified), Spanish, French, German, Thai, Vietnamese, Indonesian.
+Camera mode needs source→English packs; Translate can need any pair you select. iOS fetches each model once through a system prompt; after that the app makes no network requests. The traveler list covers Japanese, Korean, Chinese (Simplified and Traditional), Thai, Vietnamese, Indonesian, German, French, Spanish, Italian, Portuguese, Dutch, Polish, Russian, Arabic, and Turkish, plus English as a translate target.
 
-Apple's supported language pairs are the ceiling. If detection returns a script Apple cannot translate to English, the result card asks for a different pack instead of failing silently.
+Apple's supported pairs are the ceiling. If a pack is missing, the result asks for the download instead of falling back to an online service. Packs are installed by iOS; deleting one in Settings requires downloading it again.
 
 ## Entitlements
 
-- `FREE`: 15 translated scans per local calendar day, persisted in SQLite (English detections and missing-pack notices are free)
+- `FREE`: 15 translated scans per local calendar day. English detections and missing-pack notices are free; Collect captures and text translations are not metered.
 - `TRIP_PASS_14D`: unlimited for 14 days (non-renewing, local expiry)
 - `LIFETIME_PRO`: unlimited
 
-`src/services/purchases.ts` is the StoreKit 2 seam. In `__DEV__` a purchase applies instantly and is stored locally so the gate can be exercised; production builds return `unavailable` rather than faking a charge. Wire the real provider there without touching the screens or the reducer.
+`src/services/purchases.ts` is the StoreKit 2 seam. In `__DEV__` a purchase applies instantly and is stored locally so the gate can be exercised; production builds return `unavailable` rather than faking a charge.
 
 ## Native module API
 
@@ -93,59 +114,69 @@ Apple's supported language pairs are the ceiling. If detection returns a script 
 
 | Export | Purpose |
 | --- | --- |
-| `startCamera()` | Permission check, configure and start the 720p session |
-| `stopCamera()` | `stopRunning()`; powers down the sensor |
+| `startCamera()` | Permission check and 720p session start; resolves with the session generation |
+| `stopCamera()` | Stop the session unconditionally |
+| `stopCameraIfCurrent(generation)` | Stop only that generation (stale-start cleanup) |
 | `getCameraStatus()` | `{ authorized, running, adjustingFocus, adjustingExposure, settled }` |
-| `captureFrame(sourceLanguage)` | Grab one raw `CVPixelBuffer`, stop the session, run OCR; `""` means AUTO detection, a code forces the source language. Returns text, language, normalized paragraph boxes, SHA-256 hash and a frozen JPEG preview |
-| `translate({ text, sourceLanguage })` | On-device NMT to English; throws `ERR_LANGUAGE_PACK_MISSING` when the pack is absent |
-| `checkLanguagePackStatus(langCode)` | `installed` / `supported` / `unsupported` |
-| `prepareLanguagePack(langCode)` | Presents Apple's download prompt, then re-checks status |
-| `getSupportedLanguages()` | Apple's supported source languages |
-| `EcoCameraView` | Native view with `ecoMode` prop; edge HUD or color preview |
+| `captureFrame(sourceLanguage, crop?, cameraToken?)` | Grab the sharpest of three frames, stop the session, run OCR on the crop. `""` means AUTO; a code forces the source |
+| `captureStill(cameraToken?)` | Capture and save a full upright JPEG + thumbnail; no OCR |
+| `recognizeCapture(image, language)` | OCR a stored capture JPEG |
+| `capturesDirectory()` / `captureFileUri(name)` / `listCaptureFiles(minAgeSeconds)` | File locations for review and cleanup |
+| `deleteCaptureFiles(names)` | Remove image and thumbnail files |
+| `recognizeLast(language)` | Re-run OCR on the frozen frame with another source |
+| `translate({ text, sourceLanguage, targetLanguage? })` | On-device NMT; defaults to English. Throws `ERR_LANGUAGE_PACK_MISSING` |
+| `checkLanguagePackStatus(langCode, target?)` / `prepareLanguagePack(langCode, target?)` | Pack availability and Apple's download prompt |
+| `speak(text, language)` / `stopSpeaking()` | Speech synthesis; `speak` resolves when playback finishes or stops |
+| `romanize(text, language)` | ICU romanization for the result card |
+| `getSupportedLanguages()` | Apple's supported languages |
+| `EcoCameraView` | Native view with `ecoMode` prop |
 
 ## Power notes
 
-- The session is stopped as soon as a frame is grabbed, before OCR or NMT starts. Reading a result costs no camera power.
-- The eco HUD runs a GPU-backed CoreImage edge pass over the 720p frame at 15 fps and renders warm-white outlines on black; the color preview layer is hidden in that mode.
-- Frame rate is capped by the 720p/30 fps session preset; HDR video, low-light boost, subject-area monitoring and multi-camera devices are deliberately not used.
-- Screen brightness is never touched; the OLED black standby plus auto-brightness handle idle power. The scanner keeps the screen awake while mounted.
-- App backgrounding forces `SLEEP` and stops the session. A frozen result is never interrupted by backgrounding the camera.
+- The session stops as soon as the selected frame is grabbed and encoded, before OCR or translation starts.
+- Collect reuses that same capture path; the camera is already off while the JPEG is written and OCR runs in a bounded queue (two at a time, keyed by capture id so an old result can never land on a newer capture).
+- The eco HUD runs a GPU-backed CoreImage edge pass over the 720p frame at 15 fps; the color preview layer is hidden in that mode.
+- 720p/30 fps is the ceiling. HDR video, low-light boost, subject-area monitoring, and multi-camera devices are not used.
+- Screen brightness is never touched; the OLED standby plus auto-brightness handle idle power. The scanner keeps the screen awake while mounted.
+- Backgrounding forces `SLEEP` and stops the session. Leaving a screen does the same; a frozen result is never interrupted.
 
 ## Verify
 
 ```bash
-npm test                 # reducer, entitlement and geometry tests
+npm test                 # 106 tests: reducer, entitlements, geometry, capture model/queue, show layout
 npx tsc --noEmit         # strict typecheck
 npx expo prebuild --platform ios --no-install
 npx expo export --platform ios --output-dir dist
 ```
 
-`prebuild` writes `ios/` (gitignored); `expo export` proves the JS bundle and native-module bindings resolve.
+`prebuild` writes `ios/` (gitignored); `expo export` proves the JS bundle and native-module bindings resolve. The GitHub workflow runs the typecheck and tests before the Release build.
 
 ## Limits
 
-- iOS-only, iPhone-only, portrait-locked. No Android or web build.
-- The simulator has no camera; use a device.
+- iOS-only, iPhone-only, portrait-locked. No Android build.
+- The simulator has no camera; use a device. Speech, language-pack prompts, file persistence, and the capture animation need hardware validation.
 - OCR is tuned for signage: strings shorter than 2 characters and pure numbers/currency are discarded. Long strings use a permissive 0.50 confidence floor; 2–3 character strings require 0.72.
-- OCR prefers the traveler language list (German, Japanese, Chinese, etc.) so a short English watermark cannot skew language correction. Auto-detection is the fallback when that list finds nothing. AUTO source selection weighs language hypotheses toward non-English and falls back to the script hint for umlauts, kana, Hangul, Thai and Han characters.
+- Read crops to the reticle; text outside it is intentionally ignored. Collect saves the full upright frame.
+- Collect keeps at most 100 captures. Review uses 480 px thumbnails; the detail screen decodes the stored JPEG.
 - Unsigned builds cannot be submitted to the App Store and expire weekly with a free Apple ID.
-- Unsigned CI builds set `EXPO_PUBLIC_DEV_UNLIMITED=1` and run with unlimited scans for testing without StoreKit. A production build must not set that variable.
-- Language packs are installed by iOS, not by the app; deleting one in Settings requires re-downloading it.
-- Price detection requires an explicit currency symbol or ISO code; bare numbers, times and dates are ignored. Rates are bundled estimates, not live market data, and no network request is made.
-- OCR is limited to the reticle square. Text outside it is intentionally ignored; step back to fit a wide sign.
+- Unsigned CI builds set `EXPO_PUBLIC_DEV_UNLIMITED=1` and run with unlimited scans. A production build must not set that variable.
+- Price detection requires an explicit currency symbol or ISO code; rates are bundled estimates, not live market data.
+- No cloud translation, image upload, account, or analytics path exists.
 
 ## Layout
 
 ```
 app/                         Expo Router screens
-  index.tsx                  scanner, result card, frozen original
-  languages.tsx              offline pack sheet
+  index.tsx                  camera: Read/Collect, result card, history entry
+  translate.tsx              text translation, speech, show-to-local entry
+  result.tsx                 read-only replay of a history translation
+  capture/[id].tsx           saved capture: image, OCR regions, translation
   paywall.tsx                entitlement sheet
+  preview.tsx                UI sampler
 modules/native-vision-translator/
-  ios/                       Swift camera, OCR, Translation bridge
+  ios/                       Swift camera, capture files, OCR, Translation, speech
 src/scanner/                 pure reducer, store, controller, geometry
-src/services/                SQLite, cache, ledger, entitlements, source language, currency
-src/components/              OLED UI primitives and views
-assets/icon.png              black + warm-white reticle app icon
+src/services/                history, captures, OCR queue, entitlements, languages, currency
+src/components/              OLED UI primitives, sheets, capture flight, mode tabs
 .github/workflows/           unsigned IPA CI
 ```

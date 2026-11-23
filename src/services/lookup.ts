@@ -1,4 +1,5 @@
 import { readMeta, writeMeta } from './db';
+import { romanTermSpans } from './romanize';
 
 export interface LookupResult {
   title: string;
@@ -203,6 +204,41 @@ function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+function isCjkTerm(term: string): boolean {
+  return /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}\p{Script=Thai}]/u.test(
+    term,
+  );
+}
+
+/** Whole-word match for Latin terms; CJK/Thai retained terms use includes. */
+function containsTerm(translated: string, term: string): boolean {
+  if (isCjkTerm(term)) {
+    return translated.includes(term);
+  }
+  try {
+    return new RegExp(
+      `(?<![\p{L}\p{N}])${escapeRegExp(term)}(?![\p{L}\p{N}])`,
+      'iu',
+    ).test(translated);
+  } catch {
+    return translated.includes(term);
+  }
+}
+
+function sourceTermCandidates(result: {
+  sourceText: string;
+  blocks: Array<{ text: string }>;
+}): string[] {
+  return [
+    ...result.blocks
+      .map((block) => block.text.trim())
+      .filter((text) => text.length > 0 && text.split(/\s+/).length <= 4),
+    ...result.sourceText
+      .split(/[^\p{L}\p{N}]+/u)
+      .filter((word) => word.length >= 2),
+  ];
+}
+
 /**
  * Terms in the result that were passed through rather than translated:
  * short OCR blocks whose text still appears in the translation (dish names,
@@ -228,8 +264,10 @@ export function untranslatedTerms(result: {
     if (words.length === 0 || words.length > 4) {
       continue;
     }
-    const normalized = normalizeTerm(text);
-    if (normalized.length >= 3 && translated.includes(normalized)) {
+    if (
+      normalizeTerm(text).length >= 3 &&
+      containsTerm(result.translatedText, text)
+    ) {
       terms.push(text);
     }
   }
@@ -237,8 +275,10 @@ export function untranslatedTerms(result: {
     .split(/[^\p{L}\p{N}]+/u)
     .filter((word) => word.length >= 4);
   for (const word of sourceWords) {
-    const normalized = normalizeTerm(word);
-    if (normalized.length >= 4 && translated.includes(normalized)) {
+    if (
+      normalizeTerm(word).length >= 4 &&
+      containsTerm(result.translatedText, word)
+    ) {
       terms.push(word);
     }
   }
@@ -250,6 +290,51 @@ export function untranslatedTerms(result: {
         .slice(0, index)
         .some((longer) => normalizeTerm(longer).includes(normalizeTerm(term))),
   );
+}
+
+export interface LookupSpan {
+  start: number;
+  end: number;
+  text: string;
+}
+
+/**
+ * Underlined lookup terms in the translated text: retained source blocks and
+ * words, romanized proper nouns, and capitalized name pairs. Overlaps resolve
+ * to the longest span.
+ */
+export function lookupSpans(result: {
+  sourceText: string;
+  translatedText: string;
+  blocks: Array<{ text: string }>;
+}): LookupSpan[] {
+  const text = result.translatedText;
+  if (!text) {
+    return [];
+  }
+  const spans: LookupSpan[] = [];
+  const pattern = termPattern(untranslatedTerms(result));
+  if (pattern) {
+    for (const match of text.matchAll(pattern)) {
+      const start = match.index ?? 0;
+      spans.push({ start, end: start + match[0].length, text: match[0] });
+    }
+  }
+  for (const span of romanTermSpans(text, sourceTermCandidates(result))) {
+    spans.push({ start: span.start, end: span.end, text: span.word });
+  }
+  spans.sort(
+    (a, b) => a.start - b.start || (b.end - b.start) - (a.end - a.start),
+  );
+  const kept: LookupSpan[] = [];
+  for (const span of spans) {
+    if (
+      !kept.some((existing) => span.start < existing.end && span.end > existing.start)
+    ) {
+      kept.push(span);
+    }
+  }
+  return kept;
 }
 
 export function termPattern(terms: string[]): RegExp | null {

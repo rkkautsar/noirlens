@@ -204,18 +204,29 @@ export function InspectBody({
         <MicroLabel tone="accent">INSPECT · TAP THE TEXT</MicroLabel>
         {picked ? (
           <ScrollView style={styles.pickedScroll}>
-            <Text style={styles.pickedText} selectable>
-              {picked.text}
-            </Text>
-            {translating ? (
-              <MicroLabel tone="dim">TRANSLATING…</MicroLabel>
-            ) : translation ? (
-              <Text style={styles.translatedText} selectable>
-                {translation}
-              </Text>
-            ) : translationFailed ? (
-              <MicroLabel tone="dim">COULD NOT TRANSLATE THIS TEXT</MicroLabel>
-            ) : null}
+            {translation ? (
+              <>
+                <Text style={styles.translationPrimary} selectable>
+                  {translation}
+                </Text>
+                <Text style={styles.sourceSecondary} selectable>
+                  {picked.text}
+                </Text>
+              </>
+            ) : (
+              <>
+                <Text style={styles.pickedText} selectable>
+                  {picked.text}
+                </Text>
+                {translating ? (
+                  <MicroLabel tone="dim">TRANSLATING…</MicroLabel>
+                ) : translationFailed ? (
+                  <MicroLabel tone="dim">
+                    COULD NOT TRANSLATE THIS TEXT
+                  </MicroLabel>
+                ) : null}
+              </>
+            )}
           </ScrollView>
         ) : (
           <Text style={styles.hint}>
@@ -315,11 +326,17 @@ const styles = StyleSheet.create({
     lineHeight: 24,
     color: colors.foreground,
   },
-  translatedText: {
+  translationPrimary: {
+    ...typography.result,
+    fontSize: 18,
+    lineHeight: 24,
+    color: colors.foreground,
+  },
+  sourceSecondary: {
     ...typography.body,
-    fontSize: 16,
-    lineHeight: 22,
-    color: colors.accent,
+    fontSize: 13,
+    lineHeight: 19,
+    color: colors.muted,
     marginTop: 6,
   },
   hint: {

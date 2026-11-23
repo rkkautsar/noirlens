@@ -10,8 +10,8 @@ import {
   type PriceConversion,
 } from '@/services/currency';
 import { preferredCurrency } from '@/services/localeCurrency';
-import { termPattern, untranslatedTerms } from '@/services/lookup';
-import { romanize, romanTermSpans } from '@/services/romanize';
+import { lookupSpans } from '@/services/lookup';
+import { romanize } from '@/services/romanize';
 import { romanizeNative } from '@/services/romanizeNative';
 import { colors, typography } from '@/theme';
 import { PriceTooltip } from './PriceTooltip';
@@ -68,16 +68,7 @@ export function ResultBody({
       ? `The ${language} offline pack is not installed. Download it once, then scan again. You can still read the source below.`
       : '';
 
-  const lookupTerms = translated ? untranslatedTerms(result) : [];
-  const lookupPattern = termPattern(lookupTerms);
-  const sourceTerms = [
-    ...result.blocks
-      .map((block) => block.text.trim())
-      .filter((text) => text.length > 0 && text.split(/\s+/).length <= 4),
-    ...result.sourceText
-      .split(/[^\p{L}\p{N}]+/u)
-      .filter((word) => word.length >= 2),
-  ];
+  const termSpans = translated ? lookupSpans(result) : [];
   const translationPrices = priceConversions(
     result.translatedText,
     result.sourceLanguage,
@@ -163,21 +154,11 @@ export function ResultBody({
       kind: 'term' | 'price';
       price?: PriceConversion;
     }> = [];
-    if (lookupPattern) {
-      for (const match of text.matchAll(lookupPattern)) {
-        const start = match.index ?? 0;
-        spans.push({ start, end: start + match[0].length, kind: 'term' });
-      }
+    for (const span of termSpans) {
+      spans.push({ start: span.start, end: span.end, kind: 'term' });
     }
     for (const price of translationPrices) {
       spans.push({ start: price.start, end: price.end, kind: 'price', price });
-    }
-    for (const match of text.matchAll(/[A-Z][a-z]+[ \t][A-Z][a-z]+/g)) {
-      const start = match.index ?? 0;
-      spans.push({ start, end: start + match[0].length, kind: 'term' });
-    }
-    for (const span of romanTermSpans(text, sourceTerms)) {
-      spans.push({ start: span.start, end: span.end, kind: 'term' });
     }
     const priceSpans = spans.filter((span) => span.kind === 'price');
     const kept = spans.filter(

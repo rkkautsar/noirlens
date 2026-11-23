@@ -163,7 +163,7 @@ To compare on a device, run the same scripted flow on both apps. For absolute en
 ## Verify
 
 ```bash
-npm test                 # 115 tests: reducer, entitlements, geometry, capture model/queue, translation task, allowance, show layout
+npm test                 # 116 tests: reducer, entitlements, geometry, capture model/queue, translation task, allowance, lookup-term golden eval, show layout
 npx tsc --noEmit         # strict typecheck
 npx expo prebuild --platform ios --no-install
 npx expo export --platform ios --output-dir dist

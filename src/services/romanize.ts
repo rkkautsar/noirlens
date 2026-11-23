@@ -181,6 +181,20 @@ export interface RomanSpan {
  * The translator often splits or lightly mangles the transliteration, so a
  * long shared prefix or suffix also counts.
  */
+// Common English translations of foreign words; a romanized source that lands
+// on one of these was translated, not retained, so it is not a lookup term.
+const COMMON_ENGLISH = new Set([
+  'about', 'after', 'again', 'airport', 'ancient', 'another', 'bakery', 'bank',
+  'beach', 'before', 'best', 'bridge', 'building', 'cafe', 'center', 'centre',
+  'church', 'city', 'coffee', 'coffeeshop', 'food', 'famous', 'garden', 'great',
+  'hall', 'historic', 'history', 'hotel', 'house', 'island', 'large', 'left',
+  'local', 'main', 'mall', 'market', 'museum', 'new', 'noodle', 'noodles',
+  'north', 'old', 'palace', 'park', 'popular', 'public', 'restaurant', 'rice',
+  'right', 'river', 'road', 'shopping', 'shop', 'small', 'soup', 'south',
+  'square', 'station', 'street', 'sushi', 'temple', 'the', 'tower', 'traditional',
+  'trattoria', 'village', 'water', 'west', 'window', 'streetfood',
+]);
+
 export function romanTermSpans(
   text: string,
   sourceTerms: string[],
@@ -198,6 +212,9 @@ export function romanTermSpans(
       continue;
     }
     const lower = word.toLowerCase();
+    if (COMMON_ENGLISH.has(lower)) {
+      continue;
+    }
     const hit = romans.some(
       (roman) =>
         roman.includes(lower) ||

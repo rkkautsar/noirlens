@@ -1,6 +1,6 @@
 import * as Clipboard from 'expo-clipboard';
 import { useEffect, useRef, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { languageLabel, languageShortLabel } from '@/constants/languages';
@@ -127,9 +127,9 @@ export function ResultCard({
     y: number;
   } | null>(null);
 
-  const renderSource = (): React.ReactNode[] => {
+  const renderSource = () => {
     if (prices.length === 0) {
-      return [result.sourceText];
+      return result.sourceText;
     }
     const parts: React.ReactNode[] = [];
     let cursor = 0;
@@ -141,18 +141,24 @@ export function ResultCard({
         parts.push(result.sourceText.slice(cursor, price.start));
       }
       parts.push(
-        <Pressable
+        <Text
           key={`source-price-${price.start}`}
-          accessibilityRole="button"
-          accessibilityLabel={result.sourceText.slice(price.start, price.end)}
-          onPress={() => {
-            setPriceTip({ price, x: Number.NaN, y: Number.NaN });
+          style={[styles.sourceText, styles.priceTerm]}
+          onPress={(event) => {
+            const native = (
+              event as
+                | { nativeEvent?: { pageX?: number; pageY?: number } }
+                | undefined
+            )?.nativeEvent;
+            setPriceTip({
+              price,
+              x: native?.pageX ?? Number.NaN,
+              y: native?.pageY ?? Number.NaN,
+            });
           }}
         >
-          <Text style={[styles.sourceText, styles.priceTerm]}>
-            {result.sourceText.slice(price.start, price.end)}
-          </Text>
-        </Pressable>,
+          {result.sourceText.slice(price.start, price.end)}
+        </Text>,
       );
       cursor = price.end;
     }
@@ -232,31 +238,31 @@ export function ResultCard({
       }
       const slice = text.slice(span.start, span.end);
       parts.push(
-        <Pressable
+        <Text
           key={`${span.kind}-${span.start}`}
-          accessibilityRole="button"
-          accessibilityLabel={slice}
-          onPress={() => {
+          style={[
+            styles.resultText,
+            span.kind === 'price' ? styles.priceTerm : styles.lookupTerm,
+          ]}
+          onPress={(event) => {
             if (span.kind === 'price' && span.price) {
+              const native = (
+                event as
+                  | { nativeEvent?: { pageX?: number; pageY?: number } }
+                  | undefined
+              )?.nativeEvent;
               setPriceTip({
                 price: span.price,
-                x: Number.NaN,
-                y: Number.NaN,
+                x: native?.pageX ?? Number.NaN,
+                y: native?.pageY ?? Number.NaN,
               });
             } else {
               onLookUp(slice);
             }
           }}
         >
-          <Text
-            style={[
-              styles.resultText,
-              span.kind === 'price' ? styles.priceTerm : styles.lookupTerm,
-            ]}
-          >
-            {slice}
-          </Text>
-        </Pressable>,
+          {slice}
+        </Text>,
       );
       cursor = span.end;
     }
@@ -271,8 +277,6 @@ export function ResultCard({
         contentContainerStyle={[
           styles.content,
           {
-            flexGrow: 1,
-            justifyContent: 'center',
             paddingTop: insets.top + 56,
             paddingBottom: insets.bottom + 190,
           },
@@ -290,17 +294,9 @@ export function ResultCard({
         </View>
 
         {translated ? (
-          <View style={styles.translationWrap}>
-            {renderTranslation().map((part, index) =>
-              typeof part === 'string' ? (
-                <Text key={`part-${index}`} style={styles.resultText}>
-                  {part}
-                </Text>
-              ) : (
-                part
-              ),
-            )}
-          </View>
+          <Text style={styles.resultText} selectable>
+            {renderTranslation()}
+          </Text>
         ) : (
           <View style={styles.noticeBlock}>
             <Text style={styles.noticeText}>{notice}</Text>
@@ -320,17 +316,13 @@ export function ResultCard({
         <Hairline />
 
         <View style={styles.sourceBlock}>
-          <View style={styles.translationWrap}>
-            {renderSource().map((part, index) =>
-              typeof part === 'string' ? (
-                <Text key={`source-part-${index}`} style={styles.sourceText}>
-                  {part}
-                </Text>
-              ) : (
-                part
-              ),
-            )}
-          </View>
+          <Text
+            style={styles.sourceText}
+            numberOfLines={prices.length > 0 ? undefined : translated ? 3 : 6}
+            selectable
+          >
+            {renderSource()}
+          </Text>
         </View>
 
         <MicroLabel tone="dim" style={styles.footer}>
@@ -423,10 +415,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-  },
-  translationWrap: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
   },
   resultText: {
     ...typography.result,

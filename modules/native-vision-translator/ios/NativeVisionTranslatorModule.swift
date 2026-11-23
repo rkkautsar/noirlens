@@ -67,9 +67,19 @@ public final class NativeVisionTranslatorModule: Module {
     // returned untouched so Vietnamese accents are not stripped, and Japanese
     // only romanizes kana (kanji readings need a dictionary, not pinyin).
     AsyncFunction("romanize") { (text: String, language: String) async -> String in
-      let hasNonLatin = text.unicodeScalars.contains { $0.value >= 0x0370 }
-      if !hasNonLatin {
+      // Only the scripts the OCR supports get a reading; Latin text (including
+      // Vietnamese diacritics above U+0370) passes through untouched.
+      func isSupported(_ value: UInt32) -> Bool {
+        return (0xAC00...0xD7AF).contains(value) || (0x4E00...0x9FFF).contains(value)
+          || (0x3400...0x4DBF).contains(value) || (0x3040...0x30FF).contains(value)
+          || (0x0400...0x04FF).contains(value) || (0x0600...0x06FF).contains(value)
+          || (0x0E00...0x0E7F).contains(value)
+      }
+      guard text.unicodeScalars.contains(where: { isSupported($0.value) }) else {
         return text
+      }
+      let hasHan = text.unicodeScalars.contains {
+        (0x4E00...0x9FFF).contains($0.value) || (0x3400...0x4DBF).contains($0.value)
       }
       let lang = language.lowercased()
       if lang.hasPrefix("ja") {
@@ -77,10 +87,14 @@ public final class NativeVisionTranslatorModule: Module {
         for name in ["Hiragana-Latin", "Katakana-Latin"] {
           s = s.applyingTransform(StringTransform(name), reverse: false) ?? s
         }
-        return s.applyingTransform(.stripDiacritics, reverse: false) ?? s
+        return s
       }
       let latin = text.applyingTransform(.toLatin, reverse: false) ?? text
-      return latin.applyingTransform(.stripDiacritics, reverse: false) ?? latin
+      // Pinyin tone marks are only stripped when Han was transliterated; a
+      // Latin run's accents are preserved.
+      return hasHan
+        ? (latin.applyingTransform(.stripDiacritics, reverse: false) ?? latin)
+        : latin
     }
 
     AsyncFunction("translate") { (params: TranslateParams) async throws -> [String: Any] in

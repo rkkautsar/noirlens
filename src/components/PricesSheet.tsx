@@ -9,9 +9,11 @@ import { colors } from '@/theme';
 
 export function PricesSheet({
   rows,
+  selectedStart,
   onClose,
 }: {
   rows: PriceConversion[];
+  selectedStart?: number;
   onClose: () => void;
 }) {
   const preferred = preferredCurrency();
@@ -25,6 +27,7 @@ export function PricesSheet({
           rows={prices}
           target={prices[0]?.target ?? preferred.code}
           locale={preferred.locale}
+          selectedStart={selectedStart}
         />
       </ScrollView>
       <View style={styles.footer}>

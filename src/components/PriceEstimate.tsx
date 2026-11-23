@@ -12,10 +12,12 @@ export function PriceEstimate({
   rows,
   target,
   locale,
+  selectedStart,
 }: {
   rows: PriceConversion[];
   target: string;
   locale: string;
+  selectedStart?: number;
 }) {
   if (rows.length === 0) {
     return null;
@@ -29,7 +31,10 @@ export function PriceEstimate({
       </View>
 
       {rows.map((row) => (
-        <View key={`${row.start}-${row.source}-${row.amount}`} style={styles.row}>
+        <View
+          key={`${row.start}-${row.source}-${row.amount}`}
+          style={[styles.row, row.start === selectedStart && styles.rowSelected]}
+        >
           <Text style={styles.line} selectable>
             {row.raw} ≈{' '}
             <Text style={styles.target}>
@@ -55,6 +60,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 8,
+  },
+  rowSelected: {
+    backgroundColor: colors.accentSoft,
+    borderRadius: 8,
   },
   row: {
     gap: 3,

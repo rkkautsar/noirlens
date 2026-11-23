@@ -237,10 +237,16 @@ export function detectPrices(
   );
 
   let match: RegExpExecArray | null;
-  // "3,500 won" (suffix only, whole word) — a bare `won` in prose is English.
-  const wonSuffix = /(\d[\d.,]*)\s+won\b/gi;
-  while ((match = wonSuffix.exec(normalized)) !== null) {
-    push(match[0] ?? '', match[1] ?? '', 'KRW', match.index);
+  // English "won" is only a currency cue for a Korean source. Whole-word,
+  // suffix-only, and the amount may use spaces (12 500 won).
+  if (language === 'ko') {
+    const wonSuffix = new RegExp(
+      `(?<![\\d.,])(${NUMBER_PATTERN})(?![\\d.,])\\s+won\\b`,
+      'gi',
+    );
+    while ((match = wonSuffix.exec(normalized)) !== null) {
+      push(match[0] ?? '', match[1] ?? '', 'KRW', match.index);
+    }
   }
   while ((match = codePrefix.exec(normalized)) !== null) {
     push(match[0] ?? '', match[2] ?? '', match[1] ?? '', match.index);

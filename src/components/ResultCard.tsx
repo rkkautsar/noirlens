@@ -35,7 +35,7 @@ export function ResultCard({
   onShowOriginal: () => void;
   onOpenLanguages: () => void;
   onLookUp: (phrase: string, alt?: string) => void;
-  onOpenPrices: (prices: PriceConversion[]) => void;
+  onOpenPrices: (prices: PriceConversion[], selectedStart?: number) => void;
 }) {
   const insets = useSafeAreaInsets();
   const [copied, setCopied] = useState(false);
@@ -120,18 +120,26 @@ export function ResultCard({
       .toLowerCase();
   const translationPrices = priceConversions(
     result.translatedText,
-    'en',
+    result.sourceLanguage,
     preferred.code,
   );
   const sheetPrices =
     translationPrices.length > 0 ? translationPrices : prices;
+  const missingSourcePrices = prices.filter(
+    (price) =>
+      !translationPrices.some(
+        (translated) =>
+          translated.amount === price.amount &&
+          translated.source === price.source,
+      ),
+  );
   const renderSource = () => {
-    if (translationPrices.length > 0 || prices.length === 0) {
+    if (missingSourcePrices.length === 0) {
       return result.sourceText;
     }
     const parts: React.ReactNode[] = [];
     let cursor = 0;
-    for (const price of prices) {
+    for (const price of missingSourcePrices) {
       if (price.start < cursor) {
         continue;
       }
@@ -143,7 +151,7 @@ export function ResultCard({
           key={`source-price-${price.start}`}
           style={styles.priceTerm}
           onPress={() => {
-            onOpenPrices(prices);
+            onOpenPrices(prices, price.start);
           }}
         >
           {result.sourceText.slice(price.start, price.end)}
@@ -156,6 +164,7 @@ export function ResultCard({
   };
   const [romanizedState, setRomanizedState] = useState(() => ({
     input: result.sourceText,
+    language: result.sourceLanguage,
     value: romanize(result.sourceText),
   }));
   useEffect(() => {
@@ -163,7 +172,11 @@ export function ResultCard({
     void romanizeNative(result.sourceText, result.sourceLanguage).then(
       (value) => {
         if (active) {
-          setRomanizedState({ input: result.sourceText, value });
+          setRomanizedState({
+            input: result.sourceText,
+            language: result.sourceLanguage,
+            value,
+          });
         }
       },
     );
@@ -172,7 +185,8 @@ export function ResultCard({
     };
   }, [result.sourceText, result.sourceLanguage]);
   const romanizedSource =
-    romanizedState.input === result.sourceText
+    romanizedState.input === result.sourceText &&
+    romanizedState.language === result.sourceLanguage
       ? romanizedState.value
       : romanize(result.sourceText);
 
@@ -193,7 +207,7 @@ export function ResultCard({
       spans.push({ start: price.start, end: price.end, kind: 'price' });
     }
     // Romanized dish/brand names the translator kept as proper nouns.
-    for (const match of text.matchAll(/[A-Z][a-z]+(?:[ \t][A-Z][a-z]+)+/g)) {
+    for (const match of text.matchAll(/[A-Z][a-z]+[ \t][A-Z][a-z]+/g)) {
       const start = match.index ?? 0;
       spans.push({ start, end: start + match[0].length, kind: 'term' });
     }
@@ -225,7 +239,7 @@ export function ResultCard({
           style={span.kind === 'price' ? styles.priceTerm : styles.lookupTerm}
           onPress={() => {
             if (span.kind === 'price') {
-              onOpenPrices(sheetPrices);
+              onOpenPrices(sheetPrices, span.start);
             } else {
               onLookUp(slice);
             }
@@ -290,7 +304,9 @@ export function ResultCard({
         <View style={styles.sourceBlock}>
           <Text
             style={styles.sourceText}
-            numberOfLines={translated ? 3 : 6}
+            numberOfLines={
+              missingSourcePrices.length > 0 ? undefined : translated ? 3 : 6
+            }
             selectable
           >
             {renderSource()}

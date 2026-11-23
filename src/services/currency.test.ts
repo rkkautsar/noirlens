@@ -125,7 +125,7 @@ describe('conversion', () => {
 
 describe('won detection', () => {
   it('matches only a whole-word won suffix', () => {
-    const rows = detectPrices('3,500 won', 'en');
+    const rows = detectPrices('3,500 won', 'ko');
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({
       raw: '3,500 won',
@@ -137,14 +137,16 @@ describe('won detection', () => {
   });
 
   it('does not treat English prose as KRW', () => {
-    expect(detectPrices('We won 3 games', 'en')).toHaveLength(0);
-    expect(detectPrices('40 wonderful dishes', 'en')).toHaveLength(0);
+    expect(detectPrices('We won 3 games', 'ko')).toHaveLength(0);
+    expect(detectPrices('40 wonderful dishes', 'ko')).toHaveLength(0);
+    expect(detectPrices('12 500 won', 'ko')[0]?.amount).toBe(12500);
+    expect(detectPrices('1 000 won', 'ko')[0]?.amount).toBe(1000);
   });
 
   it('finds the run-on translation prices exactly', () => {
     const rows = detectPrices(
       'tteokbokki deokbokki 3,500 won Sundae 4,500 won 6,000 fish cake gimbap 2,500 won 1/2,000 won',
-      'en',
+      'ko',
     );
     expect(rows.map((row) => row.raw)).toEqual([
       '3,500 won',

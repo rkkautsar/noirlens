@@ -124,9 +124,21 @@ export function romanize(text: string): string {
   for (let i = 0; i < chars.length; i += 1) {
     const char = chars[i] ?? '';
     if (char === 'っ' || char === 'ッ') {
-      const next = romanizeChar(chars[i + 1] ?? '', chars[i + 2] ?? '').text;
-      const consonant = /^(ch|sh|ts|.)/.exec(next)?.[0] ?? '';
-      out += consonant === 'ch' ? 't' : consonant;
+      const nextChar = chars[i + 1] ?? '';
+      const isKana =
+        HIRAGANA[nextChar] !== undefined || KATAKANA[nextChar] !== undefined;
+      if (!isKana) {
+        continue;
+      }
+      const next = romanizeChar(nextChar, chars[i + 2] ?? '').text;
+      const consonant = next.startsWith('ch')
+        ? 't'
+        : next.startsWith('sh')
+          ? 's'
+          : next.startsWith('ts')
+            ? 't'
+            : (next.match(/^[a-z]/)?.[0] ?? '');
+      out += consonant;
       continue;
     }
     const result = romanizeChar(char, chars[i + 1] ?? '');

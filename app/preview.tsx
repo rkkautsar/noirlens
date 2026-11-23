@@ -73,18 +73,23 @@ export default function PreviewScreen() {
   const router = useRouter();
   const [overlay, setOverlay] = useState<
     | { kind: 'lookup'; q: string; alt?: string }
-    | { kind: 'prices'; rows: import('@/services/currency').PriceConversion[] }
+    | {
+        kind: 'prices';
+        rows: import('@/services/currency').PriceConversion[];
+        selectedStart?: number;
+      }
     | { kind: 'languages' }
     | { kind: 'history'; demo?: boolean }
     | null
   >(null);
   const openPrices = (
     prices: import('@/services/currency').PriceConversion[],
+    selectedStart?: number,
   ) => {
     if (prices.length === 0) {
       return;
     }
-    setOverlay({ kind: 'prices', rows: prices });
+    setOverlay({ kind: 'prices', rows: prices, selectedStart });
   };
   const lookUp = (phrase: string, alt?: string) => {
     setOverlay({ kind: 'lookup', q: phrase, alt });

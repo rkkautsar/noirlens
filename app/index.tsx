@@ -38,7 +38,11 @@ export default function ScannerScreen() {
   const [showOriginal, setShowOriginal] = useState(false);
   const [overlay, setOverlay] = useState<
     | { kind: 'lookup'; q: string; alt?: string }
-    | { kind: 'prices'; rows: import('@/services/currency').PriceConversion[] }
+    | {
+        kind: 'prices';
+        rows: import('@/services/currency').PriceConversion[];
+        selectedStart?: number;
+      }
     | { kind: 'languages' }
     | { kind: 'history' }
     | null
@@ -113,11 +117,14 @@ export default function ScannerScreen() {
     setOverlay({ kind: 'lookup', q: query, alt });
   };
 
-  const openPrices = (prices: import('@/services/currency').PriceConversion[]) => {
+  const openPrices = (
+    prices: import('@/services/currency').PriceConversion[],
+    selectedStart?: number,
+  ) => {
     if (prices.length === 0) {
       return;
     }
-    setOverlay({ kind: 'prices', rows: prices });
+    setOverlay({ kind: 'prices', rows: prices, selectedStart });
   };
 
   const openPaywall = () => {
@@ -324,6 +331,7 @@ export default function ScannerScreen() {
           ) : overlay.kind === 'prices' ? (
             <PricesSheet
               rows={overlay.rows}
+              selectedStart={overlay.selectedStart}
               onClose={() => setOverlay(null)}
             />
           ) : overlay.kind === 'languages' ? (

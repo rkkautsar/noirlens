@@ -2,9 +2,10 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 
 const translate = vi.fn();
 const prepareLanguagePack = vi.fn();
+const checkLanguagePackStatus = vi.fn();
 
 vi.mock('../../modules/native-vision-translator', () => ({
-  default: { translate, prepareLanguagePack },
+  default: { translate, prepareLanguagePack, checkLanguagePackStatus },
 }));
 
 const { translateText, installPack } = await import('./translationTask');
@@ -13,6 +14,8 @@ describe('translationTask', () => {
   beforeEach(() => {
     translate.mockReset();
     prepareLanguagePack.mockReset();
+    checkLanguagePackStatus.mockReset();
+    checkLanguagePackStatus.mockResolvedValue({ status: 'supported' });
   });
 
   it('returns translated text and cache state', async () => {

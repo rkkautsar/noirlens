@@ -12,18 +12,13 @@ import { colors } from '@/theme';
 export function AppSheet({
   visible,
   onClose,
-  expanded = false,
   children,
 }: {
   visible: boolean;
   onClose: () => void;
-  /** Open at a taller first snap point (history lists). */
-  expanded?: boolean;
   children?: React.ReactNode;
 }) {
-  const snapPoints: SnapPoint[] = expanded
-    ? [{ fraction: 0.72 }, 'full']
-    : ['half', 'full'];
+  const snapPoints: SnapPoint[] = ['full'];
   return (
     <BottomSheet
       isPresented={visible}
@@ -41,5 +36,7 @@ export function AppSheet({
 const styles = StyleSheet.create({
   fill: {
     flex: 1,
+    width: '100%',
+    alignSelf: 'stretch',
   },
 });

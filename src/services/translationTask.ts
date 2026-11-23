@@ -46,6 +46,27 @@ export async function translateText({
       };
     }
     if (isLanguagePackFailure(error)) {
+      // The bridge can report a pack error even when the pack is installed.
+      // Trust the availability check and retry once before asking to download.
+      const availability = await vision
+        .checkLanguagePackStatus(sourceLanguage, targetLanguage)
+        .catch(() => null);
+      if (availability?.status === 'installed') {
+        try {
+          const retry = await vision.translate({
+            text,
+            sourceLanguage,
+            targetLanguage,
+          });
+          return {
+            status: 'translated',
+            text: retry.translatedText,
+            cached: retry.cached ?? false,
+          };
+        } catch {
+          return { status: 'failed', message };
+        }
+      }
       return { status: 'pack_missing', message };
     }
     return { status: 'failed', message };

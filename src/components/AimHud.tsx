@@ -10,8 +10,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type { OcrCrop } from '../../modules/native-vision-translator';
 import type { ScanError } from '@/scanner/machine';
+import { useShellLayout } from './ScreenShell';
 import { colors, typography } from '@/theme';
 import { MicroLabel } from './ui';
+
+function useAimFooterInset() {
+  return useShellLayout().footerHeight + 8;
+}
 
 export function AimHud({
   scanning,
@@ -23,6 +28,7 @@ export function AimHud({
   onReticleFrame?: (crop: OcrCrop) => void;
 }) {
   const insets = useSafeAreaInsets();
+  const footerInset = useAimFooterInset();
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
 
   const reportReticle = (event: LayoutChangeEvent) => {
@@ -70,7 +76,7 @@ export function AimHud({
       </View>
 
       <View style={styles.footerWrap}>
-        <View style={[styles.footer, { paddingBottom: insets.bottom + 152 }]}>
+        <View style={[styles.footer, { paddingBottom: footerInset }]}>
           {scanning ? (
             <>
               <View style={styles.readingRow}>

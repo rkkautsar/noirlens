@@ -296,21 +296,20 @@ export function ResultActions({
   onShowOriginal,
   thumbnail,
   onOpenLanguages,
-  onPreparePack,
+  primary = 'scan',
 }: {
   result: ScanResult;
   onScanAgain: () => void;
   onShowOriginal?: () => void;
   thumbnail?: string;
   onOpenLanguages: () => void;
-  onPreparePack?: () => void;
+  /** Saved results lead with Back; live results lead with Scan again. */
+  primary?: 'scan' | 'close';
 }) {
   const [copied, setCopied] = useState(false);
   const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const translated = result.kind === 'translated';
-  const packMissing = result.kind === 'pack_missing';
-  const shortLanguage = languageShortLabel(result.sourceLanguage);
   const preferred = preferredCurrency();
   const prices = priceConversions(
     result.sourceText,
@@ -340,24 +339,20 @@ export function ResultActions({
   };
 
   const primaryLabel =
-    packMissing && onPreparePack
-      ? `GET ${shortLanguage} PACK`
+    primary === 'close'
+      ? 'BACK'
       : translated
         ? 'SCAN AGAIN'
-        : packMissing
-          ? `GET ${shortLanguage} PACK`
-          : 'CHOOSE LANGUAGE';
+        : 'CHOOSE LANGUAGE';
   const primaryIcon =
-    packMissing && onPreparePack
-      ? 'cloud-download-outline'
+    primary === 'close'
+      ? 'chevron-back'
       : translated
         ? 'refresh'
-        : packMissing
-          ? 'cloud-download-outline'
-          : 'language-outline';
+        : 'language-outline';
   const primaryAction =
-    packMissing && onPreparePack
-      ? onPreparePack
+    primary === 'close'
+      ? onScanAgain
       : translated
         ? onScanAgain
         : onOpenLanguages;

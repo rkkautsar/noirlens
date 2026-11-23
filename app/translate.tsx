@@ -4,7 +4,7 @@ import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 import { useEffect, useReducer, useRef, useState } from 'react';
 import {
-  KeyboardAvoidingView,
+  Keyboard,
   Platform,
   Pressable,
   ScrollView,
@@ -45,6 +45,7 @@ export default function TranslateScreen() {
   const preferred = useSourceLanguage();
   const allowance = useScanAllowance();
   const { openSheet } = useSheet();
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
 
   const [source, setSource] = useState(() =>
     preferred.code !== 'auto' ? preferred.code : 'ja',
@@ -65,6 +66,21 @@ export default function TranslateScreen() {
     },
     [],
   );
+
+  useEffect(() => {
+    const show = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+      (event) => setKeyboardHeight(event.endCoordinates.height),
+    );
+    const hide = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
+      () => setKeyboardHeight(0),
+    );
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
 
   useEffect(() => {
     void vision.stopSpeaking().catch(() => {});
@@ -229,11 +245,7 @@ export default function TranslateScreen() {
           </View>
       </View>
 
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={0}
-      >
+      <View style={styles.flex}>
         <ScrollView
           style={styles.flex}
           contentContainerStyle={styles.content}
@@ -323,7 +335,13 @@ export default function TranslateScreen() {
         </ScrollView>
 
         <View
-          style={[styles.composer, { paddingBottom: insets.bottom + 8 }]}
+          style={[
+            styles.composer,
+            {
+              paddingBottom: insets.bottom + 8,
+              marginBottom: keyboardHeight,
+            },
+          ]}
         >
           <TextInput
             value={input}
@@ -358,7 +376,7 @@ export default function TranslateScreen() {
             )}
           </Pressable>
         </View>
-      </KeyboardAvoidingView>
+      </View>
 
       {showing && request.text ? (
         <ShowToLocal

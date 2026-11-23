@@ -20,7 +20,7 @@ import {
 import type { ScanResult } from '@/scanner/machine';
 import { captures, useCaptures } from '@/services/captures';
 import { useScanAllowance } from '@/services/allowance';
-import { installPack, translateText } from '@/services/translationTask';
+import { translateText } from '@/services/translationTask';
 import type { CaptureRecord } from '@/services/captureModel';
 import { rerunCaptureOcr, retryCapture } from '@/services/captureProcessing';
 import { DEMO_HISTORY } from '@/services/demoHistory';
@@ -88,7 +88,6 @@ export function ScanResultScreen({
   const [captureError, setCaptureError] = useState<string | null>(null);
   const [translating, setTranslating] = useState(false);
   const [languageBusy, setLanguageBusy] = useState(false);
-  const [packBusy, setPackBusy] = useState(false);
   const [captureNonce, setCaptureNonce] = useState(0);
   const [ocrError, setOcrError] = useState<string | null>(null);
   const allowance = useScanAllowance();
@@ -96,7 +95,6 @@ export function ScanResultScreen({
   const pendingHint = useRef<string | null>(null);
   const translatedKey = useRef<string | null>(null);
   const requestToken = useRef(0);
-  const packBusyRef = useRef(false);
 
   useEffect(() => {
     let active = true;
@@ -254,30 +252,7 @@ export function ScanResultScreen({
     applyOcrLanguage(next);
   };
 
-  const preparePack = async () => {
-    if (!record || packBusyRef.current) {
-      return;
-    }
-    packBusyRef.current = true;
-    setPackBusy(true);
-    setCaptureError(null);
-    try {
-      const outcome = await installPack(
-        record.language || record.hint || 'und',
-        'en',
-      );
-      if (outcome !== 'installed') {
-        setCaptureResult(null);
-        setCaptureError('The pack did not finish installing. Try again.');
-        return;
-      }
-      translatedKey.current = null;
-      setCaptureNonce((value) => value + 1);
-    } finally {
-      packBusyRef.current = false;
-      setPackBusy(false);
-    }
-  };
+
 
   const retryTranslation = () => {
     setCaptureError(null);
@@ -309,8 +284,7 @@ export function ScanResultScreen({
           captureText.length > 0 &&
           !captureResult &&
           !captureError) ||
-        translating ||
-        packBusy),
+        translating),
   );
 
   return (
@@ -343,6 +317,7 @@ export function ScanResultScreen({
           ) : result ? (
             <ResultActions
               result={result}
+              primary="close"
               onScanAgain={newScan}
               onShowOriginal={
                 captureId && record ? () => setInspect(true) : undefined
@@ -350,8 +325,7 @@ export function ScanResultScreen({
               thumbnail={
                 captureId && record ? captures.uriFor(record.thumb) : undefined
               }
-              onPreparePack={captureId ? preparePack : undefined}
-              onOpenLanguages={openResultLanguages}
+                      onOpenLanguages={openResultLanguages}
             />
           ) : undefined
         }

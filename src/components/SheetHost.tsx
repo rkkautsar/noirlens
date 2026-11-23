@@ -134,11 +134,7 @@ export function SheetHost({ children }: { children: ReactNode }) {
   return (
     <SheetContext.Provider value={value}>
       {children}
-      <AppSheet
-        visible={sheet !== null}
-        onClose={handleDismiss}
-        expanded={sheet?.request.kind === 'history'}
-      >
+      <AppSheet visible={sheet !== null} onClose={handleDismiss}>
         {sheet?.request.kind === 'lookup' ? (
           <LookupSheet
             q={sheet.request.q}

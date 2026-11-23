@@ -21,7 +21,7 @@ export function LanguagePickerSheet({
   allowAuto?: boolean;
 }) {
   return (
-    <View>
+    <View style={styles.root}>
       <MicroLabel style={styles.heading}>{title}</MicroLabel>
       <ScrollView style={styles.list} contentContainerStyle={styles.listContent}>
         {allowAuto ? (
@@ -84,8 +84,12 @@ const styles = StyleSheet.create({
     paddingTop: 4,
     paddingBottom: 10,
   },
+  root: {
+    flex: 1,
+    alignSelf: 'stretch',
+  },
   list: {
-    maxHeight: 380,
+    flex: 1,
   },
   listContent: {
     paddingBottom: 12,

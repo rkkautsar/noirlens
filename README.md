@@ -12,20 +12,20 @@ Two top tabs, **Camera** and **Translate**. Inside the switcher, the active tab 
 
 Two capture behaviors, switched with the layers button beside the torch. The choice persists between launches.
 
-**Read** — press the unobstructed standby area or the center of the shutter bar to start the camera; aim and release to capture. A quick tap can also start and request a capture; there is no minimum hold time. The shutter's side controls are Cancel and Languages. The camera samples up to three frames, keeps the available frame with the highest edge-sharpness score, crops to an expanded region around the reticle (a 16% margin per side where space permits; a central 60% crop before the reticle is measured), runs OCR, translates to English, and shows the result. The sensor stops before OCR starts.
+**Read** — press the unobstructed standby area or the center of the shutter bar to start the camera; aim and release to capture. A quick tap can also start and request a capture; there is no minimum hold time. The shutter's side controls are Cancel and Languages. The camera samples up to three frames, keeps the available frame with the highest edge-sharpness score, crops to an expanded region around the reticle (a 16% margin per side where space permits; a central 60% crop before the reticle is measured), and runs OCR. Supported non-English text is translated into English when the pack is installed; an English or undetected result locks without a translation, and a missing pack locks a notice. The sensor stops before OCR starts.
 
 | State | Camera | Screen | Moves on |
 | --- | --- | --- | --- |
 | `SLEEP` | off | standby; press and release to capture | touch down |
 | `PREWARM` | 1280×720 session | preview and reticle while pressed | release |
-| `SCANNING` | up to three candidate frames, one retained, then off | "Reading on-device" | OCR + translation |
+| `SCANNING` | up to three candidate frames, one retained, then off | "Reading on-device" | a result, or standby on failure |
 | `LOCKED_READ` | off | result card; copy, inspect, change language, next scan | hold for next scan |
 
 The transition table is a pure reducer in `src/scanner/machine.ts`; `src/scanner/useScanner.ts` executes its hardware effects. A frozen result is never interrupted by lowering the phone.
 
 **Collect** — the same press and release, but the selected frame is saved as a JPEG plus a thumbnail (longest side at most 480 px) under `Documents/captures`, then queued for OCR. There is no result screen: History shows the number of retained, unreviewed captures, and after a save the real thumbnail flies into the History icon unless Reduce Motion is enabled. Collect captures do not use the daily translation allowance. Opening a capture marks it reviewed.
 
-Metadata lives in AsyncStorage (`captures.v1`) and images live as files, never base64 in storage. Collect retains the newest 100 records. Eviction, Delete, and Clear remove the metadata first, then attempt to remove the corresponding JPEGs and thumbnails; leftovers are eligible for startup cleanup. Unfinished OCR resumes on the next launch. On scanner startup, after a successful and complete metadata read, the app attempts to delete unreferenced `.jpg` files whose modification time is more than ten minutes old. The captures directory is excluded from iCloud backup.
+Metadata lives in AsyncStorage (`captures.v1`). On iOS, the record stores filenames and the image bytes are saved as files; the web mock persists its data-URI mock instead. Collect retains the newest 100 records. Eviction, Delete, and Clear remove the metadata first, then attempt to remove the corresponding JPEGs and thumbnails; leftovers are eligible for startup cleanup. Unfinished OCR resumes on the next launch. On scanner startup, after a successful and complete metadata read, the app attempts to delete unreferenced `.jpg` files whose modification time is more than ten minutes old. The captures directory is excluded from iCloud backup.
 
 **Review** — History → CAPTURES, or the History button while in Collect. Rows show the thumbnail, timestamp, OCR status, and a text preview. A row opens the full image with its OCR boxes: tap a box to translate it, or translate the whole capture. Copy, retry, delete, and clear all work offline. Missing packs use the same native download prompt as Read.
 
@@ -33,7 +33,7 @@ Delete removes the record first and then attempts to remove both files. If the A
 
 ### Translate
 
-Type or paste text, choose source and target (target defaults to English; the source starts from the saved Camera source unless it is AUTO, otherwise Japanese), swap, translate. Both languages are explicit; there is no auto-detect here. The text box and TRANSLATE button are docked above the safe area.
+Type or paste text, choose source and target (target defaults to English; source defaults to the current Camera source if already loaded and not AUTO, otherwise Japanese), swap, translate. Both languages are explicit; there is no auto-detect here. The text box and TRANSLATE button are docked above the safe area.
 
 Results offer COPY, SPEAK, and SHOW. Speech is one `AVSpeechSynthesizer`: it requests a voice for the target language with a system-language fallback, one utterance at a time, and stops on target changes or when Translate unmounts. SHOW is a full-screen, high-contrast presentation with a font size fitted to the text and viewport, scrolling for long text, up to four lines of the current input in smaller type, a 180° flip for facing someone else, and no automatic playback.
 
@@ -96,7 +96,7 @@ The CI artifact is unsigned and is not suitable for App Store submission. If ins
 
 ## Offline language packs
 
-Camera and Capture Review translate into English, so they need source→English packs. Translate uses the source and target you choose; Apple's Translation framework decides whether that pair is supported on the device. iOS fetches each model through a system prompt while it remains installed; after that OCR and translation need no network connection. Optional lookup and web search can still contact third-party services. The traveler list covers Japanese, Korean, Chinese (Simplified and Traditional), Thai, Vietnamese, Indonesian, German, French, Spanish, Italian, Portuguese, Dutch, Polish, Russian, Arabic, and Turkish, plus English, which is selectable on either side in Translate.
+Camera and Capture Review translate into English, so they need source→English packs. Translate uses the source and target you choose; Apple's Translation framework decides whether that pair is supported on the device. When a supported pair is missing its models, the app can ask iOS to download them through the system prompt. With the necessary models installed, translation can run offline. English-to-English and unknown-language text are identity paths. Optional lookup and web search can still contact third-party services. The traveler list covers Japanese, Korean, Chinese (Simplified and Traditional), Thai, Vietnamese, Indonesian, German, French, Spanish, Italian, Portuguese, Dutch, Polish, Russian, Arabic, and Turkish, plus English, which is selectable on either side in Translate.
 
 Apple's supported pairs are the ceiling. If a pack is missing, the result asks for the download instead of falling back to an online service. Packs are installed by iOS; deleting one in Settings requires downloading it again.
 
@@ -145,19 +145,19 @@ The table is an illustrative order-of-magnitude model, not a measurement and not
 
 Assumptions: rear camera + preview at about 1.2–1.8 W for our 1280×720 session, 2–3 W for a higher-resolution preview plus a continuous Vision OCR loop; one OCR pass about 0.5 J; one translation about 1 J. A [2026 sensor-battery study](https://pmc.ncbi.nlm.nih.gov/articles/PMC13211051/) measured the rear camera at roughly six minutes of battery per percentage point with no preview or recording; that supports the camera cost, not these rows. The inputs are illustrative and the real numbers will differ.
 
-The screen is excluded from the table; its effect is separate. The standby and result screens are almost entirely `#000000`, which an OLED panel renders with the pixels off, and the app never raises the display brightness — auto-brightness stays in charge. While aiming, the default Noir mode keeps the live preview but dims it with a 72% black overlay and a repeating scanline layer; no per-frame edge filter runs. A live-preview translator instead shows an undimmed camera image while pointing and can keep a full-color still on screen during review.
+The screen is excluded from the table; its effect is separate. The standby and result screens are almost entirely `#000000`, which an OLED panel renders with the pixels off, and the app does not change the display brightness. While aiming, the default Noir mode keeps the live preview but dims it with a 72% black overlay and a repeating scanline layer; no per-frame edge filter runs. This model assumes a live-preview comparator shows an undimmed camera image while pointing and keeps a full-color still on screen during review.
 
-Under illustrative display assumptions — 0.1–0.2 W for the dimmed preview, 0.05–0.15 W for black text, 0.5–1 W for full-color imagery — the same ten-minute flows differ by roughly 0.009–0.025 Wh for NoirLens versus 0.08–0.17 Wh for full-color content. Neither figure is measured; the screen is on while the user reads in both cases.
+Under illustrative display assumptions — 0.1–0.2 W for the dimmed preview, 0.05–0.15 W for a black screen with light text, 0.5–1 W for full-color imagery — the same ten-minute flows differ by roughly 0.009–0.025 Wh for NoirLens versus 0.08–0.17 Wh for full-color content. Neither figure is measured; the screen is on while the user reads in both cases.
 
 To compare on a device, run the same scripted flow on both apps. For absolute energy, use a measurement method that reports joules or watt-hours; iOS per-app battery usage is a relative indicator. Between scans, camera standby does not stream frames or run a continuous OCR or translation loop. Queued Collect OCR and user-requested translation can still run with the camera off.
 
 ## Power notes
 
 - The session stops as soon as the selected frame is grabbed and encoded, before OCR or translation starts.
-- Collect reuses that same capture path; the camera is already off while the JPEG is written and OCR runs in a bounded queue (two at a time, keyed by capture id so an old result can never land on a newer capture).
+- Collect reuses that same capture path. The capture session stops before the JPEG files are written and before the capture is queued for OCR; a later hold can power the camera while queued OCR continues in a bounded queue (two at a time, keyed by capture id so an old result can never land on a newer capture).
 - Noir mode composites the live preview through a 72% black overlay and a repeating scanline layer. There is no per-frame CoreImage pass; the OLED emits a fraction of the light of the undimmed preview.
 - The session is configured at 1280×720; frame rate is left to AVFoundation. HDR video, subject-area monitoring, and multi-camera devices are not used. Low-light boost is not configured.
-- Screen brightness is never touched; the OLED standby (pure black, pixels off) plus auto-brightness handle idle power, and the aiming view is dimmed with scanlines rather than an undimmed full-color preview. The scanner keeps the screen awake while mounted.
+- The app does not change screen brightness; the OLED standby (pure black, pixels off) and the user's brightness setting handle idle power, and the aiming view is dimmed with scanlines rather than an undimmed color preview. The scanner keeps the screen awake while mounted.
 - Backgrounding or navigating away puts an unlocked scanner to sleep and stops the camera. A locked Read result is preserved; its session is already stopped.
 
 ## Verify
@@ -174,7 +174,7 @@ npx expo export --platform ios --output-dir dist
 ## Limits
 
 - iOS-only, iPhone-only, portrait-locked. No Android build.
-- Camera, speech, language-pack prompts, file persistence, and the capture animation require a physical device; they were not exercised without one.
+- Validate the real camera, speech, system pack prompts, native capture files, and animation on a physical iPhone; the web mock does not validate native behavior.
 - OCR permits one character for recognized script ranges (kana, Han, Hangul, Thai, Arabic, Cyrillic) and requires at least two otherwise. Short observations require 0.45 confidence for those scripts and 0.72 otherwise. For four or more characters the main floor is 0.35 with an explicit source and 0.40 in AUTO; a final automatic pass uses 0.50. A separate noise filter rejects strings made entirely of digits, punctuation, whitespace, and listed symbols.
 - Read crops to an expanded region around the reticle; text outside it is ignored. Collect saves the full upright frame.
 - Collect keeps at most 100 captures. Review uses 480 px thumbnails; the detail screen decodes the stored JPEG.

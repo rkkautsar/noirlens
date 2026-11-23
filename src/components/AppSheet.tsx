@@ -1,4 +1,4 @@
-import { BottomSheet, type SnapPoint } from '@expo/ui';
+import { BottomSheet, RNHostView, type SnapPoint } from '@expo/ui';
 import { StyleSheet, View } from 'react-native';
 
 import { colors } from '@/theme';
@@ -12,13 +12,18 @@ import { colors } from '@/theme';
 export function AppSheet({
   visible,
   onClose,
+  expanded = false,
   children,
 }: {
   visible: boolean;
   onClose: () => void;
+  /** Open the first detent higher (history lists). */
+  expanded?: boolean;
   children?: React.ReactNode;
 }) {
-  const snapPoints: SnapPoint[] = ['full'];
+  const snapPoints: SnapPoint[] = expanded
+    ? [{ fraction: 0.72 }, 'full']
+    : ['half', 'full'];
   return (
     <BottomSheet
       isPresented={visible}
@@ -28,7 +33,9 @@ export function AppSheet({
       contentPadding={0}
       containerColor={colors.background}
     >
-      <View style={styles.fill}>{children}</View>
+      <RNHostView>
+        <View style={styles.fill}>{children}</View>
+      </RNHostView>
     </BottomSheet>
   );
 }

@@ -88,6 +88,7 @@ export function ScanResultScreen({
   const [captureError, setCaptureError] = useState<string | null>(null);
   const [translating, setTranslating] = useState(false);
   const [packBusy, setPackBusy] = useState(false);
+  const [packError, setPackError] = useState<string | null>(null);
   const packBusyRef = useRef(false);
   const [languageBusy, setLanguageBusy] = useState(false);
   const [captureNonce, setCaptureNonce] = useState(0);
@@ -252,18 +253,20 @@ export function ScanResultScreen({
     }
     packBusyRef.current = true;
     setPackBusy(true);
-    setCaptureError(null);
+    setPackError(null);
     try {
       const outcome = await installPack(
         record.language || record.hint || 'und',
         'en',
       );
       if (outcome !== 'installed') {
-        setCaptureError('The pack did not finish installing. Try again.');
+        setPackError('The pack did not finish installing. Try again.');
         return;
       }
       translatedKey.current = null;
       setCaptureNonce((value) => value + 1);
+    } catch {
+      setPackError('The pack could not be installed. Try again.');
     } finally {
       packBusyRef.current = false;
       setPackBusy(false);
@@ -381,6 +384,7 @@ export function ScanResultScreen({
               unlimited={unlimited}
               onPreparePack={captureId ? preparePack : undefined}
               packBusy={packBusy}
+              packError={packError}
               onLookUp={(phrase, alt) => {
                 const q = phrase.trim();
                 if (q) {

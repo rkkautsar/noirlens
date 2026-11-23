@@ -24,6 +24,7 @@ export function ResultBody({
   unlimited,
   onPreparePack,
   packBusy = false,
+  packError,
   onLookUp,
 }: {
   result: ScanResult;
@@ -31,6 +32,7 @@ export function ResultBody({
   unlimited: boolean;
   onPreparePack?: () => void;
   packBusy?: boolean;
+  packError?: string | null;
   onLookUp: (phrase: string, alt?: string) => void;
 }) {
   const [priceTip, setPriceTip] = useState<{
@@ -245,6 +247,9 @@ export function ResultBody({
       ) : (
         <View style={styles.noticeBlock}>
           <Text style={styles.noticeText}>{notice}</Text>
+          {packMissing && packError ? (
+            <Text style={styles.packError}>{packError}</Text>
+          ) : null}
           {packMissing && onPreparePack ? (
             <Pressable
               accessibilityRole="button"
@@ -472,6 +477,12 @@ const styles = StyleSheet.create({
   packActionText: {
     ...typography.micro,
     color: colors.accent,
+  },
+  packError: {
+    ...typography.body,
+    fontSize: 13,
+    lineHeight: 19,
+    color: colors.warning,
   },
   pressed: {
     opacity: 0.7,

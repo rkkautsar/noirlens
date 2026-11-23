@@ -62,6 +62,13 @@ public final class NativeVisionTranslatorModule: Module {
       )
     }
 
+    // ICU transliteration bundled with iOS: kana/Cyrillic/Arabic/Thai to
+    // Latin, Han to Mandarin pinyin. No model download.
+    AsyncFunction("romanize") { (text: String) async -> String in
+      let latin = text.applyingTransform(.toLatin, reverse: false) ?? text
+      return latin.applyingTransform(.stripDiacritics, reverse: false) ?? latin
+    }
+
     AsyncFunction("translate") { (params: TranslateParams) async throws -> [String: Any] in
       try await TranslationBridge.translate(
         text: params.text,

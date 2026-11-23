@@ -12,7 +12,8 @@ import {
 } from '@/services/currency';
 import { preferredCurrency } from '@/services/localeCurrency';
 import { termPattern, untranslatedTerms } from '@/services/lookup';
-import { isRomanizable, romanize, romanTermSpans } from '@/services/romanize';
+import { romanize, romanTermSpans } from '@/services/romanize';
+import { romanizeNative } from '@/services/romanizeNative';
 import { colors, typography } from '@/theme';
 import { PriceEstimate } from './PriceEstimate';
 import { ChipButton, Hairline, MicroLabel, SolidButton } from './ui';
@@ -125,9 +126,20 @@ export function ResultCard({
   const sheetPrices =
     translationPrices.length > 0 ? translationPrices : prices;
   const renderSource = () => result.sourceText;
-  const romanizedSource = isRomanizable(result.sourceText)
-    ? romanize(result.sourceText)
-    : '';
+  const [romanizedSource, setRomanizedSource] = useState(() =>
+    romanize(result.sourceText),
+  );
+  useEffect(() => {
+    let active = true;
+    void romanizeNative(result.sourceText).then((value) => {
+      if (active) {
+        setRomanizedSource(value);
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, [result.sourceText]);
 
   const renderTranslation = () => {
     const text = result.translatedText;
@@ -221,7 +233,9 @@ export function ResultCard({
           </View>
         )}
 
-        {translated && romanizedSource ? (
+        {translated &&
+        romanizedSource &&
+        romanizedSource !== result.sourceText ? (
           <View style={styles.romanizedBlock}>
             <MicroLabel tone="dim">ROMANIZED · APPROX.</MicroLabel>
             <Text style={styles.romanizedText}>{romanizedSource}</Text>

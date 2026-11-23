@@ -70,6 +70,7 @@ export interface NativeVisionTranslatorModule extends NativeModule {
     text: string;
     sourceLanguage: string;
   }): Promise<TranslatePayload>;
+  romanize(text: string): Promise<string>;
   checkLanguagePackStatus(langCode: string): Promise<LanguagePackStatusPayload>;
   prepareLanguagePack(langCode: string): Promise<LanguagePackStatusPayload>;
   getSupportedLanguages(): Promise<string[]>;
@@ -132,6 +133,7 @@ const webMock = {
     });
     return WEB_MOCK_OCR;
   },
+  romanize: async (text: string) => text,
   translate: async ({
     sourceLanguage,
   }: {

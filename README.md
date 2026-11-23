@@ -1,6 +1,6 @@
 # NoirLens
 
-Offline translator for iOS 18+. Point the phone at a sign and read English, type text when there is nothing to point at, or collect a few signs and translate them later. Apple's `Vision` and `Translation` frameworks do the work on-device.
+Battery-first, offline-only translator for iOS 18+. Point the phone at a sign and read English, type text when there is nothing to point at, or collect a few signs and translate them later. Apple's `Vision` and `Translation` frameworks do the work on-device.
 
 No accounts. No uploads. No server. Camera frames and text stay in the app's private storage.
 
@@ -130,6 +130,22 @@ Apple's supported pairs are the ceiling. If a pack is missing, the result asks f
 | `romanize(text, language)` | ICU romanization for the result card |
 | `getSupportedLanguages()` | Apple's supported languages |
 | `EcoCameraView` | Native view with `ecoMode` prop |
+
+## Battery
+
+The camera is the most expensive sensor in an iPhone, so NoirLens powers it only for the hold itself: roughly three seconds per scan, then off while the frame is processed. A live-overlay translator has to keep the preview and an OCR loop running for as long as the camera screen is open.
+
+The table is an order-of-magnitude model, not a measurement, for an iPhone 13 (12.41 Wh) doing ten scans in ten minutes. The screen is on and excluded in every row.
+
+| Flow | Camera/OCR live | Estimated energy | Share of battery |
+| --- | --- | --- | --- |
+| NoirLens, ten 3 s holds | 30 s | 60–80 J (0.017–0.022 Wh) | 0.14–0.18% |
+| Point-and-freeze, 30 s live + 30 s review, five times | 150 s | 400–500 J (0.11–0.14 Wh) | 0.9–1.1% |
+| Apple Translate camera screen left open for the whole 10 min | 600 s | 1.3–1.8 kJ (0.36–0.5 Wh) | 3–4% |
+
+Assumptions: rear camera + preview at about 1.2–1.8 W for our 720p session and 2–3 W for a higher-resolution preview plus a continuous Vision OCR loop; one OCR pass on a captured frame about 0.5 J; one translation about 1 J. A 2026 sensor-battery study found the rear camera to be the iPhone's most demanding sensor — about [six minutes of battery per percent](https://pmc.ncbi.nlm.nih.gov/articles/PMC13211051/) with no preview or recording at all — so the live-overlay rows are if anything conservative. Expect the real numbers to be off by a factor of two; the ordering is the point.
+
+For a real number, run a fixed script on the phone and read Xcode's Energy Log or Settings → Battery per app. The model above is only a design argument: between scans there is no sensor, no OCR loop, and no translation work.
 
 ## Power notes
 

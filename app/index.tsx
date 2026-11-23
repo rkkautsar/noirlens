@@ -241,6 +241,11 @@ export default function ScannerScreen() {
           onShowOriginal={() => {
             setShowOriginal(true);
           }}
+          thumbnail={
+            result.previewJpegBase64
+              ? `data:image/jpeg;base64,${result.previewJpegBase64}`
+              : undefined
+          }
           onOpenLanguages={openLanguages}
           onLookUp={openLookup}
                   />

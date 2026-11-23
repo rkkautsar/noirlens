@@ -202,11 +202,25 @@ enum TranslationBridge {
     source: Locale.Language,
     target: Locale.Language
   ) async throws -> String? {
-    guard let root = topViewController() else {
+    var root = topViewController()
+    // A sheet being dismissed (e.g. History -> result) still hosts the top
+    // controller for a few frames. Presenting into that transition makes
+    // UIKit drop the presentation, so wait for the chain to settle first.
+    var waited = 0
+    while let current = root,
+          current.presentedViewController != nil
+            || current.transitionCoordinator != nil
+            || current.isBeingDismissed,
+          waited < 20 {
+      try? await Task.sleep(nanoseconds: 100_000_000)
+      root = topViewController()
+      waited += 1
+    }
+    guard let presenter = root, presenter.presentedViewController == nil else {
       throw Exception(
-        name: "NoPresentationContext",
-        description: "The translation host could not be presented.",
-        code: "ERR_NO_PRESENTATION_CONTEXT"
+        name: "PresentationBusy",
+        description: "A sheet is still closing; the translation host could not be presented.",
+        code: "ERR_PRESENTATION_BUSY"
       )
     }
 
@@ -215,7 +229,7 @@ enum TranslationBridge {
       text: text,
       source: source,
       target: target,
-      from: root
+      from: presenter
     )
   }
 
@@ -263,7 +277,20 @@ private final class TranslationHostCoordinator {
       host.modalPresentationStyle = .overFullScreen
       host.view.backgroundColor = .clear
       self.host = host
-      root.present(host, animated: false)
+      root.present(host, animated: false) { @MainActor [weak self] in
+        guard let self else { return }
+        if root.presentedViewController !== host && host.view.window == nil {
+          self.finish(
+            .failure(
+              Exception(
+                name: "PresentationFailed",
+                description: "UIKit rejected the translation host presentation.",
+                code: "ERR_PRESENTATION_FAILED"
+              )
+            )
+          )
+        }
+      }
     }
   }
 

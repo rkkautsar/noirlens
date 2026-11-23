@@ -23,8 +23,10 @@ export function OriginalView({
   onScanAgain,
   onOpenLanguages,
   onLookUp,
+  imageUri,
 }: {
   result: ScanResult;
+  imageUri?: string;
   onClose: () => void;
   onScanAgain: () => void;
   onOpenLanguages: () => void;
@@ -43,9 +45,11 @@ export function OriginalView({
     stage,
     'contain',
   );
-  const uri = result.previewJpegBase64
-    ? `data:image/jpeg;base64,${result.previewJpegBase64}`
-    : null;
+  const uri =
+    imageUri ??
+    (result.previewJpegBase64
+      ? `data:image/jpeg;base64,${result.previewJpegBase64}`
+      : null);
 
   const inspect = (event: GestureResponderEvent) => {
     if (!uri || stage.width <= 0) {

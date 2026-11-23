@@ -2,7 +2,6 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Image,
   StyleSheet,
   Text,
   View,
@@ -15,7 +14,7 @@ import { LookupSheet } from '@/components/LookupSheet';
 import { ModeTabs } from '@/components/ModeTabs';
 import { ResultCard } from '@/components/ResultCard';
 import { ScanShutter } from '@/components/ScanShutter';
-import { ScanlineOverlay } from '@/components/ScanlineOverlay';
+import { OriginalView } from '@/components/OriginalView';
 import { ChipButton, MicroLabel, SolidButton } from '@/components/ui';
 import { TopBar } from '@/components/TopBar';
 import {
@@ -146,53 +145,62 @@ export default function ResultScreen() {
     if (translatedKey.current === key) {
       return;
     }
-    translatedKey.current = key;
     const base = captureBase(record);
     const text = record.text.trim();
     setCaptureError(null);
     setCaptureResult(null);
     setTranslating(false);
     if (!text) {
+      translatedKey.current = key;
       return;
     }
     if (isEnglishLanguageCode(base.sourceLanguage)) {
+      translatedKey.current = key;
       setCaptureResult({ ...base, kind: 'english', translatedText: '' });
       return;
     }
     const token = requestToken.current + 1;
     requestToken.current = token;
     setTranslating(true);
-    void vision
-      .translate({
+    // Let a dismissing native sheet finish before Apple Translation presents.
+    const timer = setTimeout(() => {
+      if (token !== requestToken.current) {
+        return;
+      }
+      translatedKey.current = key;
+      void vision
+        .translate({
         text,
-        sourceLanguage: base.sourceLanguage,
-        targetLanguage: 'en',
-      })
-      .then((out) => {
-        if (token !== requestToken.current) {
-          return;
-        }
-        setCaptureResult({
-          ...base,
-          kind: 'translated',
-          translatedText: out.translatedText,
+          sourceLanguage: base.sourceLanguage,
+          targetLanguage: 'en',
+        })
+        .then((out) => {
+          if (token !== requestToken.current) {
+            return;
+          }
+          setCaptureResult({
+            ...base,
+            kind: 'translated',
+            translatedText: out.translatedText,
+          });
+        })
+        .catch((error) => {
+          if (token !== requestToken.current) {
+            return;
+          }
+          if (isLanguagePackFailure(error)) {
+            setCaptureResult({ ...base, kind: 'pack_missing', translatedText: '' });
+          } else {
+            setCaptureError(describeNativeError(error).message);
+          }
+        })
+        .finally(() => {
+          if (token === requestToken.current) {
+            setTranslating(false);
+          }
         });
-      })
-      .catch((error) => {
-        if (token !== requestToken.current) {
-          return;
-        }
-        if (isLanguagePackFailure(error)) {
-          setCaptureResult({ ...base, kind: 'pack_missing', translatedText: '' });
-        } else {
-          setCaptureError(describeNativeError(error).message);
-        }
-      })
-      .finally(() => {
-        if (token === requestToken.current) {
-          setTranslating(false);
-        }
-      });
+    }, 300);
+    return () => clearTimeout(timer);
   }, [captureId, record, captureNonce]);
 
   const close = () => {
@@ -291,6 +299,7 @@ export default function ResultScreen() {
           readOnly
           onScanAgain={close}
           onShowOriginal={captureId && record ? () => setInspect(true) : undefined}
+          thumbnail={captureId && record ? captures.uriFor(record.thumb) : undefined}
           onPreparePack={captureId ? preparePack : undefined}
           onOpenLanguages={() =>
             setOverlay(
@@ -411,6 +420,22 @@ export default function ResultScreen() {
         onTranslate={() => router.push('/translate')}
       />
 
+      {inspect && record && captureResult ? (
+        <OriginalView
+          result={captureResult}
+          imageUri={captures.uriFor(record.thumb)}
+          onClose={() => setInspect(false)}
+          onScanAgain={close}
+          onOpenLanguages={() => setOverlay({ kind: 'languagePicker' })}
+          onLookUp={(phrase, alt) => {
+            const q = phrase.trim();
+            if (q) {
+              setOverlay({ kind: 'lookup', q, alt });
+            }
+          }}
+        />
+      ) : null}
+
       <AppSheet visible={overlay !== null} onClose={() => setOverlay(null)}>
         {overlay?.kind === 'lookup' ? (
           <LookupSheet
@@ -431,24 +456,6 @@ export default function ResultScreen() {
           />
         ) : null}
       </AppSheet>
-
-      {inspect && record ? (
-        <View style={styles.inspect}>
-          <Image
-            source={{ uri: captures.uriFor(record.thumb) }}
-            style={styles.inspectImage}
-            resizeMode="contain"
-          />
-          <ScanlineOverlay />
-          <View style={styles.inspectBar}>
-            <ChipButton
-              label="CLOSE"
-              icon="close"
-              onPress={() => setInspect(false)}
-            />
-          </View>
-        </View>
-      ) : null}
 
       {waiting && result ? (
         <View style={styles.busy} pointerEvents="none">
@@ -482,25 +489,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 20,
     textAlign: 'center',
-  },
-  inspect: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    bottom: 0,
-    left: 0,
-    backgroundColor: colors.background,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  inspectImage: {
-    width: '100%',
-    height: '80%',
-  },
-  inspectBar: {
-    position: 'absolute',
-    top: 64,
-    right: 20,
   },
   busy: {
     position: 'absolute',

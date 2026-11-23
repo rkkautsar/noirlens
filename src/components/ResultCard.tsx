@@ -1,6 +1,6 @@
 import * as Clipboard from 'expo-clipboard';
 import { useEffect, useRef, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { languageLabel, languageShortLabel } from '@/constants/languages';
@@ -24,6 +24,7 @@ export function ResultCard({
   unlimited,
   onScanAgain,
   onShowOriginal,
+  thumbnail,
   onOpenLanguages,
   onLookUp,
   onPreparePack,
@@ -34,6 +35,8 @@ export function ResultCard({
   unlimited: boolean;
   onScanAgain: () => void;
   onShowOriginal?: () => void;
+  /** Small frame preview; tapping it opens the inspect view. */
+  thumbnail?: string;
   onOpenLanguages: () => void;
   onLookUp: (phrase: string, alt?: string) => void;
   /** Capture card: install the missing pack and retry this result. */
@@ -348,7 +351,16 @@ export function ResultCard({
   );
   const actionButtons = (
     <>
-        {onShowOriginal ? (
+        {thumbnail ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Inspect original frame"
+            onPress={onShowOriginal}
+            style={styles.thumbnailButton}
+          >
+            <Image source={{ uri: thumbnail }} style={styles.thumbnail} />
+          </Pressable>
+        ) : onShowOriginal ? (
           <ChipButton
             label="INSPECT"
             icon="search-outline"
@@ -513,6 +525,19 @@ const styles = StyleSheet.create({
     left: 20,
     right: 20,
     justifyContent: 'flex-end',
+  },
+  thumbnailButton: {
+    width: 34,
+    height: 34,
+    borderRadius: 8,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  thumbnail: {
+    width: '100%',
+    height: '100%',
   },
   footer: {
     marginTop: 8,

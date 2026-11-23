@@ -155,7 +155,7 @@ For a real number, run a fixed script on the phone and read Xcode's Energy Log o
 
 - The session stops as soon as the selected frame is grabbed and encoded, before OCR or translation starts.
 - Collect reuses that same capture path; the camera is already off while the JPEG is written and OCR runs in a bounded queue (two at a time, keyed by capture id so an old result can never land on a newer capture).
-- The eco HUD runs a GPU-backed CoreImage edge pass over the 720p frame at 15 fps; the color preview layer is hidden in that mode.
+- Noir mode composites the live preview through a 72% black overlay and a repeating scanline layer. There is no per-frame CoreImage pass; the OLED emits a fraction of the light of the undimmed preview.
 - 720p/30 fps is the ceiling. HDR video, low-light boost, subject-area monitoring, and multi-camera devices are not used.
 - Screen brightness is never touched; the OLED standby (pure black, pixels off) plus auto-brightness handle idle power, and the aiming view is dimmed with scanlines rather than an undimmed full-color preview. The scanner keeps the screen awake while mounted.
 - Backgrounding forces `SLEEP` and stops the session. Leaving a screen does the same; a frozen result is never interrupted.

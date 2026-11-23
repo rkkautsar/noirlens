@@ -74,7 +74,12 @@ function CaptureRow({
   const status = statusLabel(record);
   const [imageFailed, setImageFailed] = useState(false);
   return (
-    <View style={styles.captureRow}>
+    <View
+      style={[
+        styles.captureRow,
+        record.reviewedAt === null && styles.captureRowUnseen,
+      ]}
+    >
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={`Open capture from ${formatTime(record.at)}`}
@@ -478,6 +483,9 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     borderRadius: 14,
     backgroundColor: colors.surface,
+  },
+  captureRowUnseen: {
+    borderColor: colors.accent,
   },
   captureMain: {
     flex: 1,

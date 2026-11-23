@@ -1,4 +1,4 @@
-import { BottomSheet } from '@expo/ui';
+import { BottomSheet, type SnapPoint } from '@expo/ui';
 import { StyleSheet, View } from 'react-native';
 
 import { colors } from '@/theme';
@@ -12,17 +12,23 @@ import { colors } from '@/theme';
 export function AppSheet({
   visible,
   onClose,
+  expanded = false,
   children,
 }: {
   visible: boolean;
   onClose: () => void;
+  /** Open at a taller first snap point (history lists). */
+  expanded?: boolean;
   children?: React.ReactNode;
 }) {
+  const snapPoints: SnapPoint[] = expanded
+    ? [{ fraction: 0.72 }, 'full']
+    : ['half', 'full'];
   return (
     <BottomSheet
       isPresented={visible}
       onDismiss={onClose}
-      snapPoints={['half', 'full']}
+      snapPoints={snapPoints}
       showDragIndicator
       contentPadding={0}
       containerColor={colors.background}

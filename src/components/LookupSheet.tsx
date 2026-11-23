@@ -125,7 +125,7 @@ export function LookupSheet({
 
 const styles = StyleSheet.create({
   screen: {
-    maxHeight: '100%',
+    flex: 1,
   },
   scroll: {
     flex: 1,

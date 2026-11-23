@@ -97,6 +97,7 @@ const SYMBOLS: SymbolDef[] = [
   { symbol: '円', code: 'JPY' },
   { symbol: '元', code: 'CNY' },
   { symbol: '원', code: 'KRW' },
+  { symbol: 'won', code: 'KRW' },
   { symbol: 'บาท', code: 'THB' },
   { symbol: 'đ', code: 'VND' },
   { symbol: '￥', code: 'JPY', byLanguage: { ja: 'JPY', zh: 'CNY' } },

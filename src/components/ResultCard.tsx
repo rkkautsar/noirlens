@@ -111,6 +111,8 @@ export function ResultCard({
     'en',
     preferred.code,
   );
+  const sheetPrices =
+    translationPrices.length > 0 ? translationPrices : prices;
   const renderSource = () => result.sourceText;
 
   const renderTranslation = () => {
@@ -129,6 +131,11 @@ export function ResultCard({
     for (const price of translationPrices) {
       spans.push({ start: price.start, end: price.end, kind: 'price' });
     }
+    // Romanized dish/brand names the translator kept as proper nouns.
+    for (const match of text.matchAll(/[A-Z][a-z]+(?:[ \t][A-Z][a-z]+)+/g)) {
+      const start = match.index ?? 0;
+      spans.push({ start, end: start + match[0].length, kind: 'term' });
+    }
     spans.sort((a, b) => a.start - b.start);
     const parts: React.ReactNode[] = [];
     let cursor = 0;
@@ -146,7 +153,7 @@ export function ResultCard({
           style={span.kind === 'price' ? styles.priceTerm : styles.lookupTerm}
           onPress={() => {
             if (span.kind === 'price') {
-              onOpenPrices(translationPrices);
+              onOpenPrices(sheetPrices);
             } else {
               onLookUp(slice);
             }

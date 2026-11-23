@@ -171,17 +171,18 @@ enum TextRecognizer {
     }
 
     let vertical = isVerticalLayout(lines, language: language)
-    let grouped = vertical
-      ? groupColumns(lines)
+    let grouped: [[[Line]]] = vertical
+      ? groupColumns(lines).map { [$0] }
       : groupParagraphs(lines, language: language)
 
     let blocks = grouped.map { group -> Block in
+      let groupLines = group.flatMap { $0 }
       let confidence =
-        group.reduce(Float(0)) { $0 + $1.confidence } / Float(group.count)
+        groupLines.reduce(Float(0)) { $0 + $1.confidence } / Float(groupLines.count)
       return Block(
         text: joinedText(group, language: language, vertical: vertical),
         confidence: confidence,
-        box: union(group.map(\.box))
+        box: union(groupLines.map(\.box))
       )
     }
 
@@ -653,7 +654,7 @@ enum TextRecognizer {
   private static func groupParagraphs(
     _ lines: [Line],
     language: String
-  ) -> [[Line]] {
+  ) -> [[[Line]]] {
     let medianHeight = median(lines.map(\.box.height), fallback: 0.02)
     var rows: [[Line]] = []
 
@@ -674,18 +675,18 @@ enum TextRecognizer {
       .map { $0.sorted { $0.box.minX < $1.box.minX } }
       .sorted { union($0.map(\.box)).minY < union($1.map(\.box)).minY }
 
-    var paragraphs: [[Line]] = []
+    var paragraphs: [[[Line]]] = []
     for row in rows {
       if let index = paragraphs.indices.last {
-        let previousBox = union(paragraphs[index].map(\.box))
+        let previousBox = union(paragraphs[index].flatMap { $0 }.map(\.box))
         let rowBox = union(row.map(\.box))
         let gap = rowBox.minY - previousBox.maxY
         if gap <= medianHeight * 0.9 && gap >= -medianHeight * 1.2 {
-          paragraphs[index].append(contentsOf: row)
+          paragraphs[index].append(row)
           continue
         }
       }
-      paragraphs.append(row)
+      paragraphs.append([row])
     }
 
     return paragraphs
@@ -712,34 +713,16 @@ enum TextRecognizer {
   }
 
   private static func joinedText(
-    _ lines: [Line],
+    _ rows: [[Line]],
     language: String,
     vertical: Bool
   ) -> String {
     if vertical {
-      return lines.map(\.text).joined()
-    }
-    // The paragraph merged several visual rows; keep same-row fragments
-    // together (so "12" + "500원" stays a price) and break only between rows.
-    let medianHeight = median(lines.map(\.box.height), fallback: 0.02)
-    var rows: [[Line]] = []
-    for line in lines.sorted(by: { $0.box.midY < $1.box.midY }) {
-      if let index = rows.lastIndex(where: { row in
-        guard let reference = row.first else {
-          return false
-        }
-        return abs(reference.box.midY - line.box.midY) <= medianHeight * 0.7
-      }) {
-        rows[index].append(line)
-      } else {
-        rows.append([line])
-      }
+      return rows.flatMap { $0 }.map(\.text).joined()
     }
     let intraRow = isCJK(language) ? "" : " "
     return rows.map { row in
-      row.sorted { $0.box.minX < $1.box.minX }
-        .map(\.text)
-        .joined(separator: intraRow)
+      row.map(\.text).joined(separator: intraRow)
     }.joined(separator: "\n")
   }
 

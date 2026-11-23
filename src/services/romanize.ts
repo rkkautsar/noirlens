@@ -142,13 +142,15 @@ export function romanize(text: string): string {
       continue;
     }
     const result = romanizeChar(char, chars[i + 1] ?? '');
+    if (char === '원' && /\d$/.test(out)) {
+      out += ' ';
+    }
     out += result.text;
     if (result.skipNext) {
       i += 1;
     }
   }
-  // "3,500won" reads better as "3,500 won"; leave already-Latin text alone.
-  return out.replace(/(\d)won\b/g, '$1 won');
+  return out;
 }
 
 /** True when the text contains at least one character a table can convert. */

@@ -24,3 +24,46 @@ export function romanize(text: string): string {
   }
   return out;
 }
+
+export interface RomanSpan {
+  start: number;
+  end: number;
+  word: string;
+}
+
+/**
+ * Latin words in `text` that plausibly romanize one of the source terms.
+ * The translator often splits or lightly mangles the transliteration, so a
+ * long shared prefix or suffix also counts.
+ */
+export function romanTermSpans(
+  text: string,
+  sourceTerms: string[],
+): RomanSpan[] {
+  const romans = sourceTerms
+    .map((term) => romanize(term).toLowerCase())
+    .filter((roman) => roman.length >= 4);
+  if (romans.length === 0) {
+    return [];
+  }
+  const spans: RomanSpan[] = [];
+  for (const match of text.matchAll(/[A-Za-z]+/g)) {
+    const word = match[0];
+    if (word.length < 4) {
+      continue;
+    }
+    const lower = word.toLowerCase();
+    const hit = romans.some(
+      (roman) =>
+        roman.includes(lower) ||
+        lower.includes(roman) ||
+        (lower.length >= 6 &&
+          (roman.includes(lower.slice(-6)) || roman.includes(lower.slice(0, 6)))),
+    );
+    if (hit) {
+      const start = match.index ?? 0;
+      spans.push({ start, end: start + word.length, word });
+    }
+  }
+  return spans;
+}

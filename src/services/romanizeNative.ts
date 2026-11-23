@@ -11,21 +11,18 @@ export async function romanizeNative(
   text: string,
   language = '',
 ): Promise<string> {
-  // The bundled tables are deterministic and read better for Hangul (RR),
-  // Cyrillic, Arabic and kana; ICU is only needed for Han and Thai.
-  const table = romanize(text);
-  if (table !== text) {
-    return table;
-  }
-  if (Platform.OS === 'ios') {
+  // The bundled tables read better for Hangul (RR), Cyrillic, Arabic and
+  // kana. Han and Thai need ICU; a mixed text is handled by ICU as a whole.
+  const needsICU = /[\u0E00-\u0E7F\u4E00-\u9FFF\u3400-\u4DBF]/.test(text);
+  if (needsICU && Platform.OS === 'ios') {
     try {
       const out = await vision.romanize(text, language);
       if (out && out !== text) {
         return out;
       }
     } catch {
-      // fall through
+      // fall through to the tables
     }
   }
-  return text;
+  return romanize(text);
 }

@@ -7,8 +7,10 @@ import { LookupSheet } from '@/components/LookupSheet';
 import { OverlaySheet } from '@/components/OverlaySheet';
 import { PricesSheet } from '@/components/PricesSheet';
 import { ResultCard } from '@/components/ResultCard';
+import { SolidButton } from '@/components/ui';
 import { TopBar } from '@/components/TopBar';
 import type { ScanResult } from '@/scanner/machine';
+import { DEMO_HISTORY } from '@/services/demoHistory';
 import { readScanHistory, type ScanHistoryEntry } from '@/services/scanHistory';
 import { colors } from '@/theme';
 
@@ -55,7 +57,11 @@ export default function ResultScreen() {
     void readScanHistory()
       .then((rows) => {
         if (active) {
-          setEntry(rows.find((row) => row.id === id) ?? null);
+          setEntry(
+            rows.find((row) => row.id === id) ??
+              DEMO_HISTORY.find((row) => row.id === id) ??
+              null,
+          );
         }
       })
       .finally(() => {
@@ -93,6 +99,9 @@ export default function ResultScreen() {
           onOpenPaywall={() => {}}
           showNavigation={false}
         />
+        <View style={styles.empty}>
+          <SolidButton label="BACK" icon="arrow-back" onPress={close} />
+        </View>
       </View>
     );
   }
@@ -150,5 +159,11 @@ const styles = StyleSheet.create({
   page: {
     flex: 1,
     backgroundColor: colors.background,
+  },
+  empty: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 24,
   },
 });

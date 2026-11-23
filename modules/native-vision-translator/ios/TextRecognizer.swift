@@ -716,8 +716,31 @@ enum TextRecognizer {
     language: String,
     vertical: Bool
   ) -> String {
-    let separator = vertical ? "" : "\n"
-    return lines.map(\.text).joined(separator: separator)
+    if vertical {
+      return lines.map(\.text).joined()
+    }
+    // The paragraph merged several visual rows; keep same-row fragments
+    // together (so "12" + "500원" stays a price) and break only between rows.
+    let medianHeight = median(lines.map(\.box.height), fallback: 0.02)
+    var rows: [[Line]] = []
+    for line in lines.sorted(by: { $0.box.midY < $1.box.midY }) {
+      if let index = rows.lastIndex(where: { row in
+        guard let reference = row.first else {
+          return false
+        }
+        return abs(reference.box.midY - line.box.midY) <= medianHeight * 0.7
+      }) {
+        rows[index].append(line)
+      } else {
+        rows.append([line])
+      }
+    }
+    let intraRow = isCJK(language) ? "" : " "
+    return rows.map { row in
+      row.sorted { $0.box.minX < $1.box.minX }
+        .map(\.text)
+        .joined(separator: intraRow)
+    }.joined(separator: "\n")
   }
 
   // MARK: - Payload

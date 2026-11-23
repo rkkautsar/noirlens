@@ -147,8 +147,8 @@ export function romanize(text: string): string {
       i += 1;
     }
   }
-  // "3,500won" reads better as "3,500 won".
-  return out.replace(/(\d)([a-z])/g, '$1 $2');
+  // "3,500won" reads better as "3,500 won"; leave already-Latin text alone.
+  return out.replace(/(\d)won\b/g, '$1 won');
 }
 
 /** True when the text contains at least one character a table can convert. */

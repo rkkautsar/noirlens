@@ -14,6 +14,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SheetHeader } from '@/components/SheetHeader';
 import { ChipButton, MicroLabel } from '@/components/ui';
 import { languageLabel } from '@/constants/languages';
+import { DEMO_HISTORY } from '@/services/demoHistory';
 import {
   clearScanHistory,
   readScanHistory,
@@ -21,33 +22,6 @@ import {
 } from '@/services/scanHistory';
 import { colors, typography } from '@/theme';
 
-const MOCK_HISTORY: ScanHistoryEntry[] = [
-  {
-    id: 'mock-1',
-    at: Date.now() - 1000 * 60 * 8,
-    sourceLanguage: 'ko',
-    sourceText: '금연 · 담배는 건강에 해롭습니다',
-    translatedText:
-      'No smoking. Cigarettes are harmful to your health and the people around you.',
-    kind: 'translated',
-  },
-  {
-    id: 'mock-2',
-    at: Date.now() - 1000 * 60 * 46,
-    sourceLanguage: 'ja',
-    sourceText: '営業時間 10:00 - 20:00',
-    translatedText: 'Business hours 10:00 - 20:00',
-    kind: 'translated',
-  },
-  {
-    id: 'mock-3',
-    at: Date.now() - 1000 * 60 * 60 * 3,
-    sourceLanguage: 'th',
-    sourceText: 'ราคา 120 บาท',
-    translatedText: 'Price 120 baht',
-    kind: 'translated',
-  },
-];
 
 function formatTime(at: number): string {
   return new Date(at).toLocaleString(undefined, {
@@ -76,7 +50,7 @@ export function HistorySheet({
     void readScanHistory()
       .then((rows) => {
         if (active) {
-          setEntries(rows.length === 0 && demo ? MOCK_HISTORY : rows);
+          setEntries(rows.length === 0 && demo ? DEMO_HISTORY : rows);
         }
       })
       .finally(() => {
@@ -143,45 +117,46 @@ export function HistorySheet({
             {entries.map((entry) => {
               const isCopied = copied === entry.id;
               return (
-                <Pressable
-                  key={entry.id}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Open scan: ${
-                    entry.translatedText || entry.sourceText
-                  }`}
-                  accessibilityHint="Opens the result to look up again"
-                  onPress={() => {
-                    onClose();
-                    router.push({
-                      pathname: '/result',
-                      params: { id: entry.id },
-                    });
-                  }}
-                  style={({ pressed }) => [
-                    styles.entry,
-                    pressed && styles.pressed,
-                  ]}
-                >
-                  <View style={styles.entryTop}>
-                    <MicroLabel
-                      tone={entry.kind === 'translated' ? 'accent' : 'dim'}
-                    >
-                      {entry.kind === 'translated'
-                        ? `${languageLabel(entry.sourceLanguage)} → ENGLISH`
-                        : entry.sourceLanguage === 'und'
-                          ? 'NO LANGUAGE DETECTED'
-                          : 'ENGLISH'}
-                    </MicroLabel>
-                    <MicroLabel tone="dim">{formatTime(entry.at)}</MicroLabel>
-                  </View>
-                  <Text style={styles.entryText} numberOfLines={3} selectable>
-                    {entry.translatedText || entry.sourceText}
-                  </Text>
-                  {entry.translatedText ? (
-                    <Text style={styles.entrySource} numberOfLines={1}>
-                      {entry.sourceText}
+                <View key={entry.id} style={styles.entryWrap}>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={`Open scan: ${
+                      entry.translatedText || entry.sourceText
+                    }`}
+                    accessibilityHint="Opens the result to look up again"
+                    onPress={() => {
+                      onClose();
+                      router.push({
+                        pathname: '/result',
+                        params: { id: entry.id },
+                      });
+                    }}
+                    style={({ pressed }) => [
+                      styles.entry,
+                      pressed && styles.pressed,
+                    ]}
+                  >
+                    <View style={styles.entryTop}>
+                      <MicroLabel
+                        tone={entry.kind === 'translated' ? 'accent' : 'dim'}
+                      >
+                        {entry.kind === 'translated'
+                          ? `${languageLabel(entry.sourceLanguage)} → ENGLISH`
+                          : entry.sourceLanguage === 'und'
+                            ? 'NO LANGUAGE DETECTED'
+                            : 'ENGLISH'}
+                      </MicroLabel>
+                      <MicroLabel tone="dim">{formatTime(entry.at)}</MicroLabel>
+                    </View>
+                    <Text style={styles.entryText} numberOfLines={3} selectable>
+                      {entry.translatedText || entry.sourceText}
                     </Text>
-                  ) : null}
+                    {entry.translatedText ? (
+                      <Text style={styles.entrySource} numberOfLines={1}>
+                        {entry.sourceText}
+                      </Text>
+                    ) : null}
+                  </Pressable>
                   <Pressable
                     accessibilityRole="button"
                     accessibilityLabel={isCopied ? 'Copied' : 'Copy scan'}
@@ -197,7 +172,7 @@ export function HistorySheet({
                       color={isCopied ? colors.success : colors.muted}
                     />
                   </Pressable>
-                </Pressable>
+                </View>
               );
             })}
           </>
@@ -268,6 +243,9 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: colors.muted,
     paddingRight: 24,
+  },
+  entryWrap: {
+    position: 'relative',
   },
   copyIcon: {
     position: 'absolute',

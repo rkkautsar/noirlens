@@ -126,6 +126,19 @@ export function useScanner(options: {
     let pollingStatus = false;
     let statusTimer: ReturnType<typeof setInterval> | null = null;
     let currentDay = localDayKey();
+    let cameraStart: Promise<number> | null = null;
+
+    const waitForCamera = async (): Promise<number | null> => {
+      const promise = cameraStart;
+      if (!promise) {
+        return null;
+      }
+      try {
+        return await promise;
+      } catch {
+        return null;
+      }
+    };
 
     const captureOnce = async () => {
       if (capturing || disposed || !focusedRef.current) {
@@ -164,9 +177,14 @@ export function useScanner(options: {
             width: 0.6,
             height: 0.6,
           };
+        const cameraToken = await waitForCamera();
+        if (cameraToken === null) {
+          throw { code: 'ERR_CAMERA_CANCELLED', message: 'Camera did not start.' };
+        }
         const ocr = await vision.captureFrame(
           selectedLanguage === 'auto' ? '' : selectedLanguage,
           crop,
+          cameraToken,
         );
         if (token !== captureToken) {
           return;
@@ -379,7 +397,11 @@ export function useScanner(options: {
 
       let savedFiles: string[] | null = null;
       try {
-        const still = await vision.captureStill();
+        const cameraToken = await waitForCamera();
+        if (cameraToken === null) {
+          throw { code: 'ERR_CAMERA_CANCELLED', message: 'Camera did not start.' };
+        }
+        const still = await vision.captureStill(cameraToken);
         savedFiles = [still.image, still.thumb];
         if (token !== captureToken) {
           return;
@@ -412,9 +434,6 @@ export function useScanner(options: {
         onCaptureSavedRef.current?.(record);
         store.send({ type: 'CAPTURE_SAVED', timestampMs: Date.now() });
       } catch (error) {
-        if (savedFiles) {
-          void vision.deleteCaptureFiles(savedFiles).catch(() => {});
-        }
         if (token !== captureToken) {
           return;
         }
@@ -424,6 +443,9 @@ export function useScanner(options: {
           timestampMs: Date.now(),
         });
       } finally {
+        if (savedFiles) {
+          void vision.deleteCaptureFiles(savedFiles).catch(() => {});
+        }
         clearTimeout(watchdog);
       }
     };
@@ -454,9 +476,18 @@ export function useScanner(options: {
             store.send({ type: 'SLEEP', timestampMs: Date.now() });
             break;
           }
-          void vision
-            .startCamera()
-            .then(() => {
+          const start = vision.startCamera();
+          cameraStart = start;
+          void start
+            .then((generation: number) => {
+              // A newer hold owns the camera now; never stop its session on
+              // behalf of a superseded start. But a start that raced a stop
+              // may have minted its own session, so tear down exactly that
+              // generation.
+              if (cameraStart !== start) {
+                void vision.stopCameraIfCurrent(generation).catch(() => {});
+                return;
+              }
               // The permission prompt can outlive the arm (the reducer times
               // out after 4 s). Never leave a session running after SLEEP,
               // but do not stop a session the capture phase is using: a fast
@@ -467,6 +498,11 @@ export function useScanner(options: {
               }
             })
             .catch((error: unknown) => {
+              // A rejected stale start must not sleep the hold that replaced
+              // it.
+              if (cameraStart !== start) {
+                return;
+              }
               if (store.getSnapshot().state !== 'PREWARM') {
                 return;
               }
@@ -484,6 +520,7 @@ export function useScanner(options: {
         case 'STOP_CAMERA':
           captureToken += 1;
           capturing = false;
+          cameraStart = null;
           if (captureWatchdog !== null) {
             clearTimeout(captureWatchdog);
             captureWatchdog = null;
@@ -542,14 +579,19 @@ export function useScanner(options: {
       }
     });
 
-    void captures
-      .hydrate()
-      .then(() => {
-        if (!disposed) {
-          resumeCaptureProcessing();
-        }
-      })
-      .catch(() => {});
+    let resumed = false;
+    const maybeResume = () => {
+      if (resumed || disposed) {
+        return;
+      }
+      const snapshot = captures.getSnapshot();
+      if (snapshot.loaded && snapshot.available) {
+        resumed = true;
+        resumeCaptureProcessing();
+      }
+    };
+    const unsubscribeCaptures = captures.subscribe(maybeResume);
+    void captures.hydrate({ reconcile: true }).then(maybeResume).catch(() => {});
 
     void (async () => {
       try {
@@ -619,6 +661,7 @@ export function useScanner(options: {
     return () => {
       disposed = true;
       store.setEffectHandler(null);
+      unsubscribeCaptures();
       unsubscribeEntitlements();
       unsubscribeStatePoller();
       appStateSubscription.remove();

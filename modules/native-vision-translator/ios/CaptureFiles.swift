@@ -18,12 +18,46 @@ enum CaptureFiles {
       for: .documentDirectory,
       in: .userDomainMask
     )[0]
-    let directory = documents.appendingPathComponent(folder, isDirectory: true)
+    var directory = documents.appendingPathComponent(folder, isDirectory: true)
     try FileManager.default.createDirectory(
       at: directory,
       withIntermediateDirectories: true
     )
+    // Captures are private to the device; never let iCloud back them up.
+    var values = URLResourceValues()
+    values.isExcludedFromBackup = true
+    // Fail closed: a capture that could be backed up would break the promise
+    // that frames never leave the device.
+    try directory.setResourceValues(values)
     return directory
+  }
+
+  /// Files older than `seconds`, used for startup-only orphan sweeping. The
+  /// grace window keeps a capture that is being written right now safe.
+  static func list(olderThan seconds: TimeInterval) -> [String] {
+    guard
+      let directory = try? directory(),
+      let urls = try? FileManager.default.contentsOfDirectory(
+        at: directory,
+        includingPropertiesForKeys: [.contentModificationDateKey],
+        options: [.skipsHiddenFiles]
+      )
+    else {
+      return []
+    }
+    let cutoff = Date().addingTimeInterval(-max(0, seconds))
+    return urls.compactMap { url in
+      guard url.pathExtension == "jpg" else {
+        return nil
+      }
+      let values = try? url.resourceValues(
+        forKeys: [.contentModificationDateKey]
+      )
+      guard let modified = values?.contentModificationDate else {
+        return nil
+      }
+      return modified < cutoff ? url.lastPathComponent : nil
+    }
   }
 
   static func directoryUri() -> String {
@@ -85,12 +119,21 @@ enum CaptureFiles {
     return (imageName, thumbName, image.width, image.height)
   }
 
-  static func delete(names: [String]) {
+  static func delete(names: [String]) throws {
     for name in names {
       guard let url = url(for: name) else {
         continue
       }
-      try? FileManager.default.removeItem(at: url)
+      do {
+        try FileManager.default.removeItem(at: url)
+      } catch {
+        let nsError = error as NSError
+        if nsError.domain == NSCocoaErrorDomain
+          && nsError.code == NSFileNoSuchFileError {
+          continue
+        }
+        throw error
+      }
     }
   }
 

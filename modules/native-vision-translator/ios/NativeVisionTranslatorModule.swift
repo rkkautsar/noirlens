@@ -27,12 +27,16 @@ public final class NativeVisionTranslatorModule: Module {
       }
     }
 
-    AsyncFunction("startCamera") { () async throws -> Void in
+    AsyncFunction("startCamera") { () async throws -> Int in
       try await CameraController.shared.start()
     }
 
     AsyncFunction("stopCamera") { () async -> Void in
       await CameraController.shared.stop()
+    }
+
+    AsyncFunction("stopCameraIfCurrent") { (generation: Int) async -> Void in
+      await CameraController.shared.stopIfCurrent(generation: generation)
     }
 
     AsyncFunction("setTorch") { (enabled: Bool) in
@@ -47,8 +51,13 @@ public final class NativeVisionTranslatorModule: Module {
       await CameraController.shared.status()
     }
 
-    AsyncFunction("captureFrame") { (sourceLanguage: String, crop: CropRect?) async throws -> [String: Any] in
-      let frame = try await CameraController.shared.captureFrame(crop: crop)
+    AsyncFunction("captureFrame") {
+      (sourceLanguage: String, crop: CropRect?, cameraToken: Int?) async throws
+        -> [String: Any] in
+      let frame = try await CameraController.shared.captureFrame(
+        crop: crop,
+        generation: cameraToken
+      )
       guard let pixelBuffer = frame.pixelBuffer else {
         throw cameraException(
           name: "NoFrame",
@@ -68,8 +77,11 @@ public final class NativeVisionTranslatorModule: Module {
     // Latin, Han to Mandarin pinyin. No model download. Already-Latin text is
     // returned untouched so Vietnamese accents are not stripped, and Japanese
     // only romanizes kana (kanji readings need a dictionary, not pinyin).
-    AsyncFunction("captureStill") { () async throws -> [String: Any] in
-      let frame = try await CameraController.shared.captureFrame()
+    AsyncFunction("captureStill") {
+      (cameraToken: Int?) async throws -> [String: Any] in
+      let frame = try await CameraController.shared.captureFrame(
+        generation: cameraToken
+      )
       guard let jpeg = frame.previewJpegBase64 else {
         throw cameraException(
           name: "NoFrame",
@@ -94,6 +106,10 @@ public final class NativeVisionTranslatorModule: Module {
       CaptureFiles.uri(for: name)
     }
 
+    AsyncFunction("listCaptureFiles") { (minAgeSeconds: Double) -> [String] in
+      CaptureFiles.list(olderThan: minAgeSeconds)
+    }
+
     AsyncFunction("recognizeCapture") {
       (image: String, language: String) async throws -> [String: Any] in
       guard
@@ -109,8 +125,8 @@ public final class NativeVisionTranslatorModule: Module {
       return try TextRecognizer.recognize(jpegData: data, languageHint: language)
     }
 
-    AsyncFunction("deleteCaptureFiles") { (names: [String]) in
-      CaptureFiles.delete(names: names)
+    AsyncFunction("deleteCaptureFiles") { (names: [String]) throws in
+      try CaptureFiles.delete(names: names)
     }
 
     AsyncFunction("romanize") { (text: String, language: String) async -> String in

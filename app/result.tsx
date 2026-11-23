@@ -1,7 +1,6 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { LanguagesSheet } from '@/components/LanguagesSheet';
 import { ModeTabs } from '@/components/ModeTabs';
@@ -48,7 +47,6 @@ function resultFromEntry(entry: ScanHistoryEntry): ScanResult {
 
 export default function ResultScreen() {
   const router = useRouter();
-  const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id?: string }>();
   const [entry, setEntry] = useState<ScanHistoryEntry | null>(null);
   const [loading, setLoading] = useState(true);

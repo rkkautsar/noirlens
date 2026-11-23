@@ -17,6 +17,7 @@ class CaptureModeManager {
   private snapshot: CaptureModeSnapshot = INITIAL;
   private listeners = new Set<() => void>();
   private loadPromise: Promise<void> | null = null;
+  private version = 0;
 
   subscribe = (listener: () => void): (() => void) => {
     this.listeners.add(listener);
@@ -43,14 +44,21 @@ class CaptureModeManager {
       return Promise.resolve();
     }
     if (this.loadPromise === null) {
+      const version = this.version;
       this.loadPromise = readMeta(KEY)
         .then((stored) => {
+          if (this.version !== version) {
+            return;
+          }
           this.emit({
             mode: stored === 'collect' ? 'collect' : 'read',
             loaded: true,
           });
         })
         .catch(() => {
+          if (this.version !== version) {
+            return;
+          }
           this.emit({ ...INITIAL, loaded: true });
         })
         .finally(() => {
@@ -61,6 +69,7 @@ class CaptureModeManager {
   }
 
   async set(mode: CaptureMode): Promise<void> {
+    this.version += 1;
     this.emit({ mode, loaded: true });
     try {
       await writeMeta(KEY, mode);

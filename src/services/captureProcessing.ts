@@ -2,8 +2,6 @@ import vision from '../../modules/native-vision-translator';
 import { CaptureQueue } from './captureQueue';
 import { captures } from './captures';
 
-const MAX_ATTEMPTS = 3;
-
 const processor = new CaptureQueue(
   {
     recognize: (job) => vision.recognizeCapture(job.image, job.hint),
@@ -34,9 +32,6 @@ export function enqueueCapture(id: string): void {
 /** Called after hydrate: unfinished captures resume without the camera. */
 export function resumeCaptureProcessing(): void {
   for (const record of captures.pending()) {
-    if (record.attempts >= MAX_ATTEMPTS) {
-      continue;
-    }
     processor.enqueue({
       id: record.id,
       hint: record.hint,
@@ -51,6 +46,6 @@ export function retryCapture(id: string): void {
     return;
   }
   void captures
-    .patch(id, { status: 'pending', error: null })
+    .patch(id, { status: 'pending', error: null, attempts: 0 })
     .then(() => enqueueCapture(id));
 }

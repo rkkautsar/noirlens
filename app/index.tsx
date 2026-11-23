@@ -151,6 +151,9 @@ export default function ScannerScreen() {
   };
 
   const openLanguages = () => {
+    if (state === 'PREWARM' || state === 'SCANNING') {
+      scanner.stop();
+    }
     setOverlay({ kind: 'languages' });
   };
   const openLookup = (phrase: string, alt?: string) => {
@@ -174,7 +177,7 @@ export default function ScannerScreen() {
   return (
     <View
       style={styles.root}
-      onStartShouldSetResponder={() => !locked}
+      onStartShouldSetResponder={() => !locked && overlay === null}
       onResponderGrant={() => {
         if (Platform.OS !== 'web') {
           void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(
@@ -241,16 +244,13 @@ export default function ScannerScreen() {
           onStart={locked ? beginNext : scanner.beginHold}
           onCapture={scanner.captureNow}
           onCancel={locked ? scanner.scanAgain : scanner.stop}
-          onLanguages={() => {
-            scanner.stop();
-            openLanguages();
-          }}
+          onLanguages={openLanguages}
           collect={snapshot.captureMode === 'collect'}
         />
       ) : null}
 
 
-      {!exhausted && !locked ? (
+      {!locked ? (
         <View
           style={[
             styles.sourceRow,
@@ -320,7 +320,7 @@ export default function ScannerScreen() {
         </View>
       ) : null}
 
-      {!exhausted && !locked ? (
+      {!locked ? (
         <Pressable
           accessibilityRole="switch"
           accessibilityLabel={
@@ -330,7 +330,9 @@ export default function ScannerScreen() {
           }
           accessibilityState={{
             checked: snapshot.captureMode === 'collect',
+            disabled: active,
           }}
+          disabled={active}
           onPress={() => {
             void Haptics.impactAsync(
               Haptics.ImpactFeedbackStyle.Light,
@@ -343,6 +345,7 @@ export default function ScannerScreen() {
             styles.modeButton,
             { bottom: insets.bottom + 92 },
             snapshot.captureMode === 'collect' && styles.torchButtonOn,
+            active && styles.controlDisabled,
             pressed && styles.sourceButtonPressed,
           ]}
         >
@@ -362,7 +365,7 @@ export default function ScannerScreen() {
         </Pressable>
       ) : null}
 
-      {!exhausted && !locked ? (
+      {!locked ? (
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={
@@ -392,7 +395,7 @@ export default function ScannerScreen() {
         </Pressable>
       ) : null}
 
-      {!exhausted && !locked ? (
+      {!locked ? (
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={
@@ -581,6 +584,9 @@ const styles = StyleSheet.create({
   },
   sourceButtonPressed: {
     opacity: 0.7,
+  },
+  controlDisabled: {
+    opacity: 0.4,
   },
   sourceButtonText: {
     ...typography.label,

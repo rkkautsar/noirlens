@@ -102,7 +102,9 @@ function CaptureRow({
             {record.text ||
               (record.status === 'failed'
                 ? 'Text recognition failed.'
-                : 'Reading text on-device…')}
+                : record.status === 'done'
+                  ? 'No text recognized.'
+                  : 'Reading text on-device…')}
           </Text>
         </View>
       </Pressable>
@@ -350,6 +352,14 @@ export function HistorySheet({
         >
           {!captureState.loaded ? (
             <MicroLabel tone="dim">LOADING…</MicroLabel>
+          ) : !captureState.available ? (
+            <View style={styles.empty}>
+              <MicroLabel tone="warning">STORAGE UNAVAILABLE</MicroLabel>
+              <Text style={styles.emptyText}>
+                Saved captures could not be read. Nothing has been deleted;
+                reopen History to retry.
+              </Text>
+            </View>
           ) : captureState.records.length === 0 ? (
             <View style={styles.empty}>
               <MicroLabel tone="dim">NO CAPTURES YET</MicroLabel>

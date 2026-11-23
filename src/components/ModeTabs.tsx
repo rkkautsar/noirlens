@@ -5,9 +5,6 @@ import { colors, typography } from '@/theme';
 
 export type AppMode = 'camera' | 'translate';
 
-/** Kept for screens that still reserve bottom clearance. */
-export const MODE_TABS_HEIGHT = 0;
-
 function Tab({
   label,
   active,

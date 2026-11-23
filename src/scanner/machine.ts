@@ -768,7 +768,7 @@ export function reduceScanner(
     }
 
     case 'SCAN_AGAIN': {
-      if (!canScan(context, tuning)) {
+      if (context.captureMode === 'read' && !canScan(context, tuning)) {
         return {
           context: {
             ...showPaywallIfDue(context, event.timestampMs, tuning, effects),
@@ -863,6 +863,31 @@ export function reduceScanner(
     }
 
     case 'SET_CAPTURE_MODE': {
+      if (event.mode === context.captureMode) {
+        return {
+          context: { ...context, nowMs: event.timestampMs },
+          effects,
+        };
+      }
+      // Never re-target an operation that is already on the sensor.
+      if (context.state === 'PREWARM' || context.state === 'SCANNING') {
+        return {
+          context: { ...context, nowMs: event.timestampMs },
+          effects,
+        };
+      }
+      // A frozen read belongs to the old mode; drop it when switching.
+      if (context.state === 'LOCKED_READ') {
+        return {
+          context: enterSleep(
+            { ...context, captureMode: event.mode },
+            effects,
+            { clearResult: true },
+            event.timestampMs,
+          ),
+          effects,
+        };
+      }
       return {
         context: {
           ...context,
@@ -880,7 +905,7 @@ export function reduceScanner(
           effects,
         };
       }
-      effects.push({ type: 'STOP_CAMERA' }, { type: 'HAPTIC_SUCCESS' });
+      effects.push({ type: 'HAPTIC_SUCCESS' });
       return {
         context: enterSleep(
           context,

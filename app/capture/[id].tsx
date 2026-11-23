@@ -60,7 +60,8 @@ export default function CaptureDetailScreen() {
   const [all, setAll] = useState<TranslationState>(IDLE);
   const [copied, setCopied] = useState<string | null>(null);
   const [imageFailed, setImageFailed] = useState(false);
-  const requestId = useRef(0);
+  const regionRequest = useRef(0);
+  const allRequest = useRef(0);
   const reviewed = useRef(false);
 
   useEffect(() => {
@@ -85,15 +86,15 @@ export default function CaptureDetailScreen() {
     }, 1400);
   };
 
-  const translate = async (
+  const runTranslate = async (
     text: string,
     set: (value: TranslationState) => void,
+    requests: { current: number },
+    token: number,
   ) => {
     if (!record || text.trim().length === 0) {
       return;
     }
-    const token = requestId.current + 1;
-    requestId.current = token;
     set({ status: 'loading', text: '', error: '', packGap: false });
     try {
       const out = await vision.translate({
@@ -101,7 +102,7 @@ export default function CaptureDetailScreen() {
         sourceLanguage: source,
         targetLanguage: 'en',
       });
-      if (token !== requestId.current) {
+      if (token !== requests.current) {
         return;
       }
       set({
@@ -111,7 +112,7 @@ export default function CaptureDetailScreen() {
         packGap: false,
       });
     } catch (error) {
-      if (token !== requestId.current) {
+      if (token !== requests.current) {
         return;
       }
       const failure = describeTranslateFailure(error, source, 'en');
@@ -124,14 +125,31 @@ export default function CaptureDetailScreen() {
     }
   };
 
+  const translate = (
+    text: string,
+    set: (value: TranslationState) => void,
+    requests: { current: number },
+  ) => {
+    const token = requests.current + 1;
+    requests.current = token;
+    return runTranslate(text, set, requests, token);
+  };
+
   const preparePack = async (
     text: string,
     set: (value: TranslationState) => void,
+    requests: { current: number },
   ) => {
+    const token = requests.current + 1;
+    requests.current = token;
+    set({ status: 'loading', text: '', error: '', packGap: false });
     try {
       const status = await vision.prepareLanguagePack(source, 'en');
+      if (token !== requests.current) {
+        return;
+      }
       if (status.status === 'installed') {
-        await translate(text, set);
+        await runTranslate(text, set, requests, token);
         return;
       }
       set({
@@ -141,6 +159,9 @@ export default function CaptureDetailScreen() {
         packGap: true,
       });
     } catch (error) {
+      if (token !== requests.current) {
+        return;
+      }
       const failure = describeTranslateFailure(error, source, 'en');
       set({
         status: 'error',
@@ -158,7 +179,7 @@ export default function CaptureDetailScreen() {
     setSelected(index);
     const block = record.blocks[index];
     if (block) {
-      void translate(block.text, setRegion);
+      void translate(block.text, setRegion, regionRequest);
     }
   };
 
@@ -318,7 +339,7 @@ export default function CaptureDetailScreen() {
               <ChipButton
                 label="TRANSLATE ALL"
                 icon="language-outline"
-                onPress={() => void translate(record.text, setAll)}
+                onPress={() => void translate(record.text, setAll, allRequest)}
               />
             </View>
 
@@ -353,7 +374,7 @@ export default function CaptureDetailScreen() {
                     <ChipButton
                       label="DOWNLOAD PACK"
                       icon="download-outline"
-                      onPress={() => void preparePack(block.text, setRegion)}
+                      onPress={() => void preparePack(block.text, setRegion, regionRequest)}
                     />
                   ) : null}
                 </View>
@@ -387,7 +408,7 @@ export default function CaptureDetailScreen() {
                     <ChipButton
                       label="DOWNLOAD PACK"
                       icon="download-outline"
-                      onPress={() => void preparePack(record.text, setAll)}
+                      onPress={() => void preparePack(record.text, setAll, allRequest)}
                     />
                   ) : null}
                 </View>

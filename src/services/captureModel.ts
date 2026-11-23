@@ -79,17 +79,30 @@ function isRecord(value: unknown): value is CaptureRecord {
 }
 
 export function parseCaptures(raw: string | null): CaptureRecord[] {
+  return parseCaptureStore(raw).records;
+}
+
+/**
+ * `complete` is false when the stored JSON was malformed or rows were
+ * dropped. Destructive reconciliation must not trust an incomplete view of
+ * the library: a filtered row's images would look like orphans.
+ */
+export function parseCaptureStore(raw: string | null): {
+  records: CaptureRecord[];
+  complete: boolean;
+} {
   if (raw === null) {
-    return [];
+    return { records: [], complete: true };
   }
   try {
     const parsed: unknown = JSON.parse(raw);
     if (!Array.isArray(parsed)) {
-      return [];
+      return { records: [], complete: false };
     }
-    return parsed.filter(isRecord).slice(0, MAX_CAPTURES);
+    const records = parsed.filter(isRecord).slice(0, MAX_CAPTURES);
+    return { records, complete: records.length === parsed.length };
   } catch {
-    return [];
+    return { records: [], complete: false };
   }
 }
 

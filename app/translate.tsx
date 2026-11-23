@@ -358,7 +358,7 @@ export default function TranslateScreen() {
 
       <ModeTabs
         active="translate"
-        onCamera={() => router.replace('/')}
+        onCamera={() => router.dismissTo('/')}
         onTranslate={() => {}}
       />
 

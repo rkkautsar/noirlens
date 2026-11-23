@@ -46,7 +46,6 @@ export function ScanShutter({
   onCapture,
   onCancel,
   onLanguages,
-  bottomOffset = 0,
   collect = false,
   readOnly = false,
 }: {
@@ -57,7 +56,6 @@ export function ScanShutter({
   onCapture: () => void;
   onCancel: () => void;
   onLanguages: () => void;
-  bottomOffset?: number;
   collect?: boolean;
   readOnly?: boolean;
 }) {
@@ -67,6 +65,7 @@ export function ScanShutter({
   const progress = useRef(new Animated.Value(0)).current;
   const hold = useRef<Animated.CompositeAnimation | null>(null);
   const zoneRef = useRef<Zone | null>(null);
+  const directZone = useRef<Zone | null>(null);
   const fired = useRef(false);
   const latest = useRef({ onStart, onCapture, onCancel, onLanguages, scanning });
   latest.current = { onStart, onCapture, onCancel, onLanguages, scanning };
@@ -114,15 +113,28 @@ export function ScanShutter({
     return PanResponder.create({
       onStartShouldSetPanResponder: () => !latest.current.scanning,
       onMoveShouldSetPanResponder: () => !latest.current.scanning,
-      onPanResponderGrant: () => {
+      onPanResponderGrant: (event) => {
         fired.current = false;
         clear();
         drag.setValue(0);
+        // A direct tap on the visible cancel / languages targets is an action,
+        // not a capture: never arm the camera for it.
+        const x0 = event.nativeEvent.pageX;
+        const screenWidth = Dimensions.get('window').width;
+        if (x0 <= 96) {
+          directZone.current = 'cancel';
+          return;
+        }
+        if (x0 >= screenWidth - 96) {
+          directZone.current = 'languages';
+          return;
+        }
+        directZone.current = null;
         impact();
         latest.current.onStart();
       },
       onPanResponderMove: (_, gesture) => {
-        if (fired.current) {
+        if (directZone.current !== null || fired.current) {
           return;
         }
         drag.setValue(gesture.dx);
@@ -143,6 +155,13 @@ export function ScanShutter({
         }
       },
       onPanResponderRelease: (_, gesture) => {
+        if (directZone.current !== null) {
+          const target = directZone.current;
+          directZone.current = null;
+          fired.current = false;
+          fire(target);
+          return;
+        }
         if (fired.current) {
           return;
         }
@@ -160,21 +179,11 @@ export function ScanShutter({
           fire('languages');
           return;
         }
-        // A direct tap on the visible cancel / languages targets must do what
-        // the icon says; only a tap in the middle captures.
-        const screenWidth = Dimensions.get('window').width;
-        if (gesture.x0 <= 96) {
-          fire('cancel');
-          return;
-        }
-        if (gesture.x0 >= screenWidth - 96) {
-          fire('languages');
-          return;
-        }
         latest.current.onCapture();
       },
       onPanResponderTerminate: () => {
         const wasFired = fired.current;
+        directZone.current = null;
         clear();
         if (!wasFired) {
           latest.current.onCapture();
@@ -237,7 +246,7 @@ export function ScanShutter({
       {...responder.panHandlers}
       style={[
         styles.wrap,
-        { paddingBottom: insets.bottom + 12 + bottomOffset },
+        { paddingBottom: insets.bottom + 12 },
       ]}
     >
       <View

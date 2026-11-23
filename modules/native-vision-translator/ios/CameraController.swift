@@ -76,7 +76,8 @@ final class CameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDele
 
   // MARK: - Lifecycle
 
-  func start() async throws {
+  @discardableResult
+  func start() async throws -> Int {
     NSLog(
       "[NoirLens] start: multitasking supported=%d enabled=%d",
       session.isMultitaskingCameraAccessSupported ? 1 : 0,
@@ -120,6 +121,7 @@ final class CameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDele
         }
       }
     }
+    return generation
   }
 
   private func startFailureError(_ generation: Int) -> Error {
@@ -198,6 +200,34 @@ final class CameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDele
     return startGeneration == generation
   }
 
+  private func currentStartGeneration() -> Int {
+    generationLock.lock()
+    defer { generationLock.unlock() }
+    return startGeneration
+  }
+
+  /// Atomic compare-and-invalidate: a newer start that minted between a
+  /// separate check and increment must survive the stale stop.
+  private func invalidateIfCurrent(_ generation: Int) -> Bool {
+    generationLock.lock()
+    defer { generationLock.unlock() }
+    guard startGeneration == generation else {
+      return false
+    }
+    startGeneration += 1
+    return true
+  }
+
+  private func ensureCurrentStart(_ generation: Int) throws {
+    guard isCurrentStart(generation) else {
+      throw cameraException(
+        name: "CameraCancelled",
+        description: "The capture was cancelled.",
+        code: "ERR_CAMERA_CANCELLED"
+      )
+    }
+  }
+
   private func checkStart(_ generation: Int) throws {
     guard isCurrentStart(generation) else {
       throw cameraException(
@@ -265,8 +295,26 @@ final class CameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDele
 
   func stop() async {
     invalidateStartGeneration()
+    await stopSession(generation: nil)
+  }
+
+  /// Stops only the session belonging to `generation`. A start that raced a
+  /// stop and minted a newer generation after it is still torn down, while a
+  /// genuinely newer hold's session is left alone. The check runs on the
+  /// session queue, serialized with the start block.
+  func stopIfCurrent(generation: Int) async {
+    await stopSession(generation: generation)
+  }
+
+  private func stopSession(generation: Int?) async {
     await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
       sessionQueue.async {
+        if let generation {
+          guard self.invalidateIfCurrent(generation) else {
+            continuation.resume()
+            return
+          }
+        }
         self.wantsCamera = false
         if let device = self.device, device.hasTorch, device.isTorchAvailable {
           if (try? device.lockForConfiguration()) != nil {
@@ -302,18 +350,26 @@ final class CameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDele
 
   // MARK: - Capture
 
-  func captureFrame(crop: CropRect? = nil) async throws -> CapturedFrame {
+  func captureFrame(
+    crop: CropRect? = nil,
+    generation token: Int? = nil
+  ) async throws -> CapturedFrame {
+    let generation = token ?? currentStartGeneration()
+    try ensureCurrentStart(generation)
     // Re-focus and re-expose at the reticle center, then take a fresh frame.
     // The auto arm can fire while AF is still settling; this gives every
     // capture a dedicated, sharp frame instead of whatever was on screen.
-    await prepareForCapture()
+    await prepareForCapture(generation: generation)
+    try ensureCurrentStart(generation)
     // Give the one-shot AF/AE a moment to settle before sampling.
     await waitForSettledDevice(timeout: 0.45)
+    try ensureCurrentStart(generation)
 
     // Burst three frames and keep the sharpest: a single frame can land while
     // focus or the hand is still moving.
     var best: (buffer: CMSampleBuffer, score: Float)?
     for index in 0..<3 {
+      try ensureCurrentStart(generation)
       replaceLatestSampleBuffer(nil)
       guard let candidate = await waitForSampleBuffer(timeout: 1.0) else {
         break
@@ -351,12 +407,31 @@ final class CameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDele
 
     let cropRect = imageCropRect(for: crop, pixelBuffer: pixelBuffer)
     let jpeg = makePreviewJPEG(pixelBuffer: pixelBuffer, cropRect: cropRect)
-    stateLock.lock()
-    lastCapture = (pixelBuffer, cropRect, jpeg)
-    stateLock.unlock()
-    // The frame is retained; power the sensor down before JPEG/OCR/translation
-    // so the camera is not streaming after the user released.
-    session.stopRunning()
+    // Validate and stop on the session queue: a capture cancelled by leaving
+    // the screen must never stop the session a newer hold has just started.
+    let accepted = await withCheckedContinuation {
+      (continuation: CheckedContinuation<Bool, Never>) in
+      sessionQueue.async {
+        guard self.isCurrentStart(generation) else {
+          continuation.resume(returning: false)
+          return
+        }
+        self.stateLock.lock()
+        self.lastCapture = (pixelBuffer, cropRect, jpeg)
+        self.stateLock.unlock()
+        // The frame is retained; power the sensor down before JPEG/OCR/
+        // translation so the camera is not streaming after the user released.
+        self.session.stopRunning()
+        continuation.resume(returning: true)
+      }
+    }
+    guard accepted else {
+      throw cameraException(
+        name: "CameraCancelled",
+        description: "The capture was cancelled.",
+        code: "ERR_CAMERA_CANCELLED"
+      )
+    }
     return CapturedFrame(
       sampleBuffer: sampleBuffer,
       previewJpegBase64: jpeg,
@@ -497,8 +572,11 @@ final class CameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDele
     }
   }
 
-  private func prepareForCapture() async {
+  private func prepareForCapture(generation: Int) async {
     sessionQueue.async {
+      guard self.isCurrentStart(generation) else {
+        return
+      }
       guard let device = self.device else {
         return
       }

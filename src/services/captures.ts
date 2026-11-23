@@ -6,7 +6,7 @@ import {
   addCapture,
   filesOf,
   markReviewed,
-  parseCaptures,
+  parseCaptureStore,
   removeCapture,
   serializeCaptures,
   unreviewedCount,
@@ -18,7 +18,10 @@ import { readMeta, writeMeta } from './db';
 export interface CapturesSnapshot {
   records: readonly CaptureRecord[];
   unreviewed: number;
+  /** A hydrate attempt finished (success or failure). */
   loaded: boolean;
+  /** Storage read succeeded; metadata writes are safe only when true. */
+  available: boolean;
   directory: string;
 }
 
@@ -26,6 +29,7 @@ const INITIAL: CapturesSnapshot = {
   records: [],
   unreviewed: 0,
   loaded: false,
+  available: false,
   directory: '',
 };
 
@@ -91,33 +95,74 @@ class CaptureRepository {
     await writeMeta(CAPTURES_KEY, serializeCaptures(records));
   }
 
-  private deleteFiles(names: readonly string[]): void {
+  private async deleteFiles(names: readonly string[]): Promise<void> {
     const files = names.filter((name) => name.length > 0);
     if (files.length === 0) {
       return;
     }
-    void vision.deleteCaptureFiles(files).catch(() => {});
+    try {
+      await vision.deleteCaptureFiles(files);
+    } catch {
+      // Leftovers are reconciled on the next successful hydrate.
+    }
   }
 
-  hydrate(): Promise<void> {
-    if (this.snapshot.loaded) {
+  /** Never write metadata over a store that could not be read. */
+  private async ensureAvailable(): Promise<void> {
+    if (!this.snapshot.available) {
+      await this.hydrate();
+    }
+    if (!this.snapshot.available) {
+      throw new Error('Capture storage is unavailable.');
+    }
+  }
+
+  hydrate(options: { reconcile?: boolean } = {}): Promise<void> {
+    if (this.snapshot.available) {
       return Promise.resolve();
     }
     if (this.loadPromise === null) {
+      const reconcile = options.reconcile === true;
       this.loadPromise = this.serialized(async () => {
-        const [raw, directory] = await Promise.all([
-          readMeta(CAPTURES_KEY).catch(() => null),
-          vision.capturesDirectory().catch(() => ''),
-        ]);
-        this.snapshot = {
-          ...this.snapshot,
-          records: parseCaptures(raw),
-          unreviewed: unreviewedCount(parseCaptures(raw)),
-          loaded: true,
-          directory,
-        };
-        for (const listener of this.listeners) {
-          listener();
+        try {
+          const directory = await vision
+            .capturesDirectory()
+            .catch(() => '');
+          const raw = await readMeta(CAPTURES_KEY);
+          const { records, complete } = parseCaptureStore(raw);
+          this.snapshot = {
+            ...this.snapshot,
+            records,
+            unreviewed: unreviewedCount(records),
+            loaded: true,
+            available: true,
+            directory,
+          };
+          for (const listener of this.listeners) {
+            listener();
+          }
+          if (!reconcile || !complete) {
+            return;
+          }
+          // Startup-only sweep. Only files older than the grace window are
+          // candidates, so a capture written while this runs can never be
+          // mistaken for an orphan of the record it is about to add.
+          const files = await vision
+            .listCaptureFiles(600)
+            .catch(() => null);
+          if (!files) {
+            return;
+          }
+          const referenced = new Set(records.flatMap(filesOf));
+          const orphans = files.filter((name) => !referenced.has(name));
+          if (orphans.length > 0) {
+            await this.deleteFiles(orphans);
+          }
+        } catch {
+          this.snapshot = { ...this.snapshot, loaded: true, available: false };
+          for (const listener of this.listeners) {
+            listener();
+          }
         }
       }).finally(() => {
         this.loadPromise = null;
@@ -127,65 +172,77 @@ class CaptureRepository {
   }
 
   add(record: CaptureRecord): Promise<void> {
-    return this.serialized(async () => {
-      const { records, evicted } = addCapture(this.snapshot.records, record);
-      await this.persist(records);
-      this.set(records);
-      this.deleteFiles(evicted.flatMap(filesOf));
-    });
+    return this.ensureAvailable().then(() =>
+      this.serialized(async () => {
+        const { records, evicted } = addCapture(this.snapshot.records, record);
+        await this.persist(records);
+        this.set(records);
+        await this.deleteFiles(evicted.flatMap(filesOf));
+      }),
+    );
   }
 
   patch(id: string, patch: Partial<CaptureRecord>): Promise<void> {
-    return this.serialized(async () => {
-      const records = updateCapture(this.snapshot.records, id, patch);
-      await this.persist(records);
-      this.set(records);
-    });
+    return this.ensureAvailable().then(() =>
+      this.serialized(async () => {
+        const records = updateCapture(this.snapshot.records, id, patch);
+        await this.persist(records);
+        this.set(records);
+      }),
+    );
   }
 
   fail(id: string, message: string): Promise<void> {
-    return this.serialized(async () => {
-      const current = this.snapshot.records.find((record) => record.id === id);
-      if (!current) {
-        return;
-      }
-      const records = updateCapture(this.snapshot.records, id, {
-        status: 'failed',
-        error: message,
-        attempts: current.attempts + 1,
-      });
-      await this.persist(records);
-      this.set(records);
-    });
+    return this.ensureAvailable().then(() =>
+      this.serialized(async () => {
+        const current = this.snapshot.records.find((record) => record.id === id);
+        if (!current) {
+          return;
+        }
+        const records = updateCapture(this.snapshot.records, id, {
+          status: 'failed',
+          error: message,
+          attempts: current.attempts + 1,
+        });
+        await this.persist(records);
+        this.set(records);
+      }),
+    );
   }
 
   review(id: string): Promise<void> {
-    return this.serialized(async () => {
-      const records = markReviewed(this.snapshot.records, id, Date.now());
-      await this.persist(records);
-      this.set(records);
-    });
+    return this.ensureAvailable().then(() =>
+      this.serialized(async () => {
+        const records = markReviewed(this.snapshot.records, id, Date.now());
+        await this.persist(records);
+        this.set(records);
+      }),
+    );
   }
 
   remove(id: string): Promise<void> {
-    return this.serialized(async () => {
-      const target = this.snapshot.records.find((record) => record.id === id);
-      const records = removeCapture(this.snapshot.records, id);
-      await this.persist(records);
-      this.set(records);
-      if (target) {
-        this.deleteFiles(filesOf(target));
-      }
-    });
+    return this.ensureAvailable().then(() =>
+      this.serialized(async () => {
+        const target = this.snapshot.records.find((record) => record.id === id);
+        const records = removeCapture(this.snapshot.records, id);
+        await this.persist(records);
+        this.set(records);
+        if (target) {
+          await this.deleteFiles(filesOf(target));
+        }
+      }),
+    );
   }
 
   clear(): Promise<void> {
-    return this.serialized(async () => {
-      const names = this.snapshot.records.flatMap(filesOf);
-      await this.persist([]);
-      this.set([]);
-      this.deleteFiles(names);
-    });
+    return this.ensureAvailable().then(() =>
+      this.serialized(async () => {
+        const names = this.snapshot.records.flatMap(filesOf);
+        await this.persist([]);
+        this.set([]);
+        await this.deleteFiles(names);
+      }),
+    );
   }
 }
 

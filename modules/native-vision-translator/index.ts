@@ -68,16 +68,23 @@ export interface EcoCameraViewProps extends ViewProps {
 }
 
 export interface NativeVisionTranslatorModule extends NativeModule {
-  startCamera(): Promise<void>;
+  /** Resolves with the session generation the capture calls must present. */
+  startCamera(): Promise<number>;
   stopCamera(): Promise<void>;
+  stopCameraIfCurrent(generation: number): Promise<void>;
   setTorch(enabled: boolean): Promise<void>;
   recognizeLast(language: string): Promise<OcrPayload>;
   getCameraStatus(): Promise<CameraStatus>;
-  captureFrame(sourceLanguage: string, crop?: OcrCrop): Promise<OcrPayload>;
+  captureFrame(
+    sourceLanguage: string,
+    crop?: OcrCrop,
+    cameraToken?: number,
+  ): Promise<OcrPayload>;
   /** Capture a still without OCR; writes the JPEG + thumbnail to disk. */
-  captureStill(): Promise<CaptureStillPayload>;
+  captureStill(cameraToken?: number): Promise<CaptureStillPayload>;
   capturesDirectory(): Promise<string>;
   captureFileUri(name: string): Promise<string>;
+  listCaptureFiles(minAgeSeconds?: number): Promise<string[]>;
   recognizeCapture(image: string, language: string): Promise<OcrPayload>;
   deleteCaptureFiles(names: string[]): Promise<void>;
   translate(params: {
@@ -150,8 +157,9 @@ const WEB_MOCK_CAPTURE =
   );
 
 const webMock = {
-  startCamera: async () => {},
+  startCamera: async () => 0,
   stopCamera: async () => {},
+  stopCameraIfCurrent: async (_generation: number) => {},
   setTorch: async () => {},
   recognizeLast: async () => WEB_MOCK_OCR,
   getCameraStatus: async () => ({
@@ -168,7 +176,7 @@ const webMock = {
     });
     return WEB_MOCK_OCR;
   },
-  captureStill: async () => ({
+  captureStill: async (_cameraToken?: number) => ({
     image: WEB_MOCK_CAPTURE,
     thumb: WEB_MOCK_CAPTURE,
     width: 1200,
@@ -176,6 +184,7 @@ const webMock = {
   }),
   capturesDirectory: async () => '',
   captureFileUri: async (name: string) => name,
+  listCaptureFiles: async () => [],
   recognizeCapture: async (_image: string, _language: string) => {
     await new Promise<void>((resolve) => {
       setTimeout(resolve, 500);

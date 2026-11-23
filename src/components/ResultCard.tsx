@@ -27,7 +27,6 @@ export function ResultCard({
   onOpenLanguages,
   onLookUp,
   readOnly = false,
-  bottomOffset = 0,
 }: {
   result: ScanResult;
   remaining: number | null;
@@ -38,8 +37,6 @@ export function ResultCard({
   onLookUp: (phrase: string, alt?: string) => void;
   /** History replay: the primary action closes instead of rescanning. */
   readOnly?: boolean;
-  /** Extra clearance for a persistent tab bar under the card. */
-  bottomOffset?: number;
 }) {
   const insets = useSafeAreaInsets();
   const [copied, setCopied] = useState(false);
@@ -293,7 +290,7 @@ export function ResultCard({
             flexGrow: 1,
             justifyContent: 'center',
             paddingTop: insets.top + 80,
-            paddingBottom: insets.bottom + 190 + bottomOffset,
+            paddingBottom: insets.bottom + 190,
           },
         ]}
       >
@@ -353,7 +350,7 @@ export function ResultCard({
         style={[
           styles.actions,
           styles.fixedActions,
-          { bottom: insets.bottom + 94 + bottomOffset },
+          { bottom: insets.bottom + 94 },
         ]}
       >
         {onShowOriginal ? (

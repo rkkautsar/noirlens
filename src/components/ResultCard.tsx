@@ -12,6 +12,7 @@ import {
 } from '@/services/currency';
 import { preferredCurrency } from '@/services/localeCurrency';
 import { termPattern, untranslatedTerms } from '@/services/lookup';
+import { romanize } from '@/services/romanize';
 import { colors, typography } from '@/theme';
 import { PriceEstimate } from './PriceEstimate';
 import { ChipButton, Hairline, MicroLabel, SolidButton } from './ui';
@@ -101,6 +102,19 @@ export function ResultCard({
   const primaryAction = translated ? onScanAgain : onOpenLanguages;
   const lookupTerms = translated ? untranslatedTerms(result) : [];
   const lookupPattern = termPattern(lookupTerms);
+  const romanTerms = lookupTerms
+    .map((term) => romanize(term).toLowerCase())
+    .filter((roman) => roman.length >= 4);
+  const isRomanTerm = (word: string) => {
+    const lower = word.toLowerCase();
+    return romanTerms.some(
+      (roman) =>
+        roman.includes(lower) ||
+        lower.includes(roman) ||
+        (lower.length >= 6 && roman.includes(lower.slice(-6))) ||
+        (lower.length >= 6 && roman.includes(lower.slice(0, 6))),
+    );
+  };
   const normalizedTerm = (value: string) =>
     value
       .normalize('NFD')
@@ -133,6 +147,13 @@ export function ResultCard({
     }
     // Romanized dish/brand names the translator kept as proper nouns.
     for (const match of text.matchAll(/[A-Z][a-z]+(?:[ \t][A-Z][a-z]+)+/g)) {
+      const start = match.index ?? 0;
+      spans.push({ start, end: start + match[0].length, kind: 'term' });
+    }
+    for (const match of text.matchAll(/[A-Za-z]+/g)) {
+      if (match[0].length < 4 || !isRomanTerm(match[0])) {
+        continue;
+      }
       const start = match.index ?? 0;
       spans.push({ start, end: start + match[0].length, kind: 'term' });
     }

@@ -122,3 +122,18 @@ describe('conversion', () => {
     expect(rows[0]?.rate).toBeCloseTo(1.09);
   });
 });
+
+describe('won detection', () => {
+  it('finds romanized won prices', () => {
+    const rows = detectPrices(
+      'tteokbokki deokbokki 3,500 won Sundae 4,500 won 6,000 fish cake gimbap 2,500 won 1/2,000 won',
+      'en',
+    );
+    expect(rows.map((row) => row.currency)).toEqual(['KRW', 'KRW', 'KRW', 'KRW'].slice(0, rows.length));
+    expect(rows.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it('converts KRW to SGD through USD', () => {
+    expect(convert(3500, 'KRW', 'SGD')).toBeCloseTo(3.3, 1);
+  });
+});

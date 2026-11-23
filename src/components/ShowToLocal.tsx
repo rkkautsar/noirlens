@@ -49,28 +49,27 @@ export function ShowToLocal({
           },
         ]}
       >
-        <View
-          style={[styles.inner, flipped && styles.flipped]}
-          accessibilityViewIsModal
-        >
+        <View style={styles.inner} accessibilityViewIsModal>
           <ScrollView
             style={styles.scroll}
             contentContainerStyle={styles.scrollContent}
           >
-            <Text
-              selectable
-              style={[
-                styles.translation,
-                { fontSize, lineHeight: Math.round(fontSize * 1.24) },
-              ]}
-            >
-              {translation}
-            </Text>
-            {original ? (
-              <Text style={styles.original} numberOfLines={4}>
-                {original}
+            <View style={flipped && styles.flippedText}>
+              <Text
+                selectable
+                style={[
+                  styles.translation,
+                  { fontSize, lineHeight: Math.round(fontSize * 1.24) },
+                ]}
+              >
+                {translation}
               </Text>
-            ) : null}
+              {original ? (
+                <Text style={styles.original} numberOfLines={4}>
+                  {original}
+                </Text>
+              ) : null}
+            </View>
           </ScrollView>
 
           <View style={styles.controls}>
@@ -102,7 +101,7 @@ const styles = StyleSheet.create({
   inner: {
     flex: 1,
   },
-  flipped: {
+  flippedText: {
     transform: [{ rotate: '180deg' }],
   },
   scroll: {

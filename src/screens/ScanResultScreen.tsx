@@ -322,6 +322,7 @@ export function ScanResultScreen({
         onPaywall={() => router.push('/paywall')}
         onCamera={newScan}
         onTranslate={() => router.push('/translate')}
+        onBack={close}
         actions={
           inspect ? (
             <InspectActions

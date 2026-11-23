@@ -10,7 +10,6 @@ import {
   Text,
   View,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { colors, layout, typography } from '@/theme';
 
@@ -57,7 +56,6 @@ export function ScanShutter({
   onLanguages: () => void;
   collect?: boolean;
 }) {
-  const insets = useSafeAreaInsets();
   const [zone, setZone] = useState<Zone | null>(null);
   const drag = useRef(new Animated.Value(0)).current;
   const progress = useRef(new Animated.Value(0)).current;
@@ -240,7 +238,7 @@ export function ScanShutter({
       {...responder.panHandlers}
       style={[
         styles.wrap,
-        { paddingBottom: insets.bottom + 12 },
+        { paddingBottom: 12 },
       ]}
     >
       <View

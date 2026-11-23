@@ -34,6 +34,7 @@ export function ScreenShell({
   onPaywall,
   onCamera,
   onTranslate,
+  onBack,
   backdrop,
   actions,
   dock,
@@ -46,6 +47,7 @@ export function ScreenShell({
   onPaywall: () => void;
   onCamera: () => void;
   onTranslate: () => void;
+  onBack?: () => void;
   /** Full-bleed content behind the chrome (camera preview). */
   backdrop?: ReactNode;
   /** Action row above the dock. */
@@ -72,6 +74,7 @@ export function ScreenShell({
         onOpenPaywall={onPaywall}
         onCamera={onCamera}
         onTranslate={onTranslate}
+        onBack={onBack}
       />
     </View>
   );
@@ -79,7 +82,7 @@ export function ScreenShell({
   const footer =
     actions || dock ? (
       <View
-        style={[styles.footer, dock ? null : { paddingBottom: insets.bottom }]}
+        style={[styles.footer, { paddingBottom: insets.bottom }]}
         onLayout={(event) => {
           setFooterHeight(event.nativeEvent.layout.height);
         }}

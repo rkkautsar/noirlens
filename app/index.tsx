@@ -249,6 +249,7 @@ export default function ScannerScreen() {
           ) : undefined
         }
         dock={
+          locked && exhausted ? undefined : (
           <>
             {!locked ? (
               <View style={styles.cameraUtilities}>
@@ -434,6 +435,7 @@ export default function ScannerScreen() {
               />
             ) : null}
           </>
+          )
         }
         overlay={
           flight && flightTarget ? (

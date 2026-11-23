@@ -1,4 +1,5 @@
-import { StyleSheet, Text, View } from 'react-native';
+import Ionicons from '@expo/vector-icons/Ionicons';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ModeTabs, type AppMode } from './ModeTabs';
@@ -17,6 +18,7 @@ export function ChromeHeader({
   onOpenPaywall,
   onCamera,
   onTranslate,
+  onBack,
 }: {
   active: AppMode;
   remaining: number | null;
@@ -24,6 +26,7 @@ export function ChromeHeader({
   onOpenPaywall: () => void;
   onCamera: () => void;
   onTranslate: () => void;
+  onBack?: () => void;
 }) {
   const insets = useSafeAreaInsets();
   const counter = unlimited
@@ -38,7 +41,24 @@ export function ChromeHeader({
       style={[styles.header, { paddingTop: insets.top + 8 }]}
     >
       <View pointerEvents="box-none" style={styles.row}>
-        <Text style={styles.brand}>NOIRLENS</Text>
+        <View style={styles.brandGroup}>
+          {onBack ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Back"
+              hitSlop={12}
+              onPress={onBack}
+              style={({ pressed }) => [styles.back, pressed && styles.pressed]}
+            >
+              <Ionicons
+                name="chevron-back"
+                size={20}
+                color={colors.foreground}
+              />
+            </Pressable>
+          ) : null}
+          <Text style={styles.brand}>NOIRLENS</Text>
+        </View>
         {counter ? <ChipButton label={counter} onPress={onOpenPaywall} /> : null}
       </View>
       <View pointerEvents="box-none" style={styles.tabs}>
@@ -63,6 +83,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 12,
+  },
+  brandGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  back: {
+    width: 28,
+    height: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: -6,
+  },
+  pressed: {
+    opacity: 0.6,
   },
   brand: {
     ...typography.label,

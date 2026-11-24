@@ -69,6 +69,12 @@ describe('lookup term boundaries', () => {
     expect(spans.map((span) => span.text)).toEqual(['Bánh mì\nPhượng', 'Nigiri']);
   });
 
+  it('does not spend a second wrap through a connector', () => {
+    const spans = exact('Bánh mì\nPhượng de\nIchiran');
+    expect(spans.map((span) => span.text)).toEqual(['Bánh mì\nPhượng', 'Ichiran']);
+    expect(spans.every((span) => !span.text.includes('de\n'))).toBe(true);
+  });
+
   it('does not join across a blank line or into a number', () => {
     expect(exact('Nigiri\n\nOmakase').map((span) => span.text)).toEqual([
       'Nigiri',

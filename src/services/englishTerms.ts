@@ -368,6 +368,9 @@ export function englishTermSpans(
           if (
             cursor + 1 < tokens.length &&
             !isExcluded(tokens[cursor + 1]!) &&
+            !/[\r\n]/.test(
+              text.slice(next.end, tokens[cursor + 1]!.start),
+            ) &&
             isCapitalized(tokens[cursor + 1]!.text) &&
             !isFunctionWord(canonical(tokens[cursor + 1]!.text.toLowerCase())) &&
             joinable(text, next, tokens[cursor + 1]!)

@@ -101,26 +101,28 @@ enum TranslationBridge {
     } catch let error as Exception {
       throw error
     } catch let error as TranslationError {
-      if TranslationError.notInstalled ~= error {
-        throw Exception(
-          name: "LanguagePackNotInstalled",
-          description: "The \(code) to \(targetCode) offline pack is not installed.",
-          code: "ERR_LANGUAGE_PACK_MISSING"
-        )
-      }
-      if TranslationError.unsupportedLanguagePairing ~= error ||
-        TranslationError.unsupportedSourceLanguage ~= error ||
-        TranslationError.unsupportedTargetLanguage ~= error
-      {
-        throw Exception(
-          name: "LanguagePairUnsupported",
-          description: "on-device translation from \(code) to \(targetCode) is not supported.",
-          code: "ERR_LANGUAGE_UNSUPPORTED"
-        )
+      if #available(iOS 26.0, *) {
+        if TranslationError.notInstalled ~= error {
+          throw Exception(
+            name: "LanguagePackNotInstalled",
+            description: "The \(code) to \(targetCode) offline pack is not installed.",
+            code: "ERR_LANGUAGE_PACK_MISSING"
+          )
+        }
+        if TranslationError.unsupportedLanguagePairing ~= error ||
+          TranslationError.unsupportedSourceLanguage ~= error ||
+          TranslationError.unsupportedTargetLanguage ~= error
+        {
+          throw Exception(
+            name: "LanguagePairUnsupported",
+            description: "on-device translation from \(code) to \(targetCode) is not supported.",
+            code: "ERR_LANGUAGE_UNSUPPORTED"
+          )
+        }
       }
       throw Exception(
         name: "TranslationFailed",
-        description: error.errorDescription ?? "The translation failed.",
+        description: error.localizedDescription,
         code: "ERR_TRANSLATION_FAILED"
       )
     } catch {

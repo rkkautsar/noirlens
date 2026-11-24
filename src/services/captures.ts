@@ -6,14 +6,43 @@ import {
   addCapture,
   filesOf,
   markReviewed,
+  parseCaptureRecord,
   parseCaptureStore,
   removeCapture,
-  serializeCaptures,
+  serializeCapture,
   unreviewedCount,
   updateCapture,
   type CaptureRecord,
 } from './captureModel';
-import { readMeta, writeMeta } from './db';
+import {
+  readMeta,
+  readMetaMany,
+  removeMetaMany,
+  writeMeta,
+  writeMetaMany,
+} from './db';
+
+const CAPTURES_INDEX_KEY = 'captures.v1.index';
+const CAPTURE_ROW_PREFIX = 'captures.v1.row.';
+
+function rowKey(id: string): string {
+  return CAPTURE_ROW_PREFIX + id;
+}
+
+function parseIndex(raw: string | null): string[] | null {
+  if (raw === null) {
+    return null;
+  }
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed) || !parsed.every((id) => typeof id === 'string')) {
+      return null;
+    }
+    return parsed;
+  } catch {
+    return null;
+  }
+}
 
 export interface CapturesSnapshot {
   records: readonly CaptureRecord[];
@@ -91,8 +120,15 @@ class CaptureRepository {
     return run;
   }
 
-  private async persist(records: readonly CaptureRecord[]): Promise<void> {
-    await writeMeta(CAPTURES_KEY, serializeCaptures(records));
+  private async persistIndex(records: readonly CaptureRecord[]): Promise<void> {
+    await writeMeta(
+      CAPTURES_INDEX_KEY,
+      JSON.stringify(records.map((record) => record.id)),
+    );
+  }
+
+  private async persistRecord(record: CaptureRecord): Promise<void> {
+    await writeMeta(rowKey(record.id), serializeCapture(record));
   }
 
   private async deleteFiles(names: readonly string[]): Promise<void> {
@@ -128,8 +164,35 @@ class CaptureRepository {
           const directory = await vision
             .capturesDirectory()
             .catch(() => '');
-          const raw = await readMeta(CAPTURES_KEY);
-          const { records, complete } = parseCaptureStore(raw);
+          let records: CaptureRecord[] = [];
+          let complete = true;
+          const index = parseIndex(await readMeta(CAPTURES_INDEX_KEY));
+          if (index === null) {
+            // First run after the single-blob layout (or a fresh install).
+            const parsed = parseCaptureStore(await readMeta(CAPTURES_KEY));
+            records = parsed.records;
+            complete = parsed.complete;
+            if (records.length > 0) {
+              await writeMetaMany(
+                records.map((record) => [
+                  rowKey(record.id),
+                  serializeCapture(record),
+                ]),
+              );
+              await this.persistIndex(records);
+              await removeMetaMany([CAPTURES_KEY]);
+            }
+          } else {
+            const rows = await readMetaMany(index.map(rowKey));
+            for (const raw of rows) {
+              const record = parseCaptureRecord(raw);
+              if (record === null) {
+                complete = false;
+              } else {
+                records.push(record);
+              }
+            }
+          }
           this.snapshot = {
             ...this.snapshot,
             records,
@@ -175,8 +238,15 @@ class CaptureRepository {
     return this.ensureAvailable().then(() =>
       this.serialized(async () => {
         const { records, evicted } = addCapture(this.snapshot.records, record);
-        await this.persist(records);
+        await writeMetaMany([
+          [rowKey(record.id), serializeCapture(record)],
+          [
+            CAPTURES_INDEX_KEY,
+            JSON.stringify(records.map((entry) => entry.id)),
+          ],
+        ]);
         this.set(records);
+        await removeMetaMany(evicted.map((entry) => rowKey(entry.id)));
         await this.deleteFiles(evicted.flatMap(filesOf));
       }),
     );
@@ -186,7 +256,10 @@ class CaptureRepository {
     return this.ensureAvailable().then(() =>
       this.serialized(async () => {
         const records = updateCapture(this.snapshot.records, id, patch);
-        await this.persist(records);
+        const record = records.find((entry) => entry.id === id);
+        if (record) {
+          await this.persistRecord(record);
+        }
         this.set(records);
       }),
     );
@@ -214,7 +287,10 @@ class CaptureRepository {
           error: null,
           attempts: 0,
         });
-        await this.persist(records);
+        const updated = records.find((entry) => entry.id === id);
+        if (updated) {
+          await this.persistRecord(updated);
+        }
         this.set(records);
         return revision;
       }),
@@ -235,7 +311,10 @@ class CaptureRepository {
           return;
         }
         const records = updateCapture(this.snapshot.records, id, patch);
-        await this.persist(records);
+        const record = records.find((entry) => entry.id === id);
+        if (record) {
+          await this.persistRecord(record);
+        }
         this.set(records);
       }),
     );
@@ -259,7 +338,10 @@ class CaptureRepository {
           error: message,
           attempts: current.attempts + 1,
         });
-        await this.persist(records);
+        const record = records.find((entry) => entry.id === id);
+        if (record) {
+          await this.persistRecord(record);
+        }
         this.set(records);
       }),
     );
@@ -277,7 +359,10 @@ class CaptureRepository {
           error: message,
           attempts: current.attempts + 1,
         });
-        await this.persist(records);
+        const record = records.find((entry) => entry.id === id);
+        if (record) {
+          await this.persistRecord(record);
+        }
         this.set(records);
       }),
     );
@@ -287,7 +372,10 @@ class CaptureRepository {
     return this.ensureAvailable().then(() =>
       this.serialized(async () => {
         const records = markReviewed(this.snapshot.records, id, Date.now());
-        await this.persist(records);
+        const record = records.find((entry) => entry.id === id);
+        if (record) {
+          await this.persistRecord(record);
+        }
         this.set(records);
       }),
     );
@@ -298,8 +386,9 @@ class CaptureRepository {
       this.serialized(async () => {
         const target = this.snapshot.records.find((record) => record.id === id);
         const records = removeCapture(this.snapshot.records, id);
-        await this.persist(records);
+        await this.persistIndex(records);
         this.set(records);
+        await removeMetaMany([rowKey(id)]);
         if (target) {
           await this.deleteFiles(filesOf(target));
         }
@@ -311,8 +400,10 @@ class CaptureRepository {
     return this.ensureAvailable().then(() =>
       this.serialized(async () => {
         const names = this.snapshot.records.flatMap(filesOf);
-        await this.persist([]);
+        const keys = this.snapshot.records.map((record) => rowKey(record.id));
+        await this.persistIndex([]);
         this.set([]);
+        await removeMetaMany(keys);
         await this.deleteFiles(names);
       }),
     );

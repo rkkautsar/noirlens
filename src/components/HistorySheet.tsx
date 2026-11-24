@@ -4,9 +4,9 @@ import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
   Alert,
+  FlatList,
   Image,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -257,24 +257,18 @@ export function HistorySheet({
       </View>
 
       {tab === 'translations' ? (
-        <ScrollView
+        <FlatList
           style={styles.scroll}
           contentContainerStyle={[
             styles.content,
             { paddingBottom: insets.bottom + 28 },
           ]}
-        >
-          {loading ? (
-            <MicroLabel tone="dim">LOADING…</MicroLabel>
-          ) : entries.length === 0 ? (
-            <View style={styles.empty}>
-              <MicroLabel tone="dim">NO RECENT SCANS</MicroLabel>
-              <Text style={styles.emptyText}>
-                Hold to scan a sign. Finished scans appear here.
-              </Text>
-            </View>
-          ) : (
-            <>
+          data={loading ? [] : entries}
+          keyExtractor={(entry) => entry.id}
+          initialNumToRender={10}
+          windowSize={7}
+          ListHeaderComponent={
+            !loading && entries.length > 0 ? (
               <View style={styles.listHeader}>
                 <MicroLabel tone="dim">
                   {entries.length} SCAN{entries.length === 1 ? '' : 'S'}
@@ -287,98 +281,101 @@ export function HistorySheet({
                   }}
                 />
               </View>
-
-              {entries.map((entry) => {
-                const isCopied = copied === entry.id;
-                return (
-                  <View key={entry.id} style={styles.entryWrap}>
-                    <Pressable
-                      accessibilityRole="button"
-                      accessibilityLabel={`Open scan: ${
-                        entry.translatedText || entry.sourceText
-                      }`}
-                      accessibilityHint="Opens the result to look up again"
-                      onPress={() => {
-                        router.setParams({ history: tab });
-                        navigateAfterClose({
-                          pathname: '/result',
-                          params: { id: entry.id },
-                        });
-                      }}
-                      style={({ pressed }) => [
-                        styles.entry,
-                        pressed && styles.pressed,
-                      ]}
+            ) : undefined
+          }
+          ListEmptyComponent={
+            loading ? (
+              <MicroLabel tone="dim">LOADING…</MicroLabel>
+            ) : (
+              <View style={styles.empty}>
+                <MicroLabel tone="dim">NO RECENT SCANS</MicroLabel>
+                <Text style={styles.emptyText}>
+                  Hold to scan a sign. Finished scans appear here.
+                </Text>
+              </View>
+            )
+          }
+          renderItem={({ item: entry }) => {
+            const isCopied = copied === entry.id;
+            return (
+              <View style={styles.entryWrap}>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`Open scan: ${
+                    entry.translatedText || entry.sourceText
+                  }`}
+                  accessibilityHint="Opens the result to look up again"
+                  onPress={() => {
+                    router.setParams({ history: tab });
+                    navigateAfterClose({
+                      pathname: '/result',
+                      params: { id: entry.id },
+                    });
+                  }}
+                  style={({ pressed }) => [
+                    styles.entry,
+                    pressed && styles.pressed,
+                  ]}
+                >
+                  <View style={styles.entryTop}>
+                    <MicroLabel
+                      tone={entry.kind === 'translated' ? 'accent' : 'dim'}
                     >
-                      <View style={styles.entryTop}>
-                        <MicroLabel
-                          tone={entry.kind === 'translated' ? 'accent' : 'dim'}
-                        >
-                          {entry.kind === 'translated'
-                            ? `${languageLabel(entry.sourceLanguage)} → ENGLISH`
-                            : entry.sourceLanguage === 'und'
-                              ? 'NO LANGUAGE DETECTED'
-                              : 'ENGLISH'}
-                        </MicroLabel>
-                        <MicroLabel tone="dim">{formatTime(entry.at)}</MicroLabel>
-                      </View>
-                      <Text style={styles.entryText} numberOfLines={3} selectable>
-                        {entry.translatedText || entry.sourceText}
-                      </Text>
-                      {entry.translatedText ? (
-                        <Text style={styles.entrySource} numberOfLines={1}>
-                          {entry.sourceText}
-                        </Text>
-                      ) : null}
-                    </Pressable>
-                    <Pressable
-                      accessibilityRole="button"
-                      accessibilityLabel={isCopied ? 'Copied' : 'Copy scan'}
-                      hitSlop={10}
-                      onPress={() => {
-                        void copy(entry);
-                      }}
-                      style={styles.copyIcon}
-                    >
-                      <Ionicons
-                        name={isCopied ? 'checkmark' : 'copy-outline'}
-                        size={15}
-                        color={isCopied ? colors.success : colors.muted}
-                      />
-                    </Pressable>
+                      {entry.kind === 'translated'
+                        ? `${languageLabel(entry.sourceLanguage)} → ENGLISH`
+                        : entry.sourceLanguage === 'und'
+                          ? 'NO LANGUAGE DETECTED'
+                          : 'ENGLISH'}
+                    </MicroLabel>
+                    <MicroLabel tone="dim">{formatTime(entry.at)}</MicroLabel>
                   </View>
-                );
-              })}
-            </>
-          )}
-        </ScrollView>
+                  <Text style={styles.entryText} numberOfLines={3} selectable>
+                    {entry.translatedText || entry.sourceText}
+                  </Text>
+                  {entry.translatedText ? (
+                    <Text style={styles.entrySource} numberOfLines={1}>
+                      {entry.sourceText}
+                    </Text>
+                  ) : null}
+                </Pressable>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={isCopied ? 'Copied' : 'Copy scan'}
+                  hitSlop={10}
+                  onPress={() => {
+                    void copy(entry);
+                  }}
+                  style={styles.copyIcon}
+                >
+                  <Ionicons
+                    name={isCopied ? 'checkmark' : 'copy-outline'}
+                    size={15}
+                    color={isCopied ? colors.success : colors.muted}
+                  />
+                </Pressable>
+              </View>
+            );
+          }}
+        />
       ) : (
-        <ScrollView
+        <FlatList
           style={styles.scroll}
           contentContainerStyle={[
             styles.content,
             { paddingBottom: insets.bottom + 28 },
           ]}
-        >
-          {!captureState.loaded ? (
-            <MicroLabel tone="dim">LOADING…</MicroLabel>
-          ) : !captureState.available ? (
-            <View style={styles.empty}>
-              <MicroLabel tone="warning">STORAGE UNAVAILABLE</MicroLabel>
-              <Text style={styles.emptyText}>
-                Saved captures could not be read. Nothing has been deleted;
-                reopen History to retry.
-              </Text>
-            </View>
-          ) : captureState.records.length === 0 ? (
-            <View style={styles.empty}>
-              <MicroLabel tone="dim">NO CAPTURES YET</MicroLabel>
-              <Text style={styles.emptyText}>
-                Turn on Collect mode and hold to save signs for later.
-              </Text>
-            </View>
-          ) : (
-            <>
+          data={
+            captureState.loaded && captureState.available
+              ? captureState.records
+              : []
+          }
+          keyExtractor={(record) => record.id}
+          initialNumToRender={6}
+          windowSize={5}
+          ListHeaderComponent={
+            captureState.loaded &&
+            captureState.available &&
+            captureState.records.length > 0 ? (
               <View style={styles.listHeader}>
                 <MicroLabel tone="dim">
                   {captureState.records.length} CAPTURE
@@ -390,18 +387,37 @@ export function HistorySheet({
                   onPress={clearCaptures}
                 />
               </View>
-              {captureState.records.map((record) => (
-                <CaptureRow
-                  key={record.id}
-                  record={record}
-                  uri={captures.uriFor(record.thumb)}
-                  onOpen={() => openCapture(record)}
-                  onDelete={() => deleteCapture(record)}
-                />
-              ))}
-            </>
+            ) : undefined
+          }
+          ListEmptyComponent={
+            !captureState.loaded ? (
+              <MicroLabel tone="dim">LOADING…</MicroLabel>
+            ) : !captureState.available ? (
+              <View style={styles.empty}>
+                <MicroLabel tone="warning">STORAGE UNAVAILABLE</MicroLabel>
+                <Text style={styles.emptyText}>
+                  Saved captures could not be read. Nothing has been deleted;
+                  reopen History to retry.
+                </Text>
+              </View>
+            ) : (
+              <View style={styles.empty}>
+                <MicroLabel tone="dim">NO CAPTURES YET</MicroLabel>
+                <Text style={styles.emptyText}>
+                  Turn on Collect mode and hold to save signs for later.
+                </Text>
+              </View>
+            )
+          }
+          renderItem={({ item: record }) => (
+            <CaptureRow
+              record={record}
+              uri={captures.uriFor(record.thumb)}
+              onOpen={() => openCapture(record)}
+              onDelete={() => deleteCapture(record)}
+            />
           )}
-        </ScrollView>
+        />
       )}
     </View>
   );

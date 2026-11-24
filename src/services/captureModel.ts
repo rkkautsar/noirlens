@@ -123,6 +123,31 @@ export function serializeCaptures(records: readonly CaptureRecord[]): string {
   return JSON.stringify(records);
 }
 
+/** One row for the per-capture storage layout. */
+export function serializeCapture(record: CaptureRecord): string {
+  return JSON.stringify(record);
+}
+
+/** Parse one stored row; malformed rows are skipped by the repository. */
+export function parseCaptureRecord(raw: string | null): CaptureRecord | null {
+  if (raw === null) {
+    return null;
+  }
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!isRecord(parsed)) {
+      return null;
+    }
+    return {
+      ...parsed,
+      ocrRevision:
+        typeof parsed.ocrRevision === 'number' ? parsed.ocrRevision : 0,
+    };
+  } catch {
+    return null;
+  }
+}
+
 export function unreviewedCount(records: readonly CaptureRecord[]): number {
   return records.reduce(
     (count, record) => (record.reviewedAt === null ? count + 1 : count),

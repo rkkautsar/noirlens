@@ -4,9 +4,11 @@ import {
   MAX_CAPTURES,
   addCapture,
   markReviewed,
+  parseCaptureRecord,
   parseCaptures,
   pendingCaptures,
   removeCapture,
+  serializeCapture,
   serializeCaptures,
   unreviewedCount,
   updateCapture,
@@ -36,6 +38,14 @@ function record(id: string, overrides: Partial<CaptureRecord> = {}): CaptureReco
 }
 
 describe('capture model', () => {
+  it('round-trips one stored row and rejects malformed rows', () => {
+    const original = record('7', { status: 'done', text: 'Gimbap', ocrRevision: 3 });
+    expect(parseCaptureRecord(serializeCapture(original))).toEqual(original);
+    expect(parseCaptureRecord('{')).toBeNull();
+    expect(parseCaptureRecord('null')).toBeNull();
+    expect(parseCaptureRecord(null)).toBeNull();
+  });
+
   it('round-trips valid records', () => {
     const records = [record('1'), record('2')];
     expect(parseCaptures(serializeCaptures(records))).toEqual(records);

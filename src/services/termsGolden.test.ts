@@ -27,6 +27,16 @@ describe('lookup term boundaries', () => {
   const exact = (translatedText: string) =>
     resolveTermSpans(lookupSpans({ translatedText }));
 
+  it('drops personal names in the excluded ranges', () => {
+    const text = 'We met Alice at the cafe.';
+    expect(exact(text).map((span) => span.text)).toContain('Alice');
+    const at = text.indexOf('Alice');
+    const spans = resolveTermSpans(
+      lookupSpans({ translatedText: text }, [{ start: at, end: at + 'Alice'.length }]),
+    );
+    expect(spans.map((span) => span.text)).not.toContain('Alice');
+  });
+
   it('finds translated names and unusual nouns without the source', () => {
     const text =
       'Yesterday I went to Don Quijote and bought some nigiri for dinner.';

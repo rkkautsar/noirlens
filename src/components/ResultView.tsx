@@ -11,6 +11,7 @@ import {
 } from '@/services/currency';
 import { preferredCurrency } from '@/services/localeCurrency';
 import { lookupSpans, resolveTermSpans } from '@/services/lookup';
+import { personalNameRanges } from '@/services/personNames';
 import { romanize } from '@/services/romanize';
 import { romanizeNative } from '@/services/romanizeNative';
 import { colors, typography } from '@/theme';
@@ -68,9 +69,31 @@ export function ResultBody({
       ? `The ${language} offline pack is not installed. Download it once, then scan again. You can still read the source below.`
       : '';
 
+  const [nameRanges, setNameRanges] = useState<Array<{ start: number; end: number }>>([]);
+  useEffect(() => {
+    let active = true;
+    if (!translated) {
+      setNameRanges([]);
+      return;
+    }
+    personalNameRanges(result.translatedText)
+      .then((ranges) => {
+        if (active) {
+          setNameRanges(ranges);
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setNameRanges([]);
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [result.translatedText, translated]);
   const termSpans = useMemo(
-    () => (translated ? lookupSpans(result) : []),
-    [result, translated],
+    () => (translated ? lookupSpans(result, nameRanges) : []),
+    [result, translated, nameRanges],
   );
   const translationPrices = priceConversions(
     result.translatedText,

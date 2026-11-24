@@ -203,8 +203,16 @@ export interface LookupSpan {
  * out-of-vocabulary nouns, and non-Latin runs. Source-independent, so a
  * translated proper noun is found even when the source script was different.
  */
-export function lookupSpans(result: { translatedText: string }): LookupSpan[] {
-  return englishTermSpans(result.translatedText);
+export function lookupSpans(
+  result: { translatedText: string },
+  excluded: Array<{ start: number; end: number }> = [],
+): LookupSpan[] {
+  return englishTermSpans(result.translatedText).filter(
+    (span) =>
+      !excluded.some(
+        (range) => span.start < range.end && span.end > range.start,
+      ),
+  );
 }
 
 /**

@@ -74,6 +74,8 @@ export interface NativeVisionTranslatorModule extends NativeModule {
   stopCameraIfCurrent(generation: number): Promise<void>;
   setTorch(enabled: boolean): Promise<void>;
   recognizeLast(language: string): Promise<OcrPayload>;
+  /** UTF-16 ranges NLTagger tagged as personal names. */
+  personalNameRanges(text: string): Promise<Array<{ start: number; end: number }>>;
   getCameraStatus(): Promise<CameraStatus>;
   captureFrame(
     sourceLanguage: string,
@@ -162,6 +164,7 @@ const webMock = {
   stopCameraIfCurrent: async (_generation: number) => {},
   setTorch: async () => {},
   recognizeLast: async () => WEB_MOCK_OCR,
+  personalNameRanges: async () => [],
   getCameraStatus: async () => ({
     authorized: true,
     running: true,

@@ -1,5 +1,6 @@
 import ExpoModulesCore
 import Foundation
+import NaturalLanguage
 
 struct TranslateParams: Record {
   @Field var text: String = ""
@@ -45,6 +46,31 @@ public final class NativeVisionTranslatorModule: Module {
 
     AsyncFunction("recognizeLast") { (language: String) throws -> [String: Any] in
       try CameraController.shared.recognizeLast(language: language)
+    }
+
+    AsyncFunction("personalNameRanges") { (text: String) -> [[String: Int]] in
+      guard !text.isEmpty else {
+        return []
+      }
+      let tagger = NLTagger(tagSchemes: [.nameType])
+      tagger.string = text
+      var ranges: [[String: Int]] = []
+      let full = text.startIndex..<text.endIndex
+      tagger.enumerateTags(
+        in: full,
+        unit: .word,
+        scheme: .nameType,
+        options: [.omitPunctuation, .omitWhitespace, .joinNames]
+      ) { tag, tokenRange in
+        guard tag == .personalName else {
+          return true
+        }
+        let start = text[..<tokenRange.lowerBound].utf16.count
+        let end = text[..<tokenRange.upperBound].utf16.count
+        ranges.append(["start": start, "end": end])
+        return true
+      }
+      return ranges
     }
 
     AsyncFunction("getCameraStatus") { () async -> [String: Any] in

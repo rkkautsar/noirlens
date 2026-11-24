@@ -56,6 +56,14 @@ describe('lookup term boundaries', () => {
     ]);
   });
 
+  it('keeps stacked multiword menu names separate', () => {
+    const spans = exact('Medicine Gimbap\nBindaedae Tteok');
+    expect(spans.map((span) => span.text)).toEqual([
+      'Medicine Gimbap',
+      'Bindaedae Tteok',
+    ]);
+  });
+
   it('does not join across a blank line or into a number', () => {
     expect(exact('Nigiri\n\nOmakase').map((span) => span.text)).toEqual([
       'Nigiri',

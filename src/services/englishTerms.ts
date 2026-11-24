@@ -336,21 +336,30 @@ export function englishTermSpans(
     if (isCapitalized(token.text)) {
       let last = index;
       let cursor = index + 1;
+      let wrapped = false;
       while (cursor < tokens.length) {
         const next = tokens[cursor]!;
         const gap = text.slice(tokens[last]!.end, next.start);
+        const crossesLine = /[\r\n]/.test(gap);
         const after = tokens[cursor + 1];
+        const sameLineAfter =
+          after !== undefined &&
+          !/[\r\n]/.test(text.slice(next.end, after.start));
         const startsRun =
           after !== undefined &&
+          sameLineAfter &&
           isCapitalized(after.text) &&
           !isExcluded(after) &&
           joinable(text, next, after);
         if (
           isExcluded(next) ||
-          (/[\r\n]/.test(gap) && (last === index || startsRun)) ||
+          (crossesLine && (last === index || startsRun || wrapped)) ||
           !joinable(text, tokens[last]!, next)
         ) {
           break;
+        }
+        if (crossesLine) {
+          wrapped = true;
         }
         if (isNonLatin(next.text)) {
           break;
@@ -427,18 +436,24 @@ export function englishTermSpans(
     if (isRare(token)) {
       let last = index;
       let cursor = index + 1;
+      let wrapped = false;
       while (cursor < tokens.length) {
         const next = tokens[cursor]!;
         const gap = text.slice(tokens[last]!.end, next.start);
+        const crossesLine = /[\r\n]/.test(gap);
         const after = tokens[cursor + 1];
+        const sameLineAfter =
+          after !== undefined &&
+          !/[\r\n]/.test(text.slice(next.end, after.start));
         const startsRun =
           after !== undefined &&
+          sameLineAfter &&
           isCapitalized(after.text) &&
           !isExcluded(after) &&
           joinable(text, next, after);
         if (
           isExcluded(next) ||
-          (/[\r\n]/.test(gap) && (last === index || startsRun)) ||
+          (crossesLine && (last === index || startsRun || wrapped)) ||
           !joinable(text, tokens[last]!, next) ||
           isConnector(canonical(next.text.toLowerCase())) === true ||
           !isRare(next) ||

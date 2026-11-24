@@ -464,6 +464,9 @@ export function englishTermSpans(
         ) {
           break;
         }
+        if (crossesLine) {
+          wrapped = true;
+        }
         last = cursor;
         cursor += 1;
       }

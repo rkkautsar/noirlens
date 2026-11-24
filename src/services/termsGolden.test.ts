@@ -69,6 +69,14 @@ describe('lookup term boundaries', () => {
     expect(spans.map((span) => span.text)).toEqual(['Bánh mì\nPhượng', 'Nigiri']);
   });
 
+  it('counts the first wrap in lowercase rare runs', () => {
+    const spans = exact('bánh mì\nphượng\nnigiri');
+    expect(spans.map((span) => span.text)).toEqual([
+      'bánh mì\nphượng',
+      'nigiri',
+    ]);
+  });
+
   it('does not spend a second wrap through a connector', () => {
     const spans = exact('Bánh mì\nPhượng de\nIchiran');
     expect(spans.map((span) => span.text)).toEqual(['Bánh mì\nPhượng', 'Ichiran']);

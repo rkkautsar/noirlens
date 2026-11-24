@@ -30,10 +30,19 @@ export function loadCommonWords(): Promise<void> {
     if (!uri) {
       throw new Error('The English vocabulary asset is unavailable.');
     }
-    const text =
-      Platform.OS === 'web'
-        ? await (await fetch(uri)).text()
-        : await readAsStringAsync(uri);
+    let text: string;
+    if (Platform.OS === 'web') {
+      const response = await fetch(uri);
+      if (!response.ok) {
+        throw new Error('The English vocabulary asset could not be fetched.');
+      }
+      text = await response.text();
+    } else {
+      text = await readAsStringAsync(uri);
+    }
+    if (text.trim().length === 0) {
+      throw new Error('The English vocabulary asset is empty.');
+    }
     loadCommonWordsFromText(text);
   })().catch((error: unknown) => {
     loadPromise = null;

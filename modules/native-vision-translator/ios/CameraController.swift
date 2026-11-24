@@ -352,6 +352,7 @@ final class CameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDele
 
   func captureFrame(
     crop: CropRect? = nil,
+    includePreview: Bool = true,
     generation token: Int? = nil
   ) async throws -> CapturedFrame {
     let generation = token ?? currentStartGeneration()
@@ -430,13 +431,25 @@ final class CameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDele
     }
     // Encode after the sensor is off; the frame is already retained for OCR.
     let jpeg = makePreviewData(pixelBuffer: pixelBuffer, cropRect: cropRect)
-    let previewUri = jpeg.flatMap(storePreview)
+    let preview = includePreview ? jpeg.flatMap(storePreview) : nil
+    let previewUri = preview?.uri
     if jpeg != nil {
       stateLock.lock()
+      var staleUri: String?
+      var installed = false
       if let current = lastCapture, CFEqual(current.buffer, pixelBuffer) {
+        staleUri = current.previewUri
         lastCapture = (current.buffer, current.crop, jpeg, previewUri)
+        installed = true
       }
       stateLock.unlock()
+      if let staleUri, staleUri != previewUri, let url = URL(string: staleUri) {
+        try? FileManager.default.removeItem(at: url)
+      }
+      if !installed, let preview {
+        // A newer capture owns lastCapture; this frame's preview is unused.
+        try? FileManager.default.removeItem(at: preview.url)
+      }
     }
     return CapturedFrame(
       sampleBuffer: sampleBuffer,
@@ -549,10 +562,22 @@ final class CameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDele
     let width = CVPixelBufferGetWidthOfPlane(pixelBuffer, 0)
     let height = CVPixelBufferGetHeightOfPlane(pixelBuffer, 0)
     let bytesPerRow = CVPixelBufferGetBytesPerRowOfPlane(pixelBuffer, 0)
-    let x0 = width / 4
-    let x1 = width - x0
-    let y0 = height / 4
-    let y1 = height - y0
+    var x0 = width / 4
+    var x1 = width - x0
+    var y0 = height / 4
+    var y1 = height - y0
+    if let cropRect {
+      // cropRect is in upright (rotated right) pixel space; map it back to
+      // the sensor luma plane so scoring uses the same region as OCR.
+      let sensorX = Int(cropRect.minY.rounded())
+      let sensorY = Int((CGFloat(height) - cropRect.maxX).rounded())
+      let sensorWidth = Int(cropRect.height.rounded())
+      let sensorHeight = Int(cropRect.width.rounded())
+      x0 = max(1, min(width - 2, sensorX))
+      x1 = max(x0 + 1, min(width - 1, sensorX + sensorWidth))
+      y0 = max(0, min(height - 2, sensorY))
+      y1 = max(y0 + 1, min(height, sensorY + sensorHeight))
+    }
     guard x1 > x0 + 1, y1 > y0 + 1 else {
       return 0
     }
@@ -833,12 +858,12 @@ final class CameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDele
     return currentSampleBuffer()
   }
 
-  private func storePreview(_ data: Data) -> String? {
+  private func storePreview(_ data: Data) -> (url: URL, uri: String)? {
     let url = FileManager.default.temporaryDirectory
-      .appendingPathComponent("noirlens-preview.jpg")
+      .appendingPathComponent("noirlens-preview-\(UUID().uuidString).jpg")
     do {
       try data.write(to: url, options: .atomic)
-      return url.absoluteString
+      return (url, url.absoluteString)
     } catch {
       return nil
     }

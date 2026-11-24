@@ -13,11 +13,21 @@ export function areCommonWordsReady(): boolean {
 
 /** Index raw front-coded block text. Exposed so tests and the loader share it. */
 export function loadCommonWordsFromText(text: string): void {
-  blocks = text.split('\n').filter((line) => line.length > 0);
-  bases = blocks.map((block) => {
+  const nextBlocks = text.split('\n').filter((line) => line.length > 0);
+  if (nextBlocks.length === 0) {
+    throw new Error('The English vocabulary asset is empty.');
+  }
+  const nextBases = nextBlocks.map((block) => {
     const split = block.indexOf('|');
     return split < 0 ? block : block.slice(0, split);
   });
+  for (let index = 1; index < nextBases.length; index += 1) {
+    if (nextBases[index - 1]! > nextBases[index]!) {
+      throw new Error('The English vocabulary asset is out of order.');
+    }
+  }
+  blocks = nextBlocks;
+  bases = nextBases;
   decoded.clear();
 }
 

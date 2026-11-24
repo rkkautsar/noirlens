@@ -407,7 +407,7 @@ class CaptureRepository {
         const records = removeCapture(this.snapshot.records, id);
         await this.persistIndex(records);
         this.set(records);
-        await removeMetaMany([rowKey(id)]);
+        void removeMetaMany([rowKey(id)]).catch(() => {});
         if (target) {
           await this.deleteFiles(filesOf(target));
         }
@@ -422,7 +422,7 @@ class CaptureRepository {
         const keys = this.snapshot.records.map((record) => rowKey(record.id));
         await this.persistIndex([]);
         this.set([]);
-        await removeMetaMany(keys);
+        void removeMetaMany(keys).catch(() => {});
         await this.deleteFiles(names);
       }),
     );

@@ -109,6 +109,7 @@ public final class NativeVisionTranslatorModule: Module {
     AsyncFunction("captureStill") {
       (cameraToken: Int?) async throws -> [String: Any] in
       let frame = try await CameraController.shared.captureFrame(
+        includePreview: false,
         generation: cameraToken
       )
       guard let jpeg = frame.jpegData else {

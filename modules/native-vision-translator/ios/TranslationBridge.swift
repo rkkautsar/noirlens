@@ -58,15 +58,12 @@ enum TranslationBridge {
     let availability = LanguageAvailability()
     let status = await availability.status(from: source, to: target)
 
+    // `.supported` can lag behind an installed pack (and is the common state
+    // right after a download), so let the session try and report a concrete
+    // error instead of refusing before asking the framework.
     switch status {
-    case .installed:
+    case .installed, .supported:
       break
-    case .supported:
-      throw Exception(
-        name: "LanguagePackNotInstalled",
-        description: "The \(code) to \(targetCode) offline pack is not installed.",
-        code: "ERR_LANGUAGE_PACK_MISSING"
-      )
     case .unsupported:
       throw Exception(
         name: "LanguagePairUnsupported",
@@ -103,6 +100,29 @@ enum TranslationBridge {
       ]
     } catch let error as Exception {
       throw error
+    } catch let error as TranslationError {
+      if TranslationError.notInstalled ~= error {
+        throw Exception(
+          name: "LanguagePackNotInstalled",
+          description: "The \(code) to \(targetCode) offline pack is not installed.",
+          code: "ERR_LANGUAGE_PACK_MISSING"
+        )
+      }
+      if TranslationError.unsupportedLanguagePairing ~= error ||
+        TranslationError.unsupportedSourceLanguage ~= error ||
+        TranslationError.unsupportedTargetLanguage ~= error
+      {
+        throw Exception(
+          name: "LanguagePairUnsupported",
+          description: "on-device translation from \(code) to \(targetCode) is not supported.",
+          code: "ERR_LANGUAGE_UNSUPPORTED"
+        )
+      }
+      throw Exception(
+        name: "TranslationFailed",
+        description: error.errorDescription ?? "The translation failed.",
+        code: "ERR_TRANSLATION_FAILED"
+      )
     } catch {
       throw Exception(
         name: "TranslationFailed",
@@ -149,11 +169,13 @@ enum TranslationBridge {
 
     _ = try await presentHost(text: nil, source: source, target: target)
 
-    let after = await availability.status(from: source, to: target)
+    // A completed prepareTranslation downloaded or confirmed the pack; the
+    // availability query can still report .supported for a moment, so trust
+    // the completed preparation rather than stranding the user.
     return [
       "language": code,
       "targetLanguage": targetCode,
-      "status": statusString(after)
+      "status": "installed"
     ]
   }
 

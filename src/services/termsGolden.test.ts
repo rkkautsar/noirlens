@@ -4,6 +4,7 @@ import { detectPrices } from './currency';
 import { lookupSpans, resolveTermSpans } from './lookup';
 import { isCommonWord } from './commonWords';
 import { demoNameRanges, WEB_DEMO_TRANSLATION } from './demoNameRanges';
+import { WEB_SEED_HISTORY } from './demoSeeds';
 import { resolvedNameRanges } from './nameRanges';
 import { TERMS_GOLDEN } from './termsGolden';
 
@@ -31,7 +32,19 @@ describe('lookup term boundaries', () => {
 
   it('preclassifies only reviewed demo text on web', () => {
     expect(demoNameRanges(WEB_DEMO_TRANSLATION)).toEqual([]);
+    for (const entry of WEB_SEED_HISTORY) {
+      expect(demoNameRanges(entry.translatedText), entry.id).toEqual([]);
+    }
     expect(demoNameRanges('We met Alice at the cafe.')).toBeNull();
+  });
+
+  it('keeps the demo dish heading on its own line', () => {
+    const spans = lookupSpans({ translatedText: WEB_DEMO_TRANSLATION });
+    expect(spans.map((span) => span.text)).toContain('Bánh mì thịt');
+    expect(spans.every((span) => !span.text.includes('\n'))).toBe(true);
+    const heading = spans.find((span) => span.text.startsWith('Bánh'));
+    expect(heading?.start).toBe(0);
+    expect(heading?.end).toBe('Bánh mì thịt'.length);
   });
 
   it('only uses name ranges resolved for the same text', () => {

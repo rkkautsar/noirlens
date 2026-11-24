@@ -230,10 +230,10 @@ function isNonLatin(value: string): boolean {
 
 function sentenceInitialAt(text: string, start: number): boolean {
   let index = start - 1;
-  while (index >= 0 && /\s/.test(text[index]!)) {
+  while (index >= 0 && /[ \t]/.test(text[index]!)) {
     index -= 1;
   }
-  return index < 0 || /[.!?]/.test(text[index]!);
+  return index < 0 || /[.!?\r\n]/.test(text[index]!);
 }
 
 function tokenize(text: string): Token[] {
@@ -248,7 +248,7 @@ function tokenize(text: string): Token[] {
 
 function joinable(text: string, previous: Token, next: Token): boolean {
   const gap = text.slice(previous.end, next.start);
-  if (/[!?]/.test(gap)) {
+  if (/[!?\r\n]/.test(gap)) {
     return false;
   }
   if (gap.includes('.')) {

@@ -1,4 +1,5 @@
 import { DEMO_HISTORY } from './demoHistory';
+import { WEB_SEED_HISTORY } from './demoSeeds';
 
 export const WEB_DEMO_TRANSLATION =
   'Bánh mì thịt\nBaguette with pork, pâté and pickled vegetables\n45,000 VND';
@@ -7,6 +8,7 @@ export const WEB_DEMO_TRANSLATION =
 const AUDITED_DEMO_TEXTS = new Set([
   WEB_DEMO_TRANSLATION,
   ...DEMO_HISTORY.map((entry) => entry.translatedText),
+  ...WEB_SEED_HISTORY.map((entry) => entry.translatedText),
 ]);
 
 /**

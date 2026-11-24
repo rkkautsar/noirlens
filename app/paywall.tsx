@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { SheetHeader } from '@/components/SheetHeader';
@@ -192,6 +192,12 @@ export default function PaywallScreen() {
           </View>
         ) : null}
 
+        <Pressable
+          accessibilityRole="link"
+          onPress={() => router.push('/licenses')}
+        >
+          <Text style={styles.licenses}>LICENSES & THIRD-PARTY NOTICES</Text>
+        </Pressable>
         <Text style={styles.footer}>
           Payments are handled by Apple when StoreKit is enabled. NoirLens never
           receives your card, your frames or your text.
@@ -300,6 +306,11 @@ const styles = StyleSheet.create({
     ...typography.body,
     color: colors.muted,
     fontSize: 12,
+  },
+  licenses: {
+    ...typography.label,
+    color: colors.accent,
+    letterSpacing: 1.2,
   },
   footer: {
     ...typography.body,

@@ -57,6 +57,10 @@ export default function RootLayout() {
           name="result"
           options={{ animation: 'slide_from_right' }}
         />
+        <Stack.Screen
+          name="licenses"
+          options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
+        />
       </Stack>
       </SheetHost>
     </SafeAreaProvider>

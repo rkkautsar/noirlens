@@ -1,4 +1,4 @@
-import { isCommonWord } from './commonWords';
+import { isCommonWord } from './commonWordsCore';
 
 export interface TermSpan {
   start: number;

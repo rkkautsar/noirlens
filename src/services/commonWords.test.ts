@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { commonWordCount, isCommonWord } from './commonWords';
+import { commonWordCount, isCommonWord } from './commonWordsCore';
 
 describe('commonWords', () => {
   it('decodes every front-coded entry', () => {

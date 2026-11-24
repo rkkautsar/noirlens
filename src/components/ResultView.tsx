@@ -10,6 +10,10 @@ import {
   type PriceConversion,
 } from '@/services/currency';
 import { preferredCurrency } from '@/services/localeCurrency';
+import {
+  areCommonWordsReady,
+  loadCommonWords,
+} from '@/services/commonWords';
 import { lookupSpans, resolveTermSpans } from '@/services/lookup';
 import { personalNameRanges } from '@/services/personNames';
 import { resolvedNameRanges, type NameState } from '@/services/nameRanges';
@@ -69,6 +73,24 @@ export function ResultBody({
       ? `The ${language} offline pack is not installed. Download it once, then scan again. You can still read the source below.`
       : '';
 
+  const [wordsReady, setWordsReady] = useState(areCommonWordsReady);
+  useEffect(() => {
+    if (wordsReady) {
+      return;
+    }
+    let active = true;
+    loadCommonWords()
+      .then(() => {
+        if (active) {
+          setWordsReady(true);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [wordsReady]);
+
   const [nameState, setNameState] = useState<NameState | null>(null);
   const nameRanges = resolvedNameRanges(nameState, result.translatedText);
   useEffect(() => {
@@ -96,10 +118,10 @@ export function ResultBody({
   }, [result.translatedText, translated]);
   const termSpans = useMemo(
     () =>
-      translated && nameRanges
+      translated && nameRanges && wordsReady
         ? lookupSpans({ translatedText: result.translatedText }, nameRanges)
         : [],
-    [result.translatedText, translated, nameRanges],
+    [result.translatedText, translated, nameRanges, wordsReady],
   );
   const translationPrices = useMemo(
     () =>

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { detectPrices } from './currency';
 import { lookupSpans, resolveTermSpans } from './lookup';
-import { isCommonWord } from './commonWords';
+import { isCommonWord } from './commonWordsCore';
 import { demoNameRanges, WEB_DEMO_TRANSLATION } from './demoNameRanges';
 import { WEB_SEED_HISTORY } from './demoSeeds';
 import { resolvedNameRanges } from './nameRanges';

@@ -8,6 +8,7 @@ import {
 } from 'react-native-safe-area-context';
 
 import { captures } from '@/services/captures';
+import { loadCommonWords } from '@/services/commonWords';
 import { resumeCaptureProcessing } from '@/services/captureProcessing';
 import { SheetHost } from '@/components/SheetHost';
 import { colors } from '@/theme';
@@ -15,6 +16,7 @@ import { colors } from '@/theme';
 export default function RootLayout() {
   useEffect(() => {
     void SystemUI.setBackgroundColorAsync(colors.background).catch(() => {});
+    void loadCommonWords().catch(() => {});
   }, []);
 
   useEffect(() => {

@@ -39,7 +39,8 @@
           }
         }
       ],
-      "expo-localization"
+      "expo-localization",
+      "expo-asset"
     ],
     "icon": "./assets/icon.png"
   }

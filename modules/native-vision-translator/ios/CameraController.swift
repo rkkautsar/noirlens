@@ -860,14 +860,9 @@ final class CameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDele
     return currentSampleBuffer()
   }
 
-  private static var purgedPreviews = false
-
   /// Remove preview files left by a previous process before writing new ones.
-  private static func purgeStalePreviews() {
-    if purgedPreviews {
-      return
-    }
-    purgedPreviews = true
+  /// A lazy `let` initializes once, thread-safely, before any UUID write.
+  private static let purgedPreviews: Void = {
     let directory = FileManager.default.temporaryDirectory
     guard let urls = try? FileManager.default.contentsOfDirectory(
       at: directory,
@@ -880,10 +875,10 @@ final class CameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDele
       && url.pathExtension == "jpg" {
       try? FileManager.default.removeItem(at: url)
     }
-  }
+  }()
 
   private func storePreview(_ data: Data) -> (url: URL, uri: String)? {
-    CameraController.purgeStalePreviews()
+    _ = Self.purgedPreviews
     let url = FileManager.default.temporaryDirectory
       .appendingPathComponent("noirlens-preview-\(UUID().uuidString).jpg")
     do {

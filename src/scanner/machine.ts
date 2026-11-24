@@ -45,6 +45,7 @@ export interface ScanResult {
   cached: boolean;
   /** Low-quality JPEG of the captured frame, used only for the frozen "original" view. */
   previewJpegBase64?: string;
+  previewUri?: string;
 }
 
 export type ScanFailureCode =

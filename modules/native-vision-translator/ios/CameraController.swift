@@ -6,6 +6,7 @@ import UIKit
 struct CapturedFrame {
   let sampleBuffer: CMSampleBuffer
   let jpegData: Data?
+  let previewUri: String?
   let cropRect: CGRect?
 
   var pixelBuffer: CVPixelBuffer? {
@@ -58,7 +59,7 @@ final class CameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDele
   private var startGeneration = 0
   private var wantsCamera = false
   private var torchEnabled = false
-  private var lastCapture: (buffer: CVPixelBuffer, crop: CGRect?, jpeg: Data?)?
+  private var lastCapture: (buffer: CVPixelBuffer, crop: CGRect?, jpeg: Data?, previewUri: String?)?
 
   private override init() {
     super.init()
@@ -412,7 +413,7 @@ final class CameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDele
           return
         }
         self.stateLock.lock()
-        self.lastCapture = (pixelBuffer, cropRect, nil)
+        self.lastCapture = (pixelBuffer, cropRect, nil, nil)
         self.stateLock.unlock()
         // The frame is retained; power the sensor down before JPEG/OCR/
         // translation so the camera is not streaming after the user released.
@@ -429,16 +430,18 @@ final class CameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDele
     }
     // Encode after the sensor is off; the frame is already retained for OCR.
     let jpeg = makePreviewData(pixelBuffer: pixelBuffer, cropRect: cropRect)
+    let previewUri = jpeg.flatMap(storePreview)
     if jpeg != nil {
       stateLock.lock()
       if let current = lastCapture, CFEqual(current.buffer, pixelBuffer) {
-        lastCapture = (current.buffer, current.crop, jpeg)
+        lastCapture = (current.buffer, current.crop, jpeg, previewUri)
       }
       stateLock.unlock()
     }
     return CapturedFrame(
       sampleBuffer: sampleBuffer,
       jpegData: jpeg,
+      previewUri: previewUri,
       cropRect: cropRect
     )
   }
@@ -457,7 +460,8 @@ final class CameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDele
     }
     return try TextRecognizer.recognize(
       pixelBuffer: capture.buffer,
-      previewJpegBase64: capture.jpeg?.base64EncodedString(),
+      previewJpegBase64: nil,
+      previewUri: capture.previewUri,
       languageHint: language,
       cropRect: capture.crop
     )
@@ -827,6 +831,17 @@ final class CameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDele
       try? await Task.sleep(nanoseconds: 25_000_000)
     }
     return currentSampleBuffer()
+  }
+
+  private func storePreview(_ data: Data) -> String? {
+    let url = FileManager.default.temporaryDirectory
+      .appendingPathComponent("noirlens-preview.jpg")
+    do {
+      try data.write(to: url, options: .atomic)
+      return url.absoluteString
+    } catch {
+      return nil
+    }
   }
 
   private func makePreviewData(

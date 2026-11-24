@@ -60,7 +60,7 @@ export function useInspect(
     imageUri ??
     (result?.previewJpegBase64
       ? `data:image/jpeg;base64,${result.previewJpegBase64}`
-      : null);
+      : result?.previewUri ?? null);
 
   const inspect = (event: GestureResponderEvent) => {
     if (!result || !uri || stage.width <= 0) {

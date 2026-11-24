@@ -95,7 +95,8 @@ public final class NativeVisionTranslatorModule: Module {
       }
       return try TextRecognizer.recognize(
         pixelBuffer: pixelBuffer,
-        previewJpegBase64: frame.jpegData?.base64EncodedString(),
+        previewJpegBase64: nil,
+        previewUri: frame.previewUri,
         languageHint: sourceLanguage,
         cropRect: frame.cropRect
       )

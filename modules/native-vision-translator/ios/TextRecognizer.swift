@@ -46,6 +46,7 @@ enum TextRecognizer {
   static func recognize(
     pixelBuffer: CVPixelBuffer,
     previewJpegBase64: String?,
+    previewUri: String? = nil,
     languageHint: String,
     cropRect: CGRect? = nil
   ) throws -> [String: Any] {
@@ -64,6 +65,7 @@ enum TextRecognizer {
     return try recognize(
       image: image,
       previewJpegBase64: previewJpegBase64,
+      previewUri: previewUri,
       languageHint: languageHint
     )
   }
@@ -95,6 +97,7 @@ enum TextRecognizer {
   private static func recognize(
     image: CGImage,
     previewJpegBase64: String?,
+    previewUri: String? = nil,
     languageHint: String
   ) throws -> [String: Any] {
     let width = image.width
@@ -203,7 +206,8 @@ enum TextRecognizer {
         blocks: [],
         width: width,
         height: height,
-        previewJpegBase64: previewJpegBase64
+        previewJpegBase64: previewJpegBase64,
+        previewUri: previewUri
       )
     }
 
@@ -238,7 +242,8 @@ enum TextRecognizer {
       blocks: blocks,
       width: width,
       height: height,
-      previewJpegBase64: previewJpegBase64
+      previewJpegBase64: previewJpegBase64,
+      previewUri: previewUri
     )
   }
 
@@ -801,7 +806,8 @@ enum TextRecognizer {
     blocks: [Block],
     width: Int,
     height: Int,
-    previewJpegBase64: String?
+    previewJpegBase64: String?,
+    previewUri: String? = nil
   ) -> [String: Any] {
     let averageConfidence: Double
     if blocks.isEmpty {
@@ -832,6 +838,9 @@ enum TextRecognizer {
 
     if let previewJpegBase64 {
       result["previewJpegBase64"] = previewJpegBase64
+    }
+    if let previewUri {
+      result["previewUri"] = previewUri
     }
 
     return result

@@ -224,6 +224,7 @@ export function useScanner(options: {
           ...(ocr.previewJpegBase64
             ? { previewJpegBase64: ocr.previewJpegBase64 }
             : {}),
+          ...(ocr.previewUri ? { previewUri: ocr.previewUri } : {}),
         };
 
         const sendResult = (
@@ -731,6 +732,7 @@ export function useScanner(options: {
           ...(ocr.previewJpegBase64
             ? { previewJpegBase64: ocr.previewJpegBase64 }
             : {}),
+          ...(ocr.previewUri ? { previewUri: ocr.previewUri } : {}),
         };
         let translatedText = '';
         let kind: 'translated' | 'english' | 'pack_missing' = 'translated';

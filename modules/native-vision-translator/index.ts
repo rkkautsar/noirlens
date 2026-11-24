@@ -35,6 +35,8 @@ export interface OcrPayload {
   imageHeight: number;
   sourceHash: string;
   previewJpegBase64?: string;
+  /** file:// URI for the live preview JPEG (preferred over base64). */
+  previewUri?: string;
 }
 
 export interface TranslatePayload {

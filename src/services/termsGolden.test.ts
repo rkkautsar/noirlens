@@ -33,6 +33,8 @@ describe('lookup term boundaries', () => {
     expect(resolvedNameRanges(null, 'Alice')).toBeNull();
     expect(resolvedNameRanges({ text: 'Bob', ranges }, 'Alice')).toBeNull();
     expect(resolvedNameRanges({ text: 'Alice', ranges }, 'Alice')).toBe(ranges);
+    expect(resolvedNameRanges({ text: 'Alice', ranges: [] }, 'Alice')).toEqual([]);
+    expect(resolvedNameRanges({ text: 'Alice', ranges: null }, 'Alice')).toBeNull();
   });
 
   it('keeps a dish after an excluded name in the same run', () => {

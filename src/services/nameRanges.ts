@@ -5,7 +5,8 @@ export interface NameRange {
 
 export interface NameState {
   text: string;
-  ranges: NameRange[];
+  /** null means the classifier was unavailable, not a successful empty run. */
+  ranges: NameRange[] | null;
 }
 
 /** Ranges only when they were computed for this exact translation. */
@@ -13,5 +14,7 @@ export function resolvedNameRanges(
   state: NameState | null,
   text: string,
 ): NameRange[] | null {
-  return state !== null && state.text === text ? state.ranges : null;
+  return state !== null && state.text === text && state.ranges !== null
+    ? state.ranges
+    : null;
 }

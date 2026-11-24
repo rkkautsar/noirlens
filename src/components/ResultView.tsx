@@ -88,7 +88,7 @@ export function ResultBody({
       })
       .catch(() => {
         if (active) {
-          setNameState({ text, ranges: [] });
+          setNameState({ text, ranges: null });
         }
       });
     return () => {

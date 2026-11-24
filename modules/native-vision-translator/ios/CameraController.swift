@@ -406,23 +406,24 @@ final class CameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDele
     let cropRect = imageCropRect(for: crop, pixelBuffer: pixelBuffer)
     // Validate and stop on the session queue: a capture cancelled by leaving
     // the screen must never stop the session a newer hold has just started.
-    let accepted = await withCheckedContinuation {
-      (continuation: CheckedContinuation<Bool, Never>) in
+    let replacement = await withCheckedContinuation {
+      (continuation: CheckedContinuation<(accepted: Bool, previous: String?), Never>) in
       sessionQueue.async {
         guard self.isCurrentStart(generation) else {
-          continuation.resume(returning: false)
+          continuation.resume(returning: (false, nil))
           return
         }
         self.stateLock.lock()
+        let previous = self.lastCapture?.previewUri
         self.lastCapture = (pixelBuffer, cropRect, nil, nil)
         self.stateLock.unlock()
         // The frame is retained; power the sensor down before JPEG/OCR/
         // translation so the camera is not streaming after the user released.
         self.session.stopRunning()
-        continuation.resume(returning: true)
+        continuation.resume(returning: (true, previous))
       }
     }
-    guard accepted else {
+    guard replacement.accepted else {
       throw cameraException(
         name: "CameraCancelled",
         description: "The capture was cancelled.",
@@ -435,15 +436,16 @@ final class CameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDele
     let previewUri = preview?.uri
     if jpeg != nil {
       stateLock.lock()
-      var staleUri: String?
       var installed = false
       if let current = lastCapture, CFEqual(current.buffer, pixelBuffer) {
-        staleUri = current.previewUri
         lastCapture = (current.buffer, current.crop, jpeg, previewUri)
         installed = true
       }
       stateLock.unlock()
-      if let staleUri, staleUri != previewUri, let url = URL(string: staleUri) {
+      if installed,
+         let previous = replacement.previous,
+         previous != previewUri,
+         let url = URL(string: previous) {
         try? FileManager.default.removeItem(at: url)
       }
       if !installed, let preview {
@@ -569,7 +571,7 @@ final class CameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDele
     if let cropRect {
       // cropRect is in upright (rotated right) pixel space; map it back to
       // the sensor luma plane so scoring uses the same region as OCR.
-      let sensorX = Int(cropRect.minY.rounded())
+      let sensorX = Int((CGFloat(width) - cropRect.maxY).rounded())
       let sensorY = Int((CGFloat(height) - cropRect.maxX).rounded())
       let sensorWidth = Int(cropRect.height.rounded())
       let sensorHeight = Int(cropRect.width.rounded())

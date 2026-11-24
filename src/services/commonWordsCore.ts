@@ -12,14 +12,26 @@ export function areCommonWordsReady(): boolean {
 }
 
 /** Index raw front-coded block text. Exposed so tests and the loader share it. */
+const WORD_RECORD = /^[a-z0-9'’.-]+$/;
+const PREFIXED_RECORD = /^\d+:[a-z0-9'’.-]*$/;
+const EXPECTED_BLOCKS = 3351;
+
 export function loadCommonWordsFromText(text: string): void {
   const nextBlocks = text.split('\n').filter((line) => line.length > 0);
-  if (nextBlocks.length === 0) {
-    throw new Error('The English vocabulary asset is empty.');
+  if (nextBlocks.length !== EXPECTED_BLOCKS) {
+    throw new Error('The English vocabulary asset is incomplete.');
   }
   const nextBases = nextBlocks.map((block) => {
-    const split = block.indexOf('|');
-    return split < 0 ? block : block.slice(0, split);
+    const parts = block.split('|');
+    if (!WORD_RECORD.test(parts[0] ?? '')) {
+      throw new Error('The English vocabulary asset is malformed.');
+    }
+    for (let part = 1; part < parts.length; part += 1) {
+      if (!PREFIXED_RECORD.test(parts[part]!)) {
+        throw new Error('The English vocabulary asset is malformed.');
+      }
+    }
+    return parts[0]!;
   });
   for (let index = 1; index < nextBases.length; index += 1) {
     if (nextBases[index - 1]! > nextBases[index]!) {

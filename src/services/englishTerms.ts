@@ -333,25 +333,24 @@ export function englishTermSpans(
         if (isNonLatin(next.text)) {
           break;
         }
+        if (isConnector(canonical(next.text.toLowerCase())) === true) {
+          if (
+            cursor + 1 < tokens.length &&
+            !isExcluded(tokens[cursor + 1]!) &&
+            isCapitalized(tokens[cursor + 1]!.text) &&
+            !isFunctionWord(canonical(tokens[cursor + 1]!.text.toLowerCase())) &&
+            joinable(text, next, tokens[cursor + 1]!)
+          ) {
+            last = cursor + 1;
+            cursor += 2;
+            continue;
+          }
+          break;
+        }
         if (isCapitalized(next.text) && !isFunctionWord(next.text.toLowerCase())) {
           last = cursor;
           cursor += 1;
           continue;
-        }
-        if (
-          CONNECTORS[canonical(next.text.toLowerCase())] === true &&
-          cursor + 1 < tokens.length &&
-          !isExcluded(tokens[cursor + 1]!) &&
-          isCapitalized(tokens[cursor + 1]!.text) &&
-          !isFunctionWord(canonical(tokens[cursor + 1]!.text.toLowerCase())) &&
-          joinable(text, next, tokens[cursor + 1]!)
-        ) {
-          last = cursor + 1;
-          cursor += 2;
-          continue;
-        }
-        if (isConnector(canonical(next.text.toLowerCase())) === true) {
-          break;
         }
         if (isRare(next)) {
           last = cursor;
@@ -368,6 +367,10 @@ export function englishTermSpans(
       const hasConnector = group.some(
         (entry) => isConnector(canonical(entry.text.toLowerCase())) === true,
       );
+      if (!multiword && isConnector(canonical(normalized)) === true) {
+        index = last + 1;
+        continue;
+      }
       const after = tokens[last + 1];
       const followedByNumber =
         after !== undefined &&

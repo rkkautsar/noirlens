@@ -54,7 +54,7 @@ describe('lookup term boundaries', () => {
   });
 
   it('does not leave a dangling out-of-vocabulary connector', () => {
-    for (const connector of ['ibn', 'von']) {
+    for (const connector of ['ibn', 'Ibn', 'von', 'Von']) {
       const text = `We ordered Nigiri ${connector} Alice.`;
       const at = text.indexOf('Alice');
       const spans = lookupSpans({ translatedText: text }, [

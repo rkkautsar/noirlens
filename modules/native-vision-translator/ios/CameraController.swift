@@ -430,6 +430,11 @@ final class CameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDele
         code: "ERR_CAMERA_CANCELLED"
       )
     }
+    // This replacement owns the former capture's preview now; delete it even
+    // if encoding this frame fails or a newer capture supersedes it.
+    if let previous = replacement.previous, let url = URL(string: previous) {
+      try? FileManager.default.removeItem(at: url)
+    }
     // Encode after the sensor is off; the frame is already retained for OCR.
     let jpeg = makePreviewData(pixelBuffer: pixelBuffer, cropRect: cropRect)
     let preview = includePreview ? jpeg.flatMap(storePreview) : nil
@@ -442,17 +447,12 @@ final class CameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDele
         installed = true
       }
       stateLock.unlock()
-      if installed,
-         let previous = replacement.previous,
-         previous != previewUri,
-         let url = URL(string: previous) {
-        try? FileManager.default.removeItem(at: url)
-      }
       if !installed, let preview {
         // A newer capture owns lastCapture; this frame's preview is unused.
         try? FileManager.default.removeItem(at: preview.url)
       }
     }
+
     return CapturedFrame(
       sampleBuffer: sampleBuffer,
       jpegData: jpeg,

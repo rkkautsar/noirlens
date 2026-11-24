@@ -14,7 +14,7 @@ import { lookupSpans, resolveTermSpans } from '@/services/lookup';
 import { personalNameRanges } from '@/services/personNames';
 import { resolvedNameRanges, type NameState } from '@/services/nameRanges';
 import { romanize } from '@/services/romanize';
-import { romanizeNative } from '@/services/romanizeNative';
+import { needsIcuRomanize, romanizeNative } from '@/services/romanizeNative';
 import { colors, typography } from '@/theme';
 import { PriceTooltip } from './PriceTooltip';
 import { ChipButton, Hairline, MicroLabel, SolidButton } from './ui';
@@ -48,10 +48,9 @@ export function ResultBody({
   const packMissing = result.kind === 'pack_missing';
   const language = languageLabel(result.sourceLanguage);
   const preferred = preferredCurrency();
-  const prices = priceConversions(
-    result.sourceText,
-    result.sourceLanguage,
-    preferred.code,
+  const prices = useMemo(
+    () => priceConversions(result.sourceText, result.sourceLanguage, preferred.code),
+    [result.sourceText, result.sourceLanguage, preferred.code],
   );
 
   const kicker = translated
@@ -96,26 +95,41 @@ export function ResultBody({
     };
   }, [result.translatedText, translated]);
   const termSpans = useMemo(
-    () => (translated && nameRanges ? lookupSpans(result, nameRanges) : []),
-    [result, translated, nameRanges],
+    () =>
+      translated && nameRanges
+        ? lookupSpans({ translatedText: result.translatedText }, nameRanges)
+        : [],
+    [result.translatedText, translated, nameRanges],
   );
-  const translationPrices = priceConversions(
-    result.translatedText,
-    result.sourceLanguage,
-    preferred.code,
+  const translationPrices = useMemo(
+    () =>
+      priceConversions(
+        result.translatedText,
+        result.sourceLanguage,
+        preferred.code,
+      ),
+    [result.translatedText, result.sourceLanguage, preferred.code],
   );
 
-  const [romanizedState, setRomanizedState] = useState(() => ({
-    input: result.sourceText,
-    language: result.sourceLanguage,
-    value: romanize(result.sourceText),
-  }));
+  const jsRomanized = useMemo(
+    () => romanize(result.sourceText),
+    [result.sourceText],
+  );
+  const [nativeRomanized, setNativeRomanized] = useState<{
+    input: string;
+    language: string;
+    value: string;
+  } | null>(null);
   useEffect(() => {
+    if (!needsIcuRomanize(result.sourceText)) {
+      setNativeRomanized(null);
+      return;
+    }
     let active = true;
     void romanizeNative(result.sourceText, result.sourceLanguage).then(
       (value) => {
         if (active) {
-          setRomanizedState({
+          setNativeRomanized({
             input: result.sourceText,
             language: result.sourceLanguage,
             value,
@@ -128,10 +142,11 @@ export function ResultBody({
     };
   }, [result.sourceText, result.sourceLanguage]);
   const romanizedSource =
-    romanizedState.input === result.sourceText &&
-    romanizedState.language === result.sourceLanguage
-      ? romanizedState.value
-      : romanize(result.sourceText);
+    nativeRomanized &&
+    nativeRomanized.input === result.sourceText &&
+    nativeRomanized.language === result.sourceLanguage
+      ? nativeRomanized.value
+      : jsRomanized;
 
   const tipAt = (
     price: PriceConversion,
@@ -343,10 +358,9 @@ export function ResultActions({
 
   const translated = result.kind === 'translated';
   const preferred = preferredCurrency();
-  const prices = priceConversions(
-    result.sourceText,
-    result.sourceLanguage,
-    preferred.code,
+  const prices = useMemo(
+    () => priceConversions(result.sourceText, result.sourceLanguage, preferred.code),
+    [result.sourceText, result.sourceLanguage, preferred.code],
   );
   const copyText = translated ? result.translatedText : result.sourceText;
   const priceLines = prices.map(

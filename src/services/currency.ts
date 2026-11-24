@@ -164,6 +164,71 @@ export function parseAmount(raw: string, currency: CurrencyDef): number {
   return Number(normalized);
 }
 
+interface SymbolMatcher {
+  code: string;
+  prefix: RegExp;
+  suffix: RegExp;
+}
+
+interface PriceMatchers {
+  symbols: SymbolMatcher[];
+  codePrefix: RegExp;
+  codeSuffix: RegExp;
+  wonSuffix: RegExp | null;
+}
+
+const SORTED_SYMBOLS = [...SYMBOLS].sort(
+  (a, b) => b.symbol.length - a.symbol.length,
+);
+const CURRENCY_CODES = Object.keys(CURRENCIES).join('|');
+const matcherCache = new Map<string, PriceMatchers>();
+
+function matchersFor(language: string): PriceMatchers {
+  const cached = matcherCache.get(language);
+  if (cached) {
+    return cached;
+  }
+  const symbols: SymbolMatcher[] = [];
+  for (const def of SORTED_SYMBOLS) {
+    const code = def.byLanguage?.[language] ?? def.code;
+    if (!code) {
+      continue;
+    }
+    const symbol = escapeRegex(def.symbol);
+    symbols.push({
+      code,
+      prefix: new RegExp(
+        `(${symbol})\\s?(${NUMBER_PATTERN})(?![\\d.,])`,
+        'gi',
+      ),
+      suffix: new RegExp(
+        `(${NUMBER_PATTERN})(?![\\d.,])\\s?(${symbol})`,
+        'gi',
+      ),
+    });
+  }
+  const matchers: PriceMatchers = {
+    symbols,
+    codePrefix: new RegExp(
+      `\\b(${CURRENCY_CODES})\\b\\s?(${NUMBER_PATTERN})(?![\\d.,])`,
+      'g',
+    ),
+    codeSuffix: new RegExp(
+      `(${NUMBER_PATTERN})(?![\\d.,])\\s?\\b(${CURRENCY_CODES})\\b`,
+      'g',
+    ),
+    wonSuffix:
+      language === 'ko'
+        ? new RegExp(
+            '(?<![\\d.,])((?:\\d{1,3}(?:,\\d{3})+|\\d{1,3}(?: \\d{3})+|\\d+))(?![\\d.,])\\s+won\\b',
+            'gi',
+          )
+        : null,
+  };
+  matcherCache.set(language, matchers);
+  return matchers;
+}
+
 export function detectPrices(
   text: string,
   sourceLanguage: string,
@@ -198,62 +263,32 @@ export function detectPrices(
     });
   };
 
-  const symbols = [...SYMBOLS].sort(
-    (a, b) => b.symbol.length - a.symbol.length,
-  );
-
-  for (const def of symbols) {
-    const code = def.byLanguage?.[language] ?? def.code;
-    if (!code) {
-      continue;
-    }
-    const symbol = escapeRegex(def.symbol);
-    const prefix = new RegExp(
-      `(${symbol})\\s?(${NUMBER_PATTERN})(?![\\d.,])`,
-      'gi',
-    );
-    const suffix = new RegExp(
-      `(${NUMBER_PATTERN})(?![\\d.,])\\s?(${symbol})`,
-      'gi',
-    );
-
+  const matchers = matchersFor(language);
+  for (const { code, prefix, suffix } of matchers.symbols) {
+    prefix.lastIndex = 0;
     let match: RegExpExecArray | null;
     while ((match = prefix.exec(normalized)) !== null) {
       push(match[0] ?? '', match[2] ?? '', code, match.index);
     }
+    suffix.lastIndex = 0;
     while ((match = suffix.exec(normalized)) !== null) {
       push(match[0] ?? '', match[1] ?? '', code, match.index);
     }
   }
 
-  const codes = Object.keys(CURRENCIES).join('|');
-  const codePrefix = new RegExp(
-    `\\b(${codes})\\b\\s?(${NUMBER_PATTERN})(?![\\d.,])`,
-    'g',
-  );
-  const codeSuffix = new RegExp(
-    `(${NUMBER_PATTERN})(?![\\d.,])\\s?\\b(${codes})\\b`,
-    'g',
-  );
-
   let match: RegExpExecArray | null;
-  // English "won" is only a currency cue for a Korean source. Whole-word,
-  // suffix-only, and the amount may use spaces (12 500 won).
-  if (language === 'ko') {
-    const wonAmount =
-      '(?:\\d{1,3}(?:,\\d{3})+|\\d{1,3}(?: \\d{3})+|\\d+)';
-    const wonSuffix = new RegExp(
-      `(?<![\\d.,])(${wonAmount})(?![\\d.,])\\s+won\\b`,
-      'gi',
-    );
-    while ((match = wonSuffix.exec(normalized)) !== null) {
+  if (matchers.wonSuffix) {
+    matchers.wonSuffix.lastIndex = 0;
+    while ((match = matchers.wonSuffix.exec(normalized)) !== null) {
       push(match[0] ?? '', match[1] ?? '', 'KRW', match.index);
     }
   }
-  while ((match = codePrefix.exec(normalized)) !== null) {
+  matchers.codePrefix.lastIndex = 0;
+  while ((match = matchers.codePrefix.exec(normalized)) !== null) {
     push(match[0] ?? '', match[2] ?? '', match[1] ?? '', match.index);
   }
-  while ((match = codeSuffix.exec(normalized)) !== null) {
+  matchers.codeSuffix.lastIndex = 0;
+  while ((match = matchers.codeSuffix.exec(normalized)) !== null) {
     push(match[0] ?? '', match[1] ?? '', match[2] ?? '', match.index);
   }
 

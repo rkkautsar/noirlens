@@ -256,7 +256,7 @@ function joinable(text: string, previous: Token, next: Token): boolean {
     return false;
   }
   if (/[\r\n]/.test(gap)) {
-    if (gap.includes('.')) {
+    if (!/^[ \t]*\r?\n[ \t]*$/.test(gap) || isNumeric(next.text)) {
       return false;
     }
     const nextWord = canonical(next.text.toLowerCase());

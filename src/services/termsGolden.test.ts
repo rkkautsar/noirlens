@@ -44,6 +44,19 @@ describe('lookup term boundaries', () => {
     expect(span?.text).toBe('Bánh mì\nPhượng');
   });
 
+  it('keeps a comma-separated menu list split across lines', () => {
+    const spans = exact('Gimbap,\nNigiri');
+    expect(spans.map((span) => span.text)).toEqual(['Gimbap', 'Nigiri']);
+  });
+
+  it('does not join across a blank line or into a number', () => {
+    expect(exact('Nigiri\n\nOmakase').map((span) => span.text)).toEqual([
+      'Nigiri',
+      'Omakase',
+    ]);
+    expect(exact('Opening Hours\n09:00').map((span) => span.text)).toEqual([]);
+  });
+
   it('keeps the demo dish heading on its own line', () => {
     const spans = lookupSpans({ translatedText: WEB_DEMO_TRANSLATION });
     expect(spans.map((span) => span.text)).toContain('Bánh mì thịt');

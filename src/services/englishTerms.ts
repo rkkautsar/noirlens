@@ -338,7 +338,12 @@ export function englishTermSpans(
       let cursor = index + 1;
       while (cursor < tokens.length) {
         const next = tokens[cursor]!;
-        if (isExcluded(next) || !joinable(text, tokens[last]!, next)) {
+        const gap = text.slice(tokens[last]!.end, next.start);
+        if (
+          isExcluded(next) ||
+          (/[\r\n]/.test(gap) && last === index) ||
+          !joinable(text, tokens[last]!, next)
+        ) {
           break;
         }
         if (isNonLatin(next.text)) {
@@ -418,8 +423,10 @@ export function englishTermSpans(
       let cursor = index + 1;
       while (cursor < tokens.length) {
         const next = tokens[cursor]!;
+        const gap = text.slice(tokens[last]!.end, next.start);
         if (
           isExcluded(next) ||
+          (/[\r\n]/.test(gap) && last === index) ||
           !joinable(text, tokens[last]!, next) ||
           isConnector(canonical(next.text.toLowerCase())) === true ||
           !isRare(next) ||

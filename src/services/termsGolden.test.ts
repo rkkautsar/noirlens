@@ -49,6 +49,13 @@ describe('lookup term boundaries', () => {
     expect(spans.map((span) => span.text)).toEqual(['Gimbap', 'Nigiri']);
   });
 
+  it('does not wrap an isolated menu label into the next line', () => {
+    expect(exact('Gimbap\nNigiri').map((span) => span.text)).toEqual([
+      'Gimbap',
+      'Nigiri',
+    ]);
+  });
+
   it('does not join across a blank line or into a number', () => {
     expect(exact('Nigiri\n\nOmakase').map((span) => span.text)).toEqual([
       'Nigiri',

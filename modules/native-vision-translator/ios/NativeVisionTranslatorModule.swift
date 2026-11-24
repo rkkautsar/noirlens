@@ -206,10 +206,10 @@ public final class NativeVisionTranslatorModule: Module {
     }
 
     AsyncFunction("checkLanguagePackStatuses") {
-      (languages: [String], targetLanguage: String) async -> [[String: Any]] in
+      (languages: [String], targetLanguage: String?) async -> [[String: Any]] in
       await TranslationBridge.statuses(
         for: languages,
-        targetLanguage: targetLanguage
+        targetLanguage: targetLanguage ?? "en"
       )
     }
 

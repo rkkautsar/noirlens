@@ -29,18 +29,21 @@ function rowKey(id: string): string {
   return CAPTURE_ROW_PREFIX + id;
 }
 
-function parseIndex(raw: string | null): string[] | null {
+function parseIndex(raw: string | null): {
+  ids: string[] | null;
+  corrupt: boolean;
+} {
   if (raw === null) {
-    return null;
+    return { ids: null, corrupt: false };
   }
   try {
     const parsed: unknown = JSON.parse(raw);
     if (!Array.isArray(parsed) || !parsed.every((id) => typeof id === 'string')) {
-      return null;
+      return { ids: null, corrupt: true };
     }
-    return parsed;
+    return { ids: parsed, corrupt: false };
   } catch {
-    return null;
+    return { ids: null, corrupt: true };
   }
 }
 
@@ -181,13 +184,21 @@ class CaptureRepository {
             readMeta(CAPTURES_INDEX_KEY),
           ]);
           let records: CaptureRecord[] = [];
-          let complete = true;
-          const index = parseIndex(indexRaw);
+          const parsedIndex = parseIndex(indexRaw);
+          if (parsedIndex.corrupt) {
+            // Fail closed: an unreadable manifest must not look like an empty
+            // library, or the orphan sweep would delete every saved image.
+            throw new Error('Capture index is unreadable.');
+          }
+          const index = parsedIndex.ids;
           if (index === null) {
             // First run after the single-blob layout (or a fresh install).
             const parsed = parseCaptureStore(await readMeta(CAPTURES_KEY));
+            if (!parsed.complete) {
+              // Never migrate or delete the legacy blob from a partial view.
+              throw new Error('Legacy capture store is incomplete.');
+            }
             records = parsed.records;
-            complete = parsed.complete;
             if (records.length > 0) {
               await writeMetaMany(
                 records.map((record) => [
@@ -203,10 +214,11 @@ class CaptureRepository {
             for (const raw of rows) {
               const record = parseCaptureRecord(raw);
               if (record === null) {
-                complete = false;
-              } else {
-                records.push(record);
+                // A missing/corrupt row means the view is incomplete; keep
+                // storage read-only rather than reconciling against it.
+                throw new Error('A capture row is unreadable.');
               }
+              records.push(record);
             }
           }
           this.snapshot = {
@@ -220,7 +232,7 @@ class CaptureRepository {
           for (const listener of this.listeners) {
             listener();
           }
-          if (!reconcile || !complete) {
+          if (!reconcile) {
             return;
           }
           // Startup-only sweep after the first frame. Only files older than

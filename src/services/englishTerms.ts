@@ -230,7 +230,11 @@ function isNonLatin(value: string): boolean {
 
 function sentenceInitialAt(text: string, start: number): boolean {
   let index = start - 1;
-  while (index >= 0 && /[ \t]/.test(text[index]!)) {
+  while (index >= 0) {
+    const char = text[index]!;
+    if (char === '\n' || char === '\r' || !/\s/.test(char)) {
+      break;
+    }
     index -= 1;
   }
   return index < 0 || /[.!?\r\n]/.test(text[index]!);
@@ -248,8 +252,15 @@ function tokenize(text: string): Token[] {
 
 function joinable(text: string, previous: Token, next: Token): boolean {
   const gap = text.slice(previous.end, next.start);
-  if (/[!?\r\n]/.test(gap)) {
+  if (/[!?]/.test(gap)) {
     return false;
+  }
+  if (/[\r\n]/.test(gap)) {
+    if (gap.includes('.')) {
+      return false;
+    }
+    const nextWord = canonical(next.text.toLowerCase());
+    return !isFunctionWord(nextWord) && !isCommonWord(nextWord);
   }
   if (gap.includes('.')) {
     const previousWord = canonical(previous.text.toLowerCase());

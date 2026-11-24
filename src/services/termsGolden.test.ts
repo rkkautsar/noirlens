@@ -38,6 +38,12 @@ describe('lookup term boundaries', () => {
     expect(demoNameRanges('We met Alice at the cafe.')).toBeNull();
   });
 
+  it('joins a wrapped name only when the next word is rare', () => {
+    const wrapped = 'We ate at Bánh mì\nPhượng yesterday.';
+    const span = exact(wrapped).find((entry) => entry.text.startsWith('Bánh'));
+    expect(span?.text).toBe('Bánh mì\nPhượng');
+  });
+
   it('keeps the demo dish heading on its own line', () => {
     const spans = lookupSpans({ translatedText: WEB_DEMO_TRANSLATION });
     expect(spans.map((span) => span.text)).toContain('Bánh mì thịt');
@@ -134,6 +140,7 @@ describe('lookup term boundaries', () => {
 
   it('does not join names across a sentence break', () => {
     expect(exact('Coffee is served hot.').map((span) => span.text)).toEqual([]);
+    expect(exact('Open daily.\u00A0Coffee is served hot.').map((span) => span.text)).toEqual([]);
     expect(exact('Fresh fruit is available.').map((span) => span.text)).toEqual([]);
     expect(exact('We met Jo. Alice left.').map((span) => span.text)).toEqual([
       'Jo',

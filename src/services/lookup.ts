@@ -218,6 +218,18 @@ export function resolveTermSpans(
   text?: string,
 ): LookupSpan[] {
   const trimmed: LookupSpan[] = [];
+  const push = (term: LookupSpan, start: number, end: number): void => {
+    const fragment = text
+      ? text.slice(start, end)
+      : term.text.slice(start - term.start, end - term.start);
+    const value = fragment.trim();
+    const leading = fragment.length - fragment.trimStart().length;
+    const finalStart = start + leading;
+    const finalEnd = finalStart + value.length;
+    if (finalEnd > finalStart) {
+      trimmed.push({ start: finalStart, end: finalEnd, text: value });
+    }
+  };
   for (const term of terms) {
     const overlapping = prices
       .filter((price) => term.start < price.end && term.end > price.start)
@@ -230,26 +242,18 @@ export function resolveTermSpans(
     for (const price of overlapping) {
       const end = Math.min(price.start, term.end);
       if (end > cursor) {
-        trimmed.push({
-          start: cursor,
-          end,
-          text: text ? text.slice(cursor, end).trimEnd() : term.text,
-        });
+        push(term, cursor, end);
       }
       cursor = Math.max(cursor, price.end);
     }
     if (cursor < term.end) {
-      trimmed.push({
-        start: cursor,
-        end: term.end,
-        text: text ? text.slice(cursor, term.end).trimEnd() : term.text,
-      });
+      push(term, cursor, term.end);
     }
   }
   const kept: LookupSpan[] = [];
   let lastEnd = 0;
   for (const term of trimmed) {
-    if (term.start >= lastEnd && term.end > term.start) {
+    if (term.start >= lastEnd) {
       kept.push(term);
       lastEnd = term.end;
     }

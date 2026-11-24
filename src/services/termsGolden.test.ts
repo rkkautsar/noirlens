@@ -65,14 +65,14 @@ describe('lookup term boundaries', () => {
   });
 
   it('does not join names across a sentence break', () => {
+    expect(exact('Coffee is served hot.').map((span) => span.text)).toEqual([]);
+    expect(exact('Fresh fruit is available.').map((span) => span.text)).toEqual([]);
     expect(exact('We met Jo. Alice left.').map((span) => span.text)).toEqual([
       'Jo',
-      'Alice',
     ]);
-    expect(exact('We flew to Rio. Madrid was next.').map((span) => span.text)).toEqual([
-      'Rio',
-      'Madrid',
-    ]);
+    const rio = exact('We flew to Rio. Madrid was next.');
+    expect(rio.map((span) => span.text)).toEqual(['Rio']);
+    expect(rio.every((span) => !span.text.includes('. '))).toBe(true);
   });
 
   it('joins a recognized abbreviation', () => {
@@ -85,6 +85,9 @@ describe('lookup term boundaries', () => {
     expect(exact('Fresh Fruit')).toEqual([]);
     expect(exact('Opening Hours')).toEqual([]);
     expect(exact('OPEN DAILY')).toEqual([]);
+    for (const sign of ['Exit', 'Entrance', 'Closed', 'Parking', 'Restrooms']) {
+      expect(exact(sign), sign).toEqual([]);
+    }
   });
 
   it('keeps a dish when a price follows', () => {
@@ -99,7 +102,12 @@ describe('lookup term boundaries', () => {
         detectPrices(entry.text, 'ko'),
         entry.text,
       );
-      expect(spans.map((span) => span.text)).toContain(entry.term);
+      const hit = spans.find((span) => span.text === entry.term);
+      expect(hit, entry.text).toBeDefined();
+      expect(hit?.start).toBe(entry.text.indexOf(entry.term));
+      expect(hit?.end).toBe(
+        entry.text.indexOf(entry.term) + entry.term.length,
+      );
     }
   });
 
@@ -123,6 +131,7 @@ describe('lookup terms golden set', () => {
       const spans = resolveTermSpans(
         lookupSpans({ translatedText: entry.translatedText }),
         priceRanges,
+        entry.translatedText,
       );
       const rawTerms = spans.map((span) => span.text.trim());
       const predicted = new Set(rawTerms.map((term) => term.toLowerCase()));

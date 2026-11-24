@@ -137,55 +137,6 @@ const FUNCTION_WORDS: Record<string, true> = {
   around: true,
 };
 
-/** Ordinary words that open sentences; capitalized they are not names. */
-const SENTENCE_STARTERS: Record<string, true> = {
-  yesterday: true,
-  today: true,
-  tomorrow: true,
-  tonight: true,
-  meanwhile: true,
-  however: true,
-  therefore: true,
-  instead: true,
-  finally: true,
-  first: true,
-  next: true,
-  then: true,
-  later: true,
-  soon: true,
-  recently: true,
-  usually: true,
-  often: true,
-  sometimes: true,
-  after: true,
-  before: true,
-  when: true,
-  while: true,
-  during: true,
-  try: true,
-  visit: true,
-  go: true,
-  take: true,
-  eat: true,
-  see: true,
-  walk: true,
-  book: true,
-  please: true,
-  this: true,
-  that: true,
-  there: true,
-  here: true,
-  our: true,
-  my: true,
-  your: true,
-  its: true,
-  it: true,
-  we: true,
-  they: true,
-  he: true,
-  she: true,
-};
-
 /** Abbreviations whose period does not end the sentence. */
 const ABBREVIATIONS: Record<string, true> = {
   mr: true,
@@ -397,7 +348,6 @@ export function englishTermSpans(text: string): TermSpan[] {
       const multiword = last > index;
       const sentenceInitial = sentenceInitialAt(text, token.start);
       const common = isCommonWord(canonical(token.text.toLowerCase()));
-      const starter = SENTENCE_STARTERS[canonical(normalized)] === true;
       const hasRare = group.some((entry) => isRare(entry));
       const hasConnector = group.some(
         (entry) => isConnector(canonical(entry.text.toLowerCase())) === true,
@@ -415,7 +365,7 @@ export function englishTermSpans(text: string): TermSpan[] {
       if (
         multiword
           ? hasRare || hasConnector || followedByNumber || !sentenceInitial
-          : !sentenceInitial || !common || !starter
+          : !sentenceInitial || !common
       ) {
         const end = tokens[last]!.end;
         spans.push({

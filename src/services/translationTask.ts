@@ -12,12 +12,59 @@ export type TranslationOutcome =
   | { status: 'unsupported'; message: string }
   | { status: 'failed'; message: string };
 
+const RESULT_CACHE_LIMIT = 64;
+const translationCache = new Map<string, string>();
+const inFlight = new Map<string, Promise<TranslationOutcome>>();
+
+function cacheKey(
+  text: string,
+  sourceLanguage: string,
+  targetLanguage: string,
+): string {
+  return `${targetLanguage}\u0000${sourceLanguage}\u0000${text}`;
+}
+
+/** One translation boundary with a bounded success cache and in-flight dedupe. */
+export async function translateText(args: {
+  text: string;
+  sourceLanguage: string;
+  targetLanguage?: string;
+}): Promise<TranslationOutcome> {
+  const targetLanguage = args.targetLanguage ?? 'en';
+  const key = cacheKey(args.text, args.sourceLanguage, targetLanguage);
+  const cached = translationCache.get(key);
+  if (cached !== undefined) {
+    return { status: 'translated', text: cached, cached: true };
+  }
+  const pending = inFlight.get(key);
+  if (pending !== undefined) {
+    return pending;
+  }
+  const task = runTranslation(args).then((outcome) => {
+    if (outcome.status === 'translated') {
+      translationCache.set(key, outcome.text);
+      if (translationCache.size > RESULT_CACHE_LIMIT) {
+        const oldest = translationCache.keys().next().value;
+        if (oldest !== undefined) {
+          translationCache.delete(oldest);
+        }
+      }
+    }
+    return outcome;
+  });
+  inFlight.set(key, task);
+  void task.finally(() => {
+    inFlight.delete(key);
+  });
+  return task;
+}
+
 /**
- * One translation boundary. Screens and the scanner use this instead of
- * calling the native module directly, so pack, unsupported-pair and generic
- * failures are classified the same way everywhere.
+ * Screens and the scanner use this instead of calling the native module
+ * directly, so pack, unsupported-pair and generic failures are classified the
+ * same way everywhere.
  */
-export async function translateText({
+async function runTranslation({
   text,
   sourceLanguage,
   targetLanguage = 'en',

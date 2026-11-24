@@ -383,9 +383,6 @@ final class CameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDele
       if best == nil || score > best!.score {
         best = (candidate, score)
       }
-      if index < 2 {
-        try? await Task.sleep(nanoseconds: 70_000_000)
-      }
     }
 
     guard let sampleBuffer = best?.buffer else {
@@ -405,7 +402,6 @@ final class CameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDele
     }
 
     let cropRect = imageCropRect(for: crop, pixelBuffer: pixelBuffer)
-    let jpeg = makePreviewJPEG(pixelBuffer: pixelBuffer, cropRect: cropRect)
     // Validate and stop on the session queue: a capture cancelled by leaving
     // the screen must never stop the session a newer hold has just started.
     let accepted = await withCheckedContinuation {
@@ -416,7 +412,7 @@ final class CameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDele
           return
         }
         self.stateLock.lock()
-        self.lastCapture = (pixelBuffer, cropRect, jpeg)
+        self.lastCapture = (pixelBuffer, cropRect, nil)
         self.stateLock.unlock()
         // The frame is retained; power the sensor down before JPEG/OCR/
         // translation so the camera is not streaming after the user released.
@@ -430,6 +426,15 @@ final class CameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDele
         description: "The capture was cancelled.",
         code: "ERR_CAMERA_CANCELLED"
       )
+    }
+    // Encode after the sensor is off; the frame is already retained for OCR.
+    let jpeg = makePreviewJPEG(pixelBuffer: pixelBuffer, cropRect: cropRect)
+    if jpeg != nil {
+      stateLock.lock()
+      if let current = lastCapture, CFEqual(current.buffer, pixelBuffer) {
+        lastCapture = (current.buffer, current.crop, jpeg)
+      }
+      stateLock.unlock()
     }
     return CapturedFrame(
       sampleBuffer: sampleBuffer,
@@ -596,8 +601,6 @@ final class CameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDele
       }
       device.unlockForConfiguration()
     }
-
-    try? await Task.sleep(nanoseconds: 120_000_000)
 
     let deadline = Date().addingTimeInterval(1.2)
     while Date() < deadline {
@@ -779,6 +782,16 @@ final class CameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDele
     if device.activeFormat.isVideoHDRSupported {
       device.automaticallyAdjustsVideoHDREnabled = false
       device.isVideoHDREnabled = false
+    }
+
+    // Cap preview/capture frames at 30 fps; scores and stills do not need 60.
+    let supports30 = device.activeFormat.videoSupportedFrameRateRanges.contains {
+      $0.minFrameRate <= 30 && $0.maxFrameRate >= 30
+    }
+    if supports30 {
+      let duration = CMTime(value: 1, timescale: 30)
+      device.activeVideoMinFrameDuration = duration
+      device.activeVideoMaxFrameDuration = duration
     }
   }
 

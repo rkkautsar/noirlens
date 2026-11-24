@@ -1,5 +1,5 @@
 import * as Haptics from 'expo-haptics';
-import { useKeepAwake } from 'expo-keep-awake';
+import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { useFocusEffect, useRouter } from 'expo-router';
 import {
   useCallback,
@@ -86,7 +86,14 @@ export function useScanner(options: {
   const focusedRef = useRef(false);
   const reticleCropRef = useRef<OcrCrop | null>(null);
 
-  useKeepAwake();
+  useFocusEffect(
+    useCallback(() => {
+      void activateKeepAwakeAsync().catch(() => {});
+      return () => {
+        void deactivateKeepAwake().catch(() => {});
+      };
+    }, []),
+  );
 
   useEffect(() => {
     void captureMode.hydrate();
@@ -572,8 +579,12 @@ export function useScanner(options: {
       });
     });
 
-    const unsubscribeStatePoller = store.subscribe(() => {
-      if (store.getSnapshot().state === 'PREWARM') {
+    let tickTimer: ReturnType<typeof setInterval> | null = null;
+    const syncTimers = () => {
+      const snapshot = store.getSnapshot();
+      const needsStatus =
+        snapshot.state === 'PREWARM' && snapshot.mode === 'AUTO';
+      if (needsStatus) {
         if (statusTimer === null) {
           void pollCameraStatus();
           statusTimer = setInterval(() => {
@@ -584,7 +595,21 @@ export function useScanner(options: {
         clearInterval(statusTimer);
         statusTimer = null;
       }
-    });
+      const needsTick =
+        snapshot.state === 'PREWARM' || snapshot.state === 'SCANNING';
+      if (needsTick) {
+        if (tickTimer === null) {
+          tickTimer = setInterval(() => {
+            store.send({ type: 'TICK', timestampMs: Date.now() });
+          }, 250);
+        }
+      } else if (tickTimer !== null) {
+        clearInterval(tickTimer);
+        tickTimer = null;
+      }
+    };
+    const unsubscribeStatePoller = store.subscribe(syncTimers);
+    syncTimers();
 
     void (async () => {
       try {
@@ -615,10 +640,6 @@ export function useScanner(options: {
         }
       }
     })();
-
-    const tickTimer = setInterval(() => {
-      store.send({ type: 'TICK', timestampMs: Date.now() });
-    }, 250);
 
     const dayTimer = setInterval(() => {
       const today = localDayKey();
@@ -657,7 +678,9 @@ export function useScanner(options: {
       unsubscribeEntitlements();
       unsubscribeStatePoller();
       appStateSubscription.remove();
-      clearInterval(tickTimer);
+      if (tickTimer !== null) {
+        clearInterval(tickTimer);
+      }
       clearInterval(dayTimer);
       clearInterval(statusTimer);
       void vision.stopCamera().catch(() => {});

@@ -365,6 +365,8 @@ enum TextRecognizer {
 
   private static let stickyLock = NSLock()
   private static var lastScriptPrimary: String?
+  /// Bound total Vision work across concurrent AUTO/Collect jobs.
+  private static let passLimiter = DispatchSemaphore(value: 2)
 
   private static func lineArea(_ lines: [Line]) -> CGFloat {
     lines.reduce(0) { total, line in
@@ -384,28 +386,34 @@ enum TextRecognizer {
     let sticky = lastScriptPrimary
     stickyLock.unlock()
 
+    var seeded: [Int: [Line]] = [:]
     if let sticky,
-       let group = groups.first(where: {
+       let index = groups.firstIndex(where: {
          ($0.first ?? "").lowercased().hasPrefix(
            String(sticky.lowercased().prefix(2))
          )
        }) {
-      if let candidate = try? runPass(
+      let group = groups[index]
+      let candidate = (try? runPass(
         image,
         automatic: false,
         languages: group,
         confidenceFloor: confidenceFloor
-      ).filter({ !isUrlNoise($0.text) }),
-        !candidate.isEmpty,
-        candidate.contains { $0.text.count >= 4 && $0.box.height >= 0.02 } {
+      ))?.filter({ !isUrlNoise($0.text) }) ?? []
+      if !candidate.isEmpty,
+         candidate.contains(where: { $0.text.count >= 4 && $0.box.height >= 0.02 }) {
         return candidate
       }
+      // Keep the sticky result for area comparison, but never run the same
+      // request again in the fan-out.
+      seeded[index] = candidate
     }
 
     let (lines, primary) = try autoPasses(
       image,
       groups: groups,
-      confidenceFloor: confidenceFloor
+      confidenceFloor: confidenceFloor,
+      precomputed: seeded
     )
     if let primary {
       stickyLock.lock()
@@ -418,7 +426,8 @@ enum TextRecognizer {
   private static func autoPasses(
     _ image: CGImage,
     groups: [[String]],
-    confidenceFloor: Float
+    confidenceFloor: Float,
+    precomputed: [Int: [Line]] = [:]
   ) throws -> ([Line], String?) {
     // AUTO runs the script models side by side: latency is one pass instead
     // of four, and the energy is a short ANE burst on a single frame, far
@@ -427,6 +436,12 @@ enum TextRecognizer {
     let lock = NSLock()
     var results = [[Line]?](repeating: nil, count: groups.count)
     DispatchQueue.concurrentPerform(iterations: groups.count) { index in
+      if let seeded = precomputed[index] {
+        lock.lock()
+        results[index] = seeded
+        lock.unlock()
+        return
+      }
       let group = groups[index]
       guard !group.isEmpty else {
         return
@@ -543,6 +558,8 @@ enum TextRecognizer {
       orientation: .up,
       options: [:]
     )
+    passLimiter.wait()
+    defer { passLimiter.signal() }
     try handler.perform([request])
 
     let observations = request.results ?? []

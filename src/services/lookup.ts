@@ -58,44 +58,69 @@ async function readCache(): Promise<CacheEntry[]> {
   }
 }
 
+let memoryEntries: CacheEntry[] | null = null;
+let hydratePromise: Promise<CacheEntry[]> | null = null;
+
+async function cachedEntries(): Promise<CacheEntry[]> {
+  if (memoryEntries !== null) {
+    return memoryEntries;
+  }
+  if (hydratePromise === null) {
+    hydratePromise = readCache()
+      .then((entries) => {
+        memoryEntries = entries;
+        return entries;
+      })
+      .finally(() => {
+        hydratePromise = null;
+      });
+  }
+  return hydratePromise;
+}
+
+function persist(entries: CacheEntry[]): void {
+  void serialized(async () => {
+    await writeMeta(CACHE_KEY, JSON.stringify(entries));
+  }).catch(() => {});
+}
+
 async function cacheGet(phrase: string): Promise<LookupResult | null> {
-  return serialized(async () => {
-    const entries = await readCache();
-    const index = entries.findIndex((entry) => entry.query === phrase);
-    if (index < 0) {
-      return null;
-    }
-    const entry = entries[index];
-    if (!entry) {
-      return null;
-    }
-    if (Date.now() - entry.at >= CACHE_TTL_MS) {
-      entries.splice(index, 1);
-      await writeMeta(CACHE_KEY, JSON.stringify(entries)).catch(() => {});
-      return null;
-    }
-    // Touch: move the hit to the front of the LRU.
-    if (index > 0) {
-      entries.splice(index, 1);
-      entries.unshift(entry);
-      await writeMeta(CACHE_KEY, JSON.stringify(entries)).catch(() => {});
-    }
-    return entry.value;
-  });
+  const entries = await cachedEntries();
+  const index = entries.findIndex((entry) => entry.query === phrase);
+  if (index < 0) {
+    return null;
+  }
+  const entry = entries[index];
+  if (!entry) {
+    return null;
+  }
+  if (Date.now() - entry.at >= CACHE_TTL_MS) {
+    entries.splice(index, 1);
+    persist(entries);
+    return null;
+  }
+  // Touch: move the hit to the front of the LRU.
+  if (index > 0) {
+    entries.splice(index, 1);
+    entries.unshift(entry);
+    persist(entries);
+  }
+  return entry.value;
 }
 
 async function cachePut(phrase: string, value: LookupResult): Promise<void> {
-  return serialized(async () => {
-    const entries = (await readCache()).filter(
-      (entry) => entry.query !== phrase,
-    );
-    entries.unshift({ query: phrase, at: Date.now(), value });
-    await writeMeta(
-      CACHE_KEY,
-      JSON.stringify(entries.slice(0, MAX_CACHE_ENTRIES)),
-    );
+  const entries = (await cachedEntries()).filter(
+    (entry) => entry.query !== phrase,
+  );
+  entries.unshift({ query: phrase, at: Date.now(), value });
+  const capped = entries.slice(0, MAX_CACHE_ENTRIES);
+  memoryEntries = capped;
+  await serialized(async () => {
+    await writeMeta(CACHE_KEY, JSON.stringify(capped));
   });
 }
+
+const inFlight = new Map<string, Promise<LookupResult | null>>();
 
 async function duckDuckGo(phrase: string): Promise<LookupResult | null> {
   const response = await fetch(
@@ -179,17 +204,28 @@ export async function lookUp(phrase: string): Promise<LookupResult | null> {
   if (cached) {
     return cached;
   }
+  const pending = inFlight.get(normalized);
+  if (pending !== undefined) {
+    return pending;
+  }
 
-  let result: LookupResult | null = null;
-  try {
-    result = (await duckDuckGo(query)) ?? (await wikipedia(query));
-  } catch {
-    result = null;
-  }
-  if (result) {
-    void cachePut(normalized, result).catch(() => {});
-  }
-  return result;
+  const task = (async (): Promise<LookupResult | null> => {
+    let result: LookupResult | null = null;
+    try {
+      result = (await duckDuckGo(query)) ?? (await wikipedia(query));
+    } catch {
+      result = null;
+    }
+    if (result) {
+      await cachePut(normalized, result).catch(() => {});
+    }
+    return result;
+  })();
+  inFlight.set(normalized, task);
+  void task.finally(() => {
+    inFlight.delete(normalized);
+  });
+  return task;
 }
 
 export interface LookupSpan {

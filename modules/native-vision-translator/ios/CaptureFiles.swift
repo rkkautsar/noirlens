@@ -12,8 +12,15 @@ import UIKit
 enum CaptureFiles {
   private static let folder = "captures"
   private static let context = CIContext(options: [.useSoftwareRenderer: false])
+  private static let directoryLock = NSLock()
+  private static var cachedDirectory: URL?
 
   static func directory() throws -> URL {
+    directoryLock.lock()
+    defer { directoryLock.unlock() }
+    if let cachedDirectory {
+      return cachedDirectory
+    }
     let documents = FileManager.default.urls(
       for: .documentDirectory,
       in: .userDomainMask
@@ -29,6 +36,7 @@ enum CaptureFiles {
     // Fail closed: a capture that could be backed up would break the promise
     // that frames never leave the device.
     try directory.setResourceValues(values)
+    cachedDirectory = directory
     return directory
   }
 

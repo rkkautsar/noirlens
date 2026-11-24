@@ -12,6 +12,7 @@ final class SpeechBridge: NSObject, AVSpeechSynthesizerDelegate {
 
   private let synthesizer = AVSpeechSynthesizer()
   private var continuation: CheckedContinuation<Bool, Never>?
+  private var audioConfigured = false
 
   private override init() {
     super.init()
@@ -34,16 +35,7 @@ final class SpeechBridge: NSObject, AVSpeechSynthesizerDelegate {
         language: Locale.current.language.languageCode?.identifier ?? "en"
       )
     utterance.rate = AVSpeechUtteranceDefaultSpeechRate
-    do {
-      try AVAudioSession.sharedInstance().setCategory(
-        .playback,
-        mode: .spokenAudio,
-        options: [.duckOthers]
-      )
-      try AVAudioSession.sharedInstance().setActive(true)
-    } catch {
-      // Playback may still work through the current session.
-    }
+    configureAudioIfNeeded()
 
     return await withCheckedContinuation { (continuation: CheckedContinuation<Bool, Never>) in
       self.continuation = continuation
@@ -58,10 +50,34 @@ final class SpeechBridge: NSObject, AVSpeechSynthesizerDelegate {
     finish(true)
   }
 
+  private func configureAudioIfNeeded() {
+    guard !audioConfigured else {
+      try? AVAudioSession.sharedInstance().setActive(true)
+      return
+    }
+    do {
+      try AVAudioSession.sharedInstance().setCategory(
+        .playback,
+        mode: .spokenAudio,
+        options: [.duckOthers]
+      )
+      try AVAudioSession.sharedInstance().setActive(true)
+      audioConfigured = true
+    } catch {
+      // Playback may still work through the current session.
+    }
+  }
+
   private func finish(_ spoke: Bool) {
     let continuation = self.continuation
     self.continuation = nil
     continuation?.resume(returning: spoke)
+    if !synthesizer.isSpeaking {
+      try? AVAudioSession.sharedInstance().setActive(
+        false,
+        options: .notifyOthersOnDeactivation
+      )
+    }
   }
 
   nonisolated func speechSynthesizer(

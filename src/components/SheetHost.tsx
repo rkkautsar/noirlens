@@ -1,5 +1,7 @@
 import {
+  Suspense,
   createContext,
+  lazy,
   useCallback,
   useContext,
   useEffect,
@@ -12,10 +14,23 @@ import {
 import { usePathname, useRouter, type Href } from 'expo-router';
 import type { HistoryTab } from './HistorySheet';
 import { AppSheet } from './AppSheet';
-import { HistorySheet } from './HistorySheet';
-import { LanguagePickerSheet } from './LanguagePickerSheet';
-import { LanguagesSheet } from './LanguagesSheet';
-import { LookupSheet } from './LookupSheet';
+
+const HistorySheet = lazy(() =>
+  import('./HistorySheet').then((module) => ({ default: module.HistorySheet })),
+);
+const LanguagePickerSheet = lazy(() =>
+  import('./LanguagePickerSheet').then((module) => ({
+    default: module.LanguagePickerSheet,
+  })),
+);
+const LanguagesSheet = lazy(() =>
+  import('./LanguagesSheet').then((module) => ({
+    default: module.LanguagesSheet,
+  })),
+);
+const LookupSheet = lazy(() =>
+  import('./LookupSheet').then((module) => ({ default: module.LookupSheet })),
+);
 
 export type SheetRequest =
   | { kind: 'lookup'; q: string; alt?: string }
@@ -104,6 +119,12 @@ export function SheetHost({ children }: { children: ReactNode }) {
     };
   }, [pendingHref, finishPending]);
 
+  const [everOpened, setEverOpened] = useState(false);
+  useEffect(() => {
+    if (sheet !== null) {
+      setEverOpened(true);
+    }
+  }, [sheet]);
   const closeSheet = useCallback(() => setSheet(null), []);
   const openSheet = useCallback(
     (request: SheetRequest) => setSheet({ request, origin: pathname }),
@@ -134,12 +155,14 @@ export function SheetHost({ children }: { children: ReactNode }) {
   return (
     <SheetContext.Provider value={value}>
       {children}
-      <AppSheet
-        visible={sheet !== null}
-        onClose={handleDismiss}
-        expanded={sheet?.request.kind === 'history'}
-      >
-        {sheet?.request.kind === 'lookup' ? (
+      {everOpened ? (
+        <AppSheet
+          visible={sheet !== null}
+          onClose={handleDismiss}
+          expanded={sheet?.request.kind === 'history'}
+        >
+          <Suspense fallback={null}>
+            {sheet?.request.kind === 'lookup' ? (
           <LookupSheet
             q={sheet.request.q}
             alt={sheet.request.alt}
@@ -162,8 +185,10 @@ export function SheetHost({ children }: { children: ReactNode }) {
             initialTab={sheet.request.initialTab}
             onClose={closeSheet}
           />
-        ) : null}
-      </AppSheet>
+            ) : null}
+          </Suspense>
+        </AppSheet>
+      ) : null}
     </SheetContext.Provider>
   );
 }

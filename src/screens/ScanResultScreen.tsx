@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   ScrollView,
@@ -104,6 +104,10 @@ export function ScanResultScreen({
   const requestToken = useRef(0);
 
   useEffect(() => {
+    if (!scanId) {
+      setLoading(false);
+      return;
+    }
     let active = true;
     void readScanHistory()
       .then((rows) => {
@@ -306,7 +310,10 @@ export function ScanResultScreen({
   };
 
   const remaining = allowance.remaining;
-  const historyResult = entry ? resultFromEntry(entry) : null;
+  const historyResult = useMemo(
+    () => (entry ? resultFromEntry(entry) : null),
+    [entry],
+  );
   const result = captureId ? captureResult : historyResult;
   const inspectSource =
     result ?? (record && record.status === 'done' ? captureBase(record) : null);

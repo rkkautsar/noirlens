@@ -240,9 +240,10 @@ export default function ScannerScreen() {
               onScanAgain={scanner.scanAgain}
               onShowOriginal={() => setShowOriginal(true)}
               thumbnail={
-                result.previewJpegBase64
+                result.previewUri ??
+                (result.previewJpegBase64
                   ? `data:image/jpeg;base64,${result.previewJpegBase64}`
-                  : undefined
+                  : undefined)
               }
               onOpenLanguages={openLanguages}
             />

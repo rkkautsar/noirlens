@@ -245,16 +245,16 @@ class CaptureRepository {
     return this.ensureAvailable().then(() =>
       this.serialized(async () => {
         const { records, evicted } = addCapture(this.snapshot.records, record);
-        await writeMetaMany([
-          [rowKey(record.id), serializeCapture(record)],
-          [
-            CAPTURES_INDEX_KEY,
-            JSON.stringify(records.map((entry) => entry.id)),
-          ],
-        ]);
+        // Row first, then the manifest: a failed manifest write leaves an
+        // unreferenced row, never a manifest pointing at missing data.
+        await this.persistRecord(record);
+        await this.persistIndex(records);
         this.set(records);
-        await removeMetaMany(evicted.map((entry) => rowKey(entry.id)));
-        await this.deleteFiles(evicted.flatMap(filesOf));
+        // Retention cleanup is best effort; it must never reject the commit.
+        void removeMetaMany(evicted.map((entry) => rowKey(entry.id))).catch(
+          () => {},
+        );
+        void this.deleteFiles(evicted.flatMap(filesOf));
       }),
     );
   }

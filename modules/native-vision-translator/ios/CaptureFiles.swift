@@ -11,7 +11,19 @@ import UIKit
  */
 enum CaptureFiles {
   private static let folder = "captures"
-  private static let context = CIContext(options: [.useSoftwareRenderer: false])
+  private static let contextLock = NSLock()
+  private static var contextStorage: CIContext?
+
+  private static var context: CIContext {
+    contextLock.lock()
+    defer { contextLock.unlock() }
+    if let contextStorage {
+      return contextStorage
+    }
+    let context = CIContext(options: [.useSoftwareRenderer: false])
+    contextStorage = context
+    return context
+  }
   private static let directoryLock = NSLock()
   private static var cachedDirectory: URL?
 
@@ -90,10 +102,9 @@ enum CaptureFiles {
   }
 
   static func save(
-    jpegBase64: String
+    jpegData data: Data
   ) throws -> (image: String, thumb: String, width: Int, height: Int) {
     guard
-      let data = Data(base64Encoded: jpegBase64),
       let decoded = UIImage(data: data),
       let image = decoded.cgImage
     else {

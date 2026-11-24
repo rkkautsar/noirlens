@@ -97,7 +97,7 @@ export function ScanShutter({
       hold.current = Animated.timing(progress, {
         toValue: 1,
         duration: HOLD_MS,
-        useNativeDriver: false,
+        useNativeDriver: true,
       });
       hold.current.start(({ finished }) => {
         if (finished && !fired.current) {

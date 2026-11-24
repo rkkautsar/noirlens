@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Image,
   Platform,
@@ -41,13 +41,21 @@ export function useInspect(
     reset();
   }, [reset, resetKey]);
 
-  const imageRect = result
-    ? imageFitRect(
-        { width: result.imageWidth, height: result.imageHeight },
-        stage,
-        'contain',
-      )
-    : { x: 0, y: 0, width: 0, height: 0 };
+  const imageRect = useMemo(
+    () =>
+      result
+        ? imageFitRect(
+            { width: result.imageWidth, height: result.imageHeight },
+            stage,
+            'contain',
+          )
+        : { x: 0, y: 0, width: 0, height: 0 },
+    [result?.imageWidth, result?.imageHeight, stage],
+  );
+  const rects = useMemo(
+    () => (result ? result.blocks.map((block) => mapBlockRect(block, imageRect)) : []),
+    [result?.blocks, imageRect],
+  );
   const uri =
     imageUri ??
     (result?.previewJpegBase64
@@ -82,12 +90,10 @@ export function useInspect(
     }
     let best = -1;
     let bestDistance = Number.POSITIVE_INFINITY;
-    result.blocks.forEach((block, index) => {
-      const rect = mapBlockRect(block, imageRect);
-      const distance = Math.hypot(
-        rect.x + rect.width / 2 - x,
-        rect.y + rect.height / 2 - y,
-      );
+    rects.forEach((rect, index) => {
+      const dx = rect.x + rect.width / 2 - x;
+      const dy = rect.y + rect.height / 2 - y;
+      const distance = dx * dx + dy * dy;
       if (distance < bestDistance) {
         bestDistance = distance;
         best = index;
@@ -129,6 +135,7 @@ export function useInspect(
     translating,
     translationFailed,
     imageRect,
+    rects,
     uri,
     inspect,
     picked,
@@ -152,6 +159,7 @@ export function InspectBody({
     translating,
     translationFailed,
     imageRect,
+    rects,
     uri,
     inspect,
     picked,
@@ -177,11 +185,10 @@ export function InspectBody({
             <MicroLabel tone="dim">FROZEN FRAME UNAVAILABLE</MicroLabel>
           )}
           {uri && stage.width > 0 && controller.result
-            ? controller.result.blocks.map((block, index) => {
-                const rect = mapBlockRect(block, imageRect);
+            ? rects.map((rect, index) => {
                 return (
                   <View
-                    key={`${block.text}-${index}`}
+                    key={`${index}-${rect.x}-${rect.y}`}
                     pointerEvents="none"
                     style={[
                       styles.box,

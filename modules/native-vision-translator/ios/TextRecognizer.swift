@@ -501,12 +501,22 @@ enum TextRecognizer {
   }
 
 
+  private static let metadataLock = NSLock()
+  private static var preferredCache: [Int: [String]] = [:]
+
   private static func supportedPreferredLanguages() -> [String] {
     let probe = VNRecognizeTextRequest()
+    let revision = probe.revision
+    metadataLock.lock()
+    if let cached = preferredCache[revision] {
+      metadataLock.unlock()
+      return cached
+    }
+    metadataLock.unlock()
     guard
       let supported = try? VNRecognizeTextRequest.supportedRecognitionLanguages(
         for: .accurate,
-        revision: probe.revision
+        revision: revision
       )
     else {
       return []
@@ -522,6 +532,9 @@ enum TextRecognizer {
       return supported.first { $0.lowercased().hasPrefix(prefix.lowercased()) }
     }
     NSLog("[NoirLens] OCR preferred languages available=%d", filtered.count)
+    metadataLock.lock()
+    preferredCache[revision] = filtered
+    metadataLock.unlock()
     return filtered
   }
 

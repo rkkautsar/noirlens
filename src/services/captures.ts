@@ -143,6 +143,21 @@ class CaptureRepository {
     }
   }
 
+  private async sweepOrphans(records: readonly CaptureRecord[]): Promise<void> {
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, 0);
+    });
+    const files = await vision.listCaptureFiles(600).catch(() => null);
+    if (!files) {
+      return;
+    }
+    const referenced = new Set(records.flatMap(filesOf));
+    const orphans = files.filter((name) => !referenced.has(name));
+    if (orphans.length > 0) {
+      await this.deleteFiles(orphans);
+    }
+  }
+
   /** Never write metadata over a store that could not be read. */
   private async ensureAvailable(): Promise<void> {
     if (!this.snapshot.available) {
@@ -161,12 +176,13 @@ class CaptureRepository {
       const reconcile = options.reconcile === true;
       this.loadPromise = this.serialized(async () => {
         try {
-          const directory = await vision
-            .capturesDirectory()
-            .catch(() => '');
+          const [directory, indexRaw] = await Promise.all([
+            vision.capturesDirectory().catch(() => ''),
+            readMeta(CAPTURES_INDEX_KEY),
+          ]);
           let records: CaptureRecord[] = [];
           let complete = true;
-          const index = parseIndex(await readMeta(CAPTURES_INDEX_KEY));
+          const index = parseIndex(indexRaw);
           if (index === null) {
             // First run after the single-blob layout (or a fresh install).
             const parsed = parseCaptureStore(await readMeta(CAPTURES_KEY));
@@ -207,20 +223,11 @@ class CaptureRepository {
           if (!reconcile || !complete) {
             return;
           }
-          // Startup-only sweep. Only files older than the grace window are
-          // candidates, so a capture written while this runs can never be
-          // mistaken for an orphan of the record it is about to add.
-          const files = await vision
-            .listCaptureFiles(600)
-            .catch(() => null);
-          if (!files) {
-            return;
-          }
-          const referenced = new Set(records.flatMap(filesOf));
-          const orphans = files.filter((name) => !referenced.has(name));
-          if (orphans.length > 0) {
-            await this.deleteFiles(orphans);
-          }
+          // Startup-only sweep after the first frame. Only files older than
+          // the grace window are candidates, so a capture written while this
+          // runs can never be mistaken for an orphan of the record it is
+          // about to add.
+          void this.sweepOrphans(records);
         } catch {
           this.snapshot = { ...this.snapshot, loaded: true, available: false };
           for (const listener of this.listeners) {

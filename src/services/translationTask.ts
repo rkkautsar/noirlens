@@ -93,43 +93,34 @@ async function runTranslation({
       };
     }
     if (isLanguagePackFailure(error)) {
-      // The bridge can report a pack error even when the pack is installed.
-      // Trust the availability check and retry once before asking to download.
-      const availability = await vision
-        .checkLanguagePackStatus(sourceLanguage, targetLanguage)
-        .catch(() => null);
-      if (availability?.status === 'installed') {
-        try {
-          const retry = await vision.translate({
-            text,
-            sourceLanguage,
-            targetLanguage,
-          });
+      // Retry once: an installed pack can still report "supported" during a
+      // download. The bridge now attempts the session instead of trusting it.
+      try {
+        const retry = await vision.translate({
+          text,
+          sourceLanguage,
+          targetLanguage,
+        });
+        return {
+          status: 'translated',
+          text: retry.translatedText,
+          cached: retry.cached ?? false,
+        };
+      } catch (retryError) {
+        if (isUnsupportedLanguagePair(retryError)) {
           return {
-            status: 'translated',
-            text: retry.translatedText,
-            cached: retry.cached ?? false,
-          };
-        } catch (retryError) {
-          if (isUnsupportedLanguagePair(retryError)) {
-            return {
-              status: 'unsupported',
-              message: `${languageLabel(sourceLanguage)} to ${languageLabel(targetLanguage)} is not supported on this device.`,
-            };
-          }
-          if (isLanguagePackFailure(retryError)) {
-            return {
-              status: 'failed',
-              message: `The ${languageLabel(sourceLanguage)} pack is installed, but this text could not be translated.`,
-            };
-          }
-          return {
-            status: 'failed',
-            message: describeNativeError(retryError, sourceLanguage).message,
+            status: 'unsupported',
+            message: `${languageLabel(sourceLanguage)} to ${languageLabel(targetLanguage)} is not supported on this device.`,
           };
         }
+        if (isLanguagePackFailure(retryError)) {
+          return { status: 'pack_missing', message };
+        }
+        return {
+          status: 'failed',
+          message: describeNativeError(retryError, sourceLanguage).message,
+        };
       }
-      return { status: 'pack_missing', message };
     }
     return { status: 'failed', message };
   }

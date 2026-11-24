@@ -31,6 +31,25 @@ enum TranslationBridge {
     ]
   }
 
+  static func statuses(
+    for languages: [String],
+    targetLanguage: String = "en"
+  ) async -> [[String: Any]] {
+    let availability = LanguageAvailability()
+    let target = language(from: targetLanguage)
+    var results: [[String: Any]] = []
+    results.reserveCapacity(languages.count)
+    for code in languages {
+      let status = await availability.status(from: language(from: code), to: target)
+      results.append([
+        "language": code,
+        "targetLanguage": normalizedCode(targetLanguage),
+        "status": statusString(status)
+      ])
+    }
+    return results
+  }
+
   static func supportedLanguages() async -> [String] {
     let availability = LanguageAvailability()
     let languages = await availability.supportedLanguages

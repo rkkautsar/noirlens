@@ -112,6 +112,10 @@ export interface NativeVisionTranslatorModule extends NativeModule {
     langCode: string,
     targetLanguage?: string,
   ): Promise<LanguagePackStatusPayload>;
+  checkLanguagePackStatuses(
+    languages: string[],
+    targetLanguage?: string,
+  ): Promise<LanguagePackStatusPayload[]>;
   getSupportedLanguages(): Promise<string[]>;
 }
 
@@ -226,6 +230,12 @@ const webMock = {
     targetLanguage: 'en',
     status: 'installed' as const,
   }),
+  checkLanguagePackStatuses: async (languages: string[]) =>
+    languages.map((language) => ({
+      language,
+      targetLanguage: 'en',
+      status: 'installed' as const,
+    })),
   getSupportedLanguages: async () => [],
 } as unknown as NativeVisionTranslatorModule;
 

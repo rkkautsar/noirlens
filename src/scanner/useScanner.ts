@@ -273,20 +273,14 @@ export function useScanner(options: {
           sourceStatus?.status !== 'installed' &&
           ocr.confidence < 0.65
         ) {
-          const installed = (
-            await Promise.all(
-              TRAVELER_LANGUAGES.map(async (option) => {
-                try {
-                  const status = await vision.checkLanguagePackStatus(
-                    option.code,
-                  );
-                  return status.status === 'installed' ? option.code : null;
-                } catch {
-                  return null;
-                }
-              }),
+          const statuses = await vision
+            .checkLanguagePackStatuses(
+              TRAVELER_LANGUAGES.map((option) => option.code),
             )
-          ).filter((code): code is string => code !== null);
+            .catch(() => []);
+          const installed = statuses
+            .filter((status) => status.status === 'installed')
+            .map((status) => status.language);
 
           for (const candidate of installed) {
             if (token !== captureToken) {
@@ -613,11 +607,11 @@ export function useScanner(options: {
 
     void (async () => {
       try {
-        await Promise.all([
+        const [used] = await Promise.all([
+          readScanCount(currentDay),
           entitlements.hydrate(),
           sourceLanguage.hydrate(),
         ]);
-        const used = await readScanCount(currentDay);
         if (disposed) {
           return;
         }

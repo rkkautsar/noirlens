@@ -95,7 +95,7 @@ public final class NativeVisionTranslatorModule: Module {
       }
       return try TextRecognizer.recognize(
         pixelBuffer: pixelBuffer,
-        previewJpegBase64: frame.previewJpegBase64,
+        previewJpegBase64: frame.jpegData?.base64EncodedString(),
         languageHint: sourceLanguage,
         cropRect: frame.cropRect
       )
@@ -110,14 +110,14 @@ public final class NativeVisionTranslatorModule: Module {
       let frame = try await CameraController.shared.captureFrame(
         generation: cameraToken
       )
-      guard let jpeg = frame.previewJpegBase64 else {
+      guard let jpeg = frame.jpegData else {
         throw cameraException(
           name: "NoFrame",
           description: "The captured frame had no image data.",
           code: "ERR_NO_FRAME"
         )
       }
-      let saved = try CaptureFiles.save(jpegBase64: jpeg)
+      let saved = try CaptureFiles.save(jpegData: jpeg)
       return [
         "image": saved.image,
         "thumb": saved.thumb,
@@ -201,6 +201,14 @@ public final class NativeVisionTranslatorModule: Module {
       await TranslationBridge.status(
         for: langCode,
         targetLanguage: targetLanguage ?? "en"
+      )
+    }
+
+    AsyncFunction("checkLanguagePackStatuses") {
+      (languages: [String], targetLanguage: String) async -> [[String: Any]] in
+      await TranslationBridge.statuses(
+        for: languages,
+        targetLanguage: targetLanguage
       )
     }
 

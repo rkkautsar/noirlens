@@ -36,19 +36,32 @@ export function LanguagesSheet({ onClose }: { onClose: () => void }) {
 
   const refresh = useCallback(async () => {
     setRefreshing(true);
-    const entries = await Promise.all(
-      TRAVELER_LANGUAGES.map(async (language) => {
-        try {
-          const result = await vision.checkLanguagePackStatus(language.code);
-          return [language.code, result.status] as const;
-        } catch {
-          return [language.code, 'unsupported'] as const;
-        }
-      }),
-    );
-    if (mounted.current) {
-      setStatuses(Object.fromEntries(entries));
-      setRefreshing(false);
+    try {
+      const results = await vision.checkLanguagePackStatuses(
+        TRAVELER_LANGUAGES.map((language) => language.code),
+      );
+      if (mounted.current) {
+        setStatuses(
+          Object.fromEntries(
+            results.map((result) => [result.language, result.status]),
+          ),
+        );
+      }
+    } catch {
+      if (mounted.current) {
+        setStatuses(
+          Object.fromEntries(
+            TRAVELER_LANGUAGES.map((language) => [
+              language.code,
+              'unsupported',
+            ]),
+          ),
+        );
+      }
+    } finally {
+      if (mounted.current) {
+        setRefreshing(false);
+      }
     }
   }, []);
 

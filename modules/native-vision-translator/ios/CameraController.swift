@@ -5,7 +5,7 @@ import UIKit
 
 struct CapturedFrame {
   let sampleBuffer: CMSampleBuffer
-  let previewJpegBase64: String?
+  let jpegData: Data?
   let cropRect: CGRect?
 
   var pixelBuffer: CVPixelBuffer? {
@@ -58,7 +58,7 @@ final class CameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDele
   private var startGeneration = 0
   private var wantsCamera = false
   private var torchEnabled = false
-  private var lastCapture: (buffer: CVPixelBuffer, crop: CGRect?, jpeg: String?)?
+  private var lastCapture: (buffer: CVPixelBuffer, crop: CGRect?, jpeg: Data?)?
 
   private override init() {
     super.init()
@@ -428,7 +428,7 @@ final class CameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDele
       )
     }
     // Encode after the sensor is off; the frame is already retained for OCR.
-    let jpeg = makePreviewJPEG(pixelBuffer: pixelBuffer, cropRect: cropRect)
+    let jpeg = makePreviewData(pixelBuffer: pixelBuffer, cropRect: cropRect)
     if jpeg != nil {
       stateLock.lock()
       if let current = lastCapture, CFEqual(current.buffer, pixelBuffer) {
@@ -438,7 +438,7 @@ final class CameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDele
     }
     return CapturedFrame(
       sampleBuffer: sampleBuffer,
-      previewJpegBase64: jpeg,
+      jpegData: jpeg,
       cropRect: cropRect
     )
   }
@@ -457,7 +457,7 @@ final class CameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDele
     }
     return try TextRecognizer.recognize(
       pixelBuffer: capture.buffer,
-      previewJpegBase64: capture.jpeg,
+      previewJpegBase64: capture.jpeg?.base64EncodedString(),
       languageHint: language,
       cropRect: capture.crop
     )
@@ -527,37 +527,45 @@ final class CameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDele
     )
   }
 
-  private static let sharpnessContext = CIContext(
-    options: [.useSoftwareRenderer: false]
-  )
-
+  /// Edge energy on the camera's luma plane, sampled on a coarse grid. This
+  /// avoids a Core Image graph per burst candidate; the center crop keeps
+  /// borders and hands out of the score.
   private func sharpnessScore(
     _ pixelBuffer: CVPixelBuffer,
     cropRect: CGRect?
   ) -> Float {
-    var image = CIImage(cvPixelBuffer: pixelBuffer).oriented(.right)
-    if let cropRect {
-      image = image.cropped(to: cropRect)
+    CVPixelBufferLockBaseAddress(pixelBuffer, .readOnly)
+    defer { CVPixelBufferUnlockBaseAddress(pixelBuffer, .readOnly) }
+    guard
+      CVPixelBufferIsPlanar(pixelBuffer),
+      let base = CVPixelBufferGetBaseAddressOfPlane(pixelBuffer, 0)
+    else {
+      return 0
     }
-    let gray = image.applyingFilter("CIColorControls", parameters: [
-      kCIInputSaturationKey: 0,
-    ])
-    let edges = gray.applyingFilter("CIEdges", parameters: [
-      kCIInputIntensityKey: 1.0,
-    ])
-    let average = edges.applyingFilter("CIAreaAverage", parameters: [
-      kCIInputExtentKey: CIVector(cgRect: edges.extent),
-    ])
-    var pixel = [UInt8](repeating: 0, count: 4)
-    CameraController.sharpnessContext.render(
-      average,
-      toBitmap: &pixel,
-      rowBytes: 4,
-      bounds: CGRect(x: 0, y: 0, width: 1, height: 1),
-      format: .RGBA8,
-      colorSpace: CGColorSpaceCreateDeviceRGB()
-    )
-    return Float(pixel[0]) + Float(pixel[1]) + Float(pixel[2])
+    let width = CVPixelBufferGetWidthOfPlane(pixelBuffer, 0)
+    let height = CVPixelBufferGetHeightOfPlane(pixelBuffer, 0)
+    let bytesPerRow = CVPixelBufferGetBytesPerRowOfPlane(pixelBuffer, 0)
+    let x0 = width / 4
+    let x1 = width - x0
+    let y0 = height / 4
+    let y1 = height - y0
+    guard x1 > x0 + 1, y1 > y0 + 1 else {
+      return 0
+    }
+    let row = base.assumingMemoryBound(to: UInt8.self)
+    var total: Int64 = 0
+    var samples: Int64 = 0
+    for y in stride(from: y0, to: y1, by: 4) {
+      let offset = y * bytesPerRow
+      for x in stride(from: x0 + 1, to: x1, by: 4) {
+        total += abs(Int64(row[offset + x]) - Int64(row[offset + x - 1]))
+        samples += 1
+      }
+    }
+    guard samples > 0 else {
+      return 0
+    }
+    return Float(total) / Float(samples)
   }
 
   private func waitForSettledDevice(timeout: TimeInterval) async {
@@ -821,19 +829,16 @@ final class CameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDele
     return currentSampleBuffer()
   }
 
-  private func makePreviewJPEG(
+  private func makePreviewData(
     pixelBuffer: CVPixelBuffer,
     cropRect: CGRect?
-  ) -> String? {
+  ) -> Data? {
     let upright = CIImage(cvPixelBuffer: pixelBuffer).oriented(.right)
     let cropped = cropRect.map { upright.cropped(to: $0) } ?? upright
     guard let cgImage = ciContext.createCGImage(cropped, from: cropped.extent) else {
       return nil
     }
-    guard let data = UIImage(cgImage: cgImage).jpegData(compressionQuality: 0.55) else {
-      return nil
-    }
-    return data.base64EncodedString()
+    return UIImage(cgImage: cgImage).jpegData(compressionQuality: 0.55)
   }
 }
 

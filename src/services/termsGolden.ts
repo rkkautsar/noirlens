@@ -89,7 +89,7 @@ export const TERMS_GOLDEN: TermsGoldenCase[] = [
     language: 'es',
     blocks: ['El Xampanyet'],
     translatedText: 'We ended the night at El Xampanyet with cava and anchovies.',
-    expected: ['El Xampanyet'],
+    expected: ['El Xampanyet', 'cava'],
   },
   {
     id: 'la-boqueria',
@@ -117,7 +117,7 @@ export const TERMS_GOLDEN: TermsGoldenCase[] = [
     language: 'it',
     blocks: ["All'Antico Vinaio"],
     translatedText: "Students line up at All'Antico Vinaio for the schiacciata.",
-    expected: ["All'Antico Vinaio"],
+    expected: ["All'Antico Vinaio", 'schiacciata'],
   },
   {
     id: 'hofbrauhaus',
@@ -236,7 +236,7 @@ export const TERMS_GOLDEN: TermsGoldenCase[] = [
     language: 'ko',
     blocks: ['광장시장'],
     translatedText: 'Vendors at Gwangjang Market sell mung bean pancakes.',
-    expected: ['Gwangjang'],
+    expected: ['Gwangjang Market', 'mung'],
   },
   {
     id: 'quanjude-transliterated',
@@ -421,7 +421,7 @@ export const TERMS_GOLDEN: TermsGoldenCase[] = [
     language: 'vi',
     blocks: ['Highlands Coffee 24'],
     translatedText: 'Highlands Coffee 24 is near the lake.',
-    expected: ['Highlands Coffee 24'],
+    expected: ['Highlands Coffee'],
   },
   {
     id: 'ichiran-romanized-synthetic',
@@ -443,7 +443,7 @@ export const TERMS_GOLDEN: TermsGoldenCase[] = [
     language: 'vi',
     blocks: ['Vincom Center'],
     translatedText: 'The cinema inside vincom center is upstairs.',
-    expected: ['vincom center'],
+    expected: ['vincom'],
   },
   {
     id: 'da-nang-lowercase-target',

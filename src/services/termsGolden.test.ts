@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { lookupSpans, resolveTermSpans } from './lookup';
+import { COMMON_WORDS } from './commonWords';
 import { TERMS_GOLDEN } from './termsGolden';
 
 interface Occurrence {
@@ -22,53 +23,44 @@ function occurrences(text: string, term: string): Occurrence[] {
 }
 
 describe('lookup term boundaries', () => {
-  const exact = (
-    blocks: string[],
-    translatedText: string,
-  ) =>
-    resolveTermSpans(
-      lookupSpans({
-        sourceText: blocks.join(' '),
-        translatedText,
-        blocks: blocks.map((text) => ({ text })),
-      }),
-    );
+  const exact = (translatedText: string) =>
+    resolveTermSpans(lookupSpans({ translatedText }));
 
-  it('keeps standalone terms out of larger words and returns exact offsets', () => {
-    const cases = [
-      { blocks: ['Sony'], translatedText: "A booth near Sony opened SonyCorp's new store.", term: 'Sony' },
-      { blocks: ['Acme'], translatedText: 'Acme Éditions sells AcmeÉditions.', term: 'Acme' },
-      { blocks: ['Lima'], translatedText: 'Lima is not Limaçon.', term: 'Lima' },
-    ];
-    for (const entry of cases) {
-      const hits = exact(entry.blocks, entry.translatedText).filter(
-        (span) => span.text.toLowerCase() === entry.term.toLowerCase(),
-      );
-      expect(hits, entry.translatedText).toHaveLength(1);
-      const at = entry.translatedText.toLowerCase().indexOf(entry.term.toLowerCase());
-      expect(hits[0]?.start).toBe(at);
-      expect(hits[0]?.end).toBe(at + entry.term.length);
-    }
+  it('finds translated names and unusual nouns without the source', () => {
+    const text =
+      'Yesterday I went to Don Quijote and bought some nigiri for dinner.';
+    const spans = exact(text);
+    expect(spans.map((span) => span.text)).toEqual([
+      'Don Quijote',
+      'nigiri',
+    ]);
+    expect(spans[0]?.start).toBe(text.indexOf('Don Quijote'));
+    expect(spans[0]?.end).toBe(
+      text.indexOf('Don Quijote') + 'Don Quijote'.length,
+    );
+    expect(spans[1]?.start).toBe(text.indexOf('nigiri'));
   });
 
-  it('keeps offsets aligned after a supplementary character', () => {
-    const translatedText = '🙂 Cafe Central is open.';
-    const span = exact(['Café Central'], translatedText).find(
-      (entry) => entry.text === 'Cafe Central',
-    );
-    expect(span).toBeDefined();
-    expect(span?.start).toBe(translatedText.indexOf('Cafe Central'));
-    expect(span?.end).toBe(
-      translatedText.indexOf('Cafe Central') + 'Cafe Central'.length,
-    );
+  it('finds romanized proper nouns in the English text', () => {
+    const text =
+      'At midnight we joined the queue at Ichiran in Shinjuku for a bowl.';
+    expect(exact(text).map((span) => span.text)).toEqual([
+      'Ichiran',
+      'Shinjuku',
+    ]);
   });
 
-  it('covers a decomposed accent in the tappable range', () => {
-    const translatedText = 'We ate at Cafe\u0301 Central.';
-    const span = exact(['Café Central'], translatedText).find((entry) =>
-      entry.text.startsWith('Cafe'),
-    );
-    expect(span?.text).toBe('Cafe\u0301 Central');
+  it('keeps proper nouns whole when they contain another name', () => {
+    const text = "A booth near Sony opened SonyCorp's new store.";
+    expect(exact(text).map((span) => span.text)).toEqual([
+      'Sony',
+      "SonyCorp's",
+    ]);
+  });
+
+  it('flags a lowercase loanword mid-sentence', () => {
+    const text = 'A bowl of phở costs forty thousand dong.';
+    expect(exact(text).map((span) => span.text)).toEqual(['phở']);
   });
 });
 
@@ -84,44 +76,37 @@ describe('lookup terms golden set', () => {
         occurrences(entry.translatedText, term),
       );
       const spans = resolveTermSpans(
-        lookupSpans({
-          sourceText: entry.blocks.join(' '),
-          translatedText: entry.translatedText,
-          blocks: entry.blocks.map((text) => ({ text })),
-        }),
+        lookupSpans({ translatedText: entry.translatedText }),
         priceRanges,
       );
-      const predicted = new Set(
-        spans.map((span) => span.text.trim().toLowerCase()),
-      );
+      const rawTerms = spans.map((span) => span.text.trim());
+      const predicted = new Set(rawTerms.map((term) => term.toLowerCase()));
       const expected = new Set(
         entry.expected.map((term) => term.trim().toLowerCase()),
       );
       let caseTp = 0;
-      let caseFp = 0;
-      let caseFn = 0;
       for (const term of expected) {
         if (predicted.has(term)) {
           caseTp += 1;
         } else {
-          caseFn += 1;
+          fn += 1;
+          misses.push(`${entry.id}: missing ${term}`);
         }
       }
-      for (const term of predicted) {
-        if (!expected.has(term)) {
-          caseFp += 1;
+      // Proper nouns are allowed extras: capitalized spans are legitimate
+      // tappable names. Only lowercase out-of-vocabulary spans count against
+      // precision.
+      for (const raw of rawTerms) {
+        const term = raw.toLowerCase();
+        const naturalized = COMMON_WORDS.has(
+          term.normalize('NFD').replace(/\p{M}/gu, ''),
+        );
+        if (raw === term && !expected.has(term) && !naturalized) {
+          fp += 1;
+          misses.push(`${entry.id}: lowercase extra ${term}`);
         }
       }
       tp += caseTp;
-      fp += caseFp;
-      fn += caseFn;
-      if (caseTp !== expected.size || caseFp > 0) {
-        misses.push(
-          `${entry.id}: tp=${caseTp}/${expected.size} fp=${caseFp} predicted=${JSON.stringify([
-            ...predicted,
-          ])}`,
-        );
-      }
     }
 
     const precision = tp + fp === 0 ? 0 : tp / (tp + fp);

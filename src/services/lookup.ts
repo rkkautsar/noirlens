@@ -215,14 +215,41 @@ export function lookupSpans(result: { translatedText: string }): LookupSpan[] {
 export function resolveTermSpans(
   terms: LookupSpan[],
   prices: Array<{ start: number; end: number }> = [],
+  text?: string,
 ): LookupSpan[] {
-  const withoutPrices = terms.filter(
-    (term) => !prices.some((price) => term.start < price.end && term.end > price.start),
-  );
+  const trimmed: LookupSpan[] = [];
+  for (const term of terms) {
+    const overlapping = prices
+      .filter((price) => term.start < price.end && term.end > price.start)
+      .sort((a, b) => a.start - b.start);
+    if (overlapping.length === 0) {
+      trimmed.push(term);
+      continue;
+    }
+    let cursor = term.start;
+    for (const price of overlapping) {
+      const end = Math.min(price.start, term.end);
+      if (end > cursor) {
+        trimmed.push({
+          start: cursor,
+          end,
+          text: text ? text.slice(cursor, end).trimEnd() : term.text,
+        });
+      }
+      cursor = Math.max(cursor, price.end);
+    }
+    if (cursor < term.end) {
+      trimmed.push({
+        start: cursor,
+        end: term.end,
+        text: text ? text.slice(cursor, term.end).trimEnd() : term.text,
+      });
+    }
+  }
   const kept: LookupSpan[] = [];
   let lastEnd = 0;
-  for (const term of withoutPrices) {
-    if (term.start >= lastEnd) {
+  for (const term of trimmed) {
+    if (term.start >= lastEnd && term.end > term.start) {
       kept.push(term);
       lastEnd = term.end;
     }

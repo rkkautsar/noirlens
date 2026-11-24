@@ -151,7 +151,7 @@ export function ResultBody({
 
   const renderTranslation = () => {
     const text = result.translatedText;
-    const termOnly = resolveTermSpans(termSpans, translationPrices);
+    const termOnly = resolveTermSpans(termSpans, translationPrices, text);
     const kept = [
       ...termOnly.map((span) => ({
         start: span.start,

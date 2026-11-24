@@ -1,4 +1,4 @@
-import { COMMON_WORDS } from './commonWords';
+import { isCommonWord } from './commonWords';
 
 export interface TermSpan {
   start: number;
@@ -137,6 +137,76 @@ const FUNCTION_WORDS: Record<string, true> = {
   around: true,
 };
 
+/** Ordinary words that open sentences; capitalized they are not names. */
+const SENTENCE_STARTERS: Record<string, true> = {
+  yesterday: true,
+  today: true,
+  tomorrow: true,
+  tonight: true,
+  meanwhile: true,
+  however: true,
+  therefore: true,
+  instead: true,
+  finally: true,
+  first: true,
+  next: true,
+  then: true,
+  later: true,
+  soon: true,
+  recently: true,
+  usually: true,
+  often: true,
+  sometimes: true,
+  after: true,
+  before: true,
+  when: true,
+  while: true,
+  during: true,
+  try: true,
+  visit: true,
+  go: true,
+  take: true,
+  eat: true,
+  see: true,
+  walk: true,
+  book: true,
+  please: true,
+  this: true,
+  that: true,
+  there: true,
+  here: true,
+  our: true,
+  my: true,
+  your: true,
+  its: true,
+  it: true,
+  we: true,
+  they: true,
+  he: true,
+  she: true,
+};
+
+/** Abbreviations whose period does not end the sentence. */
+const ABBREVIATIONS: Record<string, true> = {
+  mr: true,
+  mrs: true,
+  ms: true,
+  dr: true,
+  st: true,
+  jl: true,
+  jr: true,
+  sr: true,
+  ave: true,
+  blvd: true,
+  rd: true,
+  no: true,
+  inc: true,
+  ltd: true,
+  co: true,
+  vs: true,
+  etc: true,
+};
+
 /** Name particles that stay lowercase inside a proper noun. */
 const CONNECTORS: Record<string, true> = {
   de: true,
@@ -169,6 +239,10 @@ interface Token {
   text: string;
   start: number;
   end: number;
+}
+
+function canonical(value: string): string {
+  return value.replace(/’/g, "'");
 }
 
 function isFunctionWord(value: string): boolean {
@@ -227,8 +301,11 @@ function joinable(text: string, previous: Token, next: Token): boolean {
     return false;
   }
   if (gap.includes('.')) {
+    const previousWord = canonical(previous.text.toLowerCase());
+    const initial = Array.from(previousWord).length === 1;
     return (
-      Array.from(previous.text).length <= 3 && CONNECTOR_GAP.test(gap)
+      (initial || ABBREVIATIONS[previousWord] === true) &&
+      CONNECTOR_GAP.test(gap)
     );
   }
   return CONNECTOR_GAP.test(gap);
@@ -248,12 +325,12 @@ export function englishTermSpans(text: string): TermSpan[] {
   const spans: TermSpan[] = [];
 
   const isRare = (token: Token): boolean => {
-    const raw = token.text.toLowerCase();
+    const raw = canonical(token.text.toLowerCase());
     return (
       raw.length >= 2 &&
       !isNumeric(token.text) &&
       !isFunctionWord(raw) &&
-      !COMMON_WORDS.has(raw)
+      !isCommonWord(raw)
     );
   };
 
@@ -299,10 +376,11 @@ export function englishTermSpans(text: string): TermSpan[] {
           continue;
         }
         if (
-          CONNECTORS[next.text.toLowerCase()] === true &&
+          CONNECTORS[canonical(next.text.toLowerCase())] === true &&
           cursor + 1 < tokens.length &&
           isCapitalized(tokens[cursor + 1]!.text) &&
-          !isFunctionWord(tokens[cursor + 1]!.text.toLowerCase())
+          !isFunctionWord(canonical(tokens[cursor + 1]!.text.toLowerCase())) &&
+          joinable(text, next, tokens[cursor + 1]!)
         ) {
           last = cursor + 1;
           cursor += 2;
@@ -315,12 +393,30 @@ export function englishTermSpans(text: string): TermSpan[] {
         }
         break;
       }
+      const group = tokens.slice(index, last + 1);
       const multiword = last > index;
       const sentenceInitial = sentenceInitialAt(text, token.start);
-      const common = COMMON_WORDS.has(token.text.toLowerCase());
+      const common = isCommonWord(canonical(token.text.toLowerCase()));
+      const starter = SENTENCE_STARTERS[canonical(normalized)] === true;
+      const hasRare = group.some((entry) => isRare(entry));
+      const hasConnector = group.some(
+        (entry) => isConnector(canonical(entry.text.toLowerCase())) === true,
+      );
+      const after = tokens[last + 1];
+      const followedByNumber =
+        after !== undefined &&
+        isNumeric(after.text) &&
+        joinable(text, tokens[last]!, after);
       // Mid-sentence capitalization marks a name even for a common word
-      // ("Sony"). Sentence-initial common words are ordinary ("Yesterday").
-      if (multiword || !sentenceInitial || !common) {
+      // ("Sony"). A sentence-initial common word is ordinary only when it is
+      // a known sentence opener ("Yesterday"). A standalone title-cased run of
+      // ordinary words is signage ("Fresh Fruit"); mid-sentence runs and runs
+      // with a name particle are names ("Cafe Central", "Le Jules Verne").
+      if (
+        multiword
+          ? hasRare || hasConnector || followedByNumber || !sentenceInitial
+          : !sentenceInitial || !common || !starter
+      ) {
         const end = tokens[last]!.end;
         spans.push({
           start: token.start,
@@ -338,7 +434,7 @@ export function englishTermSpans(text: string): TermSpan[] {
       while (cursor < tokens.length) {
         const next = tokens[cursor]!;
         if (
-          !CONNECTOR_GAP.test(text.slice(tokens[last]!.end, next.start)) ||
+          !joinable(text, tokens[last]!, next) ||
           !isRare(next) ||
           isCapitalized(next.text)
         ) {

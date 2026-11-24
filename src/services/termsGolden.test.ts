@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
+import { detectPrices } from './currency';
 import { lookupSpans, resolveTermSpans } from './lookup';
-import { COMMON_WORDS } from './commonWords';
+import { isCommonWord } from './commonWords';
 import { TERMS_GOLDEN } from './termsGolden';
 
 interface Occurrence {
@@ -58,6 +59,50 @@ describe('lookup term boundaries', () => {
     ]);
   });
 
+  it('folds curly apostrophes for words', () => {
+    expect(exact('Please don’t touch the door.').map((span) => span.text)).toEqual([]);
+    expect(exact("Please don't touch the door.").map((span) => span.text)).toEqual([]);
+  });
+
+  it('does not join names across a sentence break', () => {
+    expect(exact('We met Jo. Alice left.').map((span) => span.text)).toEqual([
+      'Jo',
+      'Alice',
+    ]);
+    expect(exact('We flew to Rio. Madrid was next.').map((span) => span.text)).toEqual([
+      'Rio',
+      'Madrid',
+    ]);
+  });
+
+  it('joins a recognized abbreviation', () => {
+    expect(exact('Jl. Malioboro is crowded.').map((span) => span.text)).toContain(
+      'Jl. Malioboro',
+    );
+  });
+
+  it('ignores ordinary title-cased signage', () => {
+    expect(exact('Fresh Fruit')).toEqual([]);
+    expect(exact('Opening Hours')).toEqual([]);
+    expect(exact('OPEN DAILY')).toEqual([]);
+  });
+
+  it('keeps a dish when a price follows', () => {
+    const cases: Array<{ text: string; term: string }> = [
+      { text: 'Gimbap KRW 2,500', term: 'Gimbap' },
+      { text: 'Bindaedae Tteok 3,500 Won', term: 'Bindaedae Tteok' },
+      { text: 'Bindaedae Tteok ₩3,500', term: 'Bindaedae Tteok' },
+    ];
+    for (const entry of cases) {
+      const spans = resolveTermSpans(
+        lookupSpans({ translatedText: entry.text }),
+        detectPrices(entry.text, 'ko'),
+        entry.text,
+      );
+      expect(spans.map((span) => span.text)).toContain(entry.term);
+    }
+  });
+
   it('flags a lowercase loanword mid-sentence', () => {
     const text = 'A bowl of phở costs forty thousand dong.';
     expect(exact(text).map((span) => span.text)).toEqual(['phở']);
@@ -98,7 +143,7 @@ describe('lookup terms golden set', () => {
       // precision.
       for (const raw of rawTerms) {
         const term = raw.toLowerCase();
-        const naturalized = COMMON_WORDS.has(
+        const naturalized = isCommonWord(
           term.normalize('NFD').replace(/\p{M}/gu, ''),
         );
         if (raw === term && !expected.has(term) && !naturalized) {

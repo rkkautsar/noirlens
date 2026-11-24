@@ -53,6 +53,17 @@ describe('lookup term boundaries', () => {
     expect(spans.map((span) => span.text)).toEqual(['Nigiri']);
   });
 
+  it('does not leave a dangling out-of-vocabulary connector', () => {
+    for (const connector of ['ibn', 'von']) {
+      const text = `We ordered Nigiri ${connector} Alice.`;
+      const at = text.indexOf('Alice');
+      const spans = lookupSpans({ translatedText: text }, [
+        { start: at, end: at + 'Alice'.length },
+      ]);
+      expect(spans.map((span) => span.text)).toEqual(['Nigiri']);
+    }
+  });
+
   it('drops personal names in the excluded ranges', () => {
     const text = 'We met Alice at the cafe.';
     expect(exact(text).map((span) => span.text)).toContain('Alice');

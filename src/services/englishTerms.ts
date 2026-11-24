@@ -350,6 +350,9 @@ export function englishTermSpans(
           cursor += 2;
           continue;
         }
+        if (isConnector(canonical(next.text.toLowerCase())) === true) {
+          break;
+        }
         if (isRare(next)) {
           last = cursor;
           cursor += 1;
@@ -391,6 +394,11 @@ export function englishTermSpans(
       continue;
     }
 
+    if (isConnector(canonical(normalized)) === true) {
+      index += 1;
+      continue;
+    }
+
     if (isRare(token)) {
       let last = index;
       let cursor = index + 1;
@@ -399,6 +407,7 @@ export function englishTermSpans(
         if (
           isExcluded(next) ||
           !joinable(text, tokens[last]!, next) ||
+          isConnector(canonical(next.text.toLowerCase())) === true ||
           !isRare(next) ||
           isCapitalized(next.text)
         ) {

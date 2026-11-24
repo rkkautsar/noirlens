@@ -44,6 +44,15 @@ describe('lookup term boundaries', () => {
     expect(spans.map((span) => span.text)).toContain('nigiri');
   });
 
+  it('does not join through a connector into an excluded name', () => {
+    const text = 'We ordered Nigiri de Alice.';
+    const at = text.indexOf('Alice');
+    const spans = lookupSpans({ translatedText: text }, [
+      { start: at, end: at + 'Alice'.length },
+    ]);
+    expect(spans.map((span) => span.text)).toEqual(['Nigiri']);
+  });
+
   it('drops personal names in the excluded ranges', () => {
     const text = 'We met Alice at the cafe.';
     expect(exact(text).map((span) => span.text)).toContain('Alice');

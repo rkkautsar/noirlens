@@ -2,6 +2,11 @@ import { requireNativeModule, requireNativeView, type NativeModule } from 'expo'
 import type { ComponentType } from 'react';
 import { Platform, View, type ViewProps } from 'react-native';
 
+import {
+  demoNameRanges,
+  WEB_DEMO_TRANSLATION,
+} from '../../src/services/demoNameRanges';
+
 export type LanguagePackStatus = 'installed' | 'supported' | 'unsupported';
 
 export interface OcrBlockPayload {
@@ -145,8 +150,7 @@ const WEB_MOCK_OCR: OcrPayload = {
   sourceHash: 'web-mock',
 };
 
-const WEB_MOCK_TRANSLATION =
-  'Bánh mì thịt\nBaguette with pork, pâté and pickled vegetables\n45,000 VND';
+const WEB_MOCK_TRANSLATION = WEB_DEMO_TRANSLATION;
 
 const WEB_MOCK_CAPTURE =
   'data:image/svg+xml;charset=utf-8,' +
@@ -166,7 +170,7 @@ const webMock = {
   stopCameraIfCurrent: async (_generation: number) => {},
   setTorch: async () => {},
   recognizeLast: async () => WEB_MOCK_OCR,
-  personalNameRanges: async () => null,
+  personalNameRanges: async (text: string) => demoNameRanges(text),
   getCameraStatus: async () => ({
     authorized: true,
     running: true,

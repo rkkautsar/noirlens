@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { detectPrices } from './currency';
 import { lookupSpans, resolveTermSpans } from './lookup';
 import { isCommonWord } from './commonWords';
+import { demoNameRanges, WEB_DEMO_TRANSLATION } from './demoNameRanges';
 import { resolvedNameRanges } from './nameRanges';
 import { TERMS_GOLDEN } from './termsGolden';
 
@@ -27,6 +28,11 @@ function occurrences(text: string, term: string): Occurrence[] {
 describe('lookup term boundaries', () => {
   const exact = (translatedText: string) =>
     resolveTermSpans(lookupSpans({ translatedText }));
+
+  it('preclassifies only reviewed demo text on web', () => {
+    expect(demoNameRanges(WEB_DEMO_TRANSLATION)).toEqual([]);
+    expect(demoNameRanges('We met Alice at the cafe.')).toBeNull();
+  });
 
   it('only uses name ranges resolved for the same text', () => {
     const ranges = [{ start: 0, end: 5 }];

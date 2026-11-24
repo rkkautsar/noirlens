@@ -1,9 +1,6 @@
 import vision from '../../modules/native-vision-translator';
 
-export interface NameRange {
-  start: number;
-  end: number;
-}
+import type { NameRange } from './nameRanges';
 
 /**
  * Personal-name ranges from the platform tagger. Empty on web or failure so

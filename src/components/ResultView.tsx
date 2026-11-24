@@ -12,6 +12,7 @@ import {
 import { preferredCurrency } from '@/services/localeCurrency';
 import { lookupSpans, resolveTermSpans } from '@/services/lookup';
 import { personalNameRanges } from '@/services/personNames';
+import { resolvedNameRanges, type NameState } from '@/services/nameRanges';
 import { romanize } from '@/services/romanize';
 import { romanizeNative } from '@/services/romanizeNative';
 import { colors, typography } from '@/theme';
@@ -69,22 +70,25 @@ export function ResultBody({
       ? `The ${language} offline pack is not installed. Download it once, then scan again. You can still read the source below.`
       : '';
 
-  const [nameRanges, setNameRanges] = useState<Array<{ start: number; end: number }>>([]);
+  const [nameState, setNameState] = useState<NameState | null>(null);
+  const nameRanges = resolvedNameRanges(nameState, result.translatedText);
   useEffect(() => {
     let active = true;
     if (!translated) {
-      setNameRanges([]);
+      setNameState(null);
       return;
     }
-    personalNameRanges(result.translatedText)
+    const text = result.translatedText;
+    setNameState(null);
+    personalNameRanges(text)
       .then((ranges) => {
         if (active) {
-          setNameRanges(ranges);
+          setNameState({ text, ranges });
         }
       })
       .catch(() => {
         if (active) {
-          setNameRanges([]);
+          setNameState({ text, ranges: [] });
         }
       });
     return () => {
@@ -92,7 +96,7 @@ export function ResultBody({
     };
   }, [result.translatedText, translated]);
   const termSpans = useMemo(
-    () => (translated ? lookupSpans(result, nameRanges) : []),
+    () => (translated && nameRanges ? lookupSpans(result, nameRanges) : []),
     [result, translated, nameRanges],
   );
   const translationPrices = priceConversions(

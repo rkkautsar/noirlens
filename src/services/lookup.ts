@@ -207,7 +207,7 @@ export function lookupSpans(
   result: { translatedText: string },
   excluded: Array<{ start: number; end: number }> = [],
 ): LookupSpan[] {
-  return englishTermSpans(result.translatedText).filter(
+  return englishTermSpans(result.translatedText, excluded).filter(
     (span) =>
       !excluded.some(
         (range) => span.start < range.end && span.end > range.start,

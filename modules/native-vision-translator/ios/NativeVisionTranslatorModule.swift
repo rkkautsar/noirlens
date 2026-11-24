@@ -65,9 +65,11 @@ public final class NativeVisionTranslatorModule: Module {
         guard tag == .personalName else {
           return true
         }
-        let start = text[..<tokenRange.lowerBound].utf16.count
-        let end = text[..<tokenRange.upperBound].utf16.count
-        ranges.append(["start": start, "end": end])
+        let range = NSRange(tokenRange, in: text)
+        ranges.append([
+          "start": range.location,
+          "end": range.location + range.length,
+        ])
         return true
       }
       return ranges

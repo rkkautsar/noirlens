@@ -268,12 +268,19 @@ function joinable(text: string, previous: Token, next: Token): boolean {
  * non-Latin runs. This is deliberately independent of the source text, so a
  * translated proper noun ("Ichiran") is found even when the source was kanji.
  */
-export function englishTermSpans(text: string): TermSpan[] {
+export function englishTermSpans(
+  text: string,
+  excluded: Array<{ start: number; end: number }> = [],
+): TermSpan[] {
   if (!text) {
     return [];
   }
   const tokens = tokenize(text);
   const spans: TermSpan[] = [];
+  const isExcluded = (token: Token): boolean =>
+    excluded.some(
+      (range) => token.start < range.end && token.end > range.start,
+    );
 
   const isRare = (token: Token): boolean => {
     const raw = canonical(token.text.toLowerCase());
@@ -288,6 +295,11 @@ export function englishTermSpans(text: string): TermSpan[] {
   let index = 0;
   while (index < tokens.length) {
     const token = tokens[index]!;
+
+    if (isExcluded(token)) {
+      index += 1;
+      continue;
+    }
 
     if (isNumeric(token.text)) {
       index += 1;
@@ -315,7 +327,7 @@ export function englishTermSpans(text: string): TermSpan[] {
       let cursor = index + 1;
       while (cursor < tokens.length) {
         const next = tokens[cursor]!;
-        if (!joinable(text, tokens[last]!, next)) {
+        if (isExcluded(next) || !joinable(text, tokens[last]!, next)) {
           break;
         }
         if (isNonLatin(next.text)) {
@@ -384,6 +396,7 @@ export function englishTermSpans(text: string): TermSpan[] {
       while (cursor < tokens.length) {
         const next = tokens[cursor]!;
         if (
+          isExcluded(next) ||
           !joinable(text, tokens[last]!, next) ||
           !isRare(next) ||
           isCapitalized(next.text)

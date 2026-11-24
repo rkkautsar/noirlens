@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { detectPrices } from './currency';
 import { lookupSpans, resolveTermSpans } from './lookup';
 import { isCommonWord } from './commonWords';
+import { resolvedNameRanges } from './nameRanges';
 import { TERMS_GOLDEN } from './termsGolden';
 
 interface Occurrence {
@@ -26,6 +27,22 @@ function occurrences(text: string, term: string): Occurrence[] {
 describe('lookup term boundaries', () => {
   const exact = (translatedText: string) =>
     resolveTermSpans(lookupSpans({ translatedText }));
+
+  it('only uses name ranges resolved for the same text', () => {
+    const ranges = [{ start: 0, end: 5 }];
+    expect(resolvedNameRanges(null, 'Alice')).toBeNull();
+    expect(resolvedNameRanges({ text: 'Bob', ranges }, 'Alice')).toBeNull();
+    expect(resolvedNameRanges({ text: 'Alice', ranges }, 'Alice')).toBe(ranges);
+  });
+
+  it('keeps a dish after an excluded name in the same run', () => {
+    const text = "We ordered Alice's nigiri.";
+    const at = text.indexOf('Alice');
+    const spans = lookupSpans({ translatedText: text }, [
+      { start: at, end: at + 'Alice'.length },
+    ]);
+    expect(spans.map((span) => span.text)).toContain('nigiri');
+  });
 
   it('drops personal names in the excluded ranges', () => {
     const text = 'We met Alice at the cafe.';

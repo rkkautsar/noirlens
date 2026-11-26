@@ -783,6 +783,14 @@ function useScannerController(
       }
       const scanHash = before.result.sourceHash;
       const token = ++rescanToken.current;
+      const ownsResult = () => {
+        const latest = store.getSnapshot();
+        return (
+          token === rescanToken.current &&
+          latest.state === 'LOCKED_READ' &&
+          latest.result?.sourceHash === scanHash
+        );
+      };
       try {
         if (language !== 'auto' && !isEnglishLanguageCode(language)) {
           const pack = await installPack(language, 'en');
@@ -841,7 +849,7 @@ function useScannerController(
           } else {
             // Unsupported pairs and generic failures keep the prior result;
             // they are not an English detection.
-            return 'failed';
+            return ownsResult() ? 'failed' : 'superseded';
           }
         }
         const settled = store.getSnapshot();
@@ -872,7 +880,7 @@ function useScannerController(
         return 'applied';
       } catch {
         // The frozen frame is gone; keep the current result.
-        return 'failed';
+        return ownsResult() ? 'failed' : 'superseded';
       }
     },
     [store],

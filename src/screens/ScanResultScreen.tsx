@@ -305,6 +305,7 @@ export function ScanResultScreen({
     packBusyRef.current = true;
     setPackBusy(true);
     setPackError(null);
+    setLiveNotice(null);
     try {
       const current = scannerRef.current.snapshot.result;
       if (!current || current.sourceHash !== liveResult.sourceHash) {
@@ -347,6 +348,7 @@ export function ScanResultScreen({
     packBusyRef.current = true;
     setPackBusy(true);
     setPackError(null);
+    setLiveNotice(null);
     try {
       const outcome = await installPack(
         record.language || record.hint || 'und',
@@ -481,6 +483,12 @@ export function ScanResultScreen({
           )
         }
       >
+        <View style={styles.bodyColumn}>
+          {live && liveNotice ? (
+            <View style={styles.noticeBar}>
+              <Text style={styles.stateText}>{liveNotice}</Text>
+            </View>
+          ) : null}
         {inspect ? (
           <InspectBody controller={inspectState} />
         ) : result ? (
@@ -488,9 +496,6 @@ export function ScanResultScreen({
             style={styles.scroll}
             contentContainerStyle={styles.content}
           >
-            {live && liveNotice ? (
-              <Text style={styles.stateText}>{liveNotice}</Text>
-            ) : null}
             <ResultBody
               result={result}
               remaining={remaining}
@@ -617,6 +622,7 @@ export function ScanResultScreen({
             )}
           </View>
         )}
+        </View>
 
         {waiting && result ? (
           <View style={styles.busy} pointerEvents="none">
@@ -661,6 +667,14 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 20,
     textAlign: 'center',
+  },
+  bodyColumn: {
+    flex: 1,
+  },
+  noticeBar: {
+    paddingHorizontal: layout.page,
+    paddingTop: 10,
+    paddingBottom: 6,
   },
   actions: {
     flexDirection: 'row',

@@ -141,6 +141,7 @@ function useScannerController(
 
   const focusedRef = useRef(false);
   const reticleCropRef = useRef<OcrCrop | null>(null);
+  const rescanToken = useRef(0);
 
   useEffect(() => {
     void captureMode.hydrate();
@@ -724,6 +725,7 @@ function useScannerController(
   }, [store]);
 
   const scanAgain = useCallback(() => {
+    rescanToken.current += 1;
     store.send({ type: 'SCAN_AGAIN', timestampMs: Date.now() });
   }, [store]);
 
@@ -732,6 +734,7 @@ function useScannerController(
   }, [store]);
 
   const stop = useCallback(() => {
+    rescanToken.current += 1;
     store.send({ type: 'STOP', timestampMs: Date.now() });
   }, [store]);
 
@@ -746,6 +749,9 @@ function useScannerController(
   const setActive = useCallback(
     (active: boolean) => {
       focusedRef.current = active;
+      if (!active) {
+        rescanToken.current += 1;
+      }
       if (active) {
         void activateKeepAwakeAsync().catch(() => {});
         return;
@@ -761,9 +767,25 @@ function useScannerController(
 
   const rescan = useCallback(
     async (language: string) => {
+      const before = store.getSnapshot();
+      if (before.state !== 'LOCKED_READ' || !before.result) {
+        return;
+      }
+      const scanHash = before.result.sourceHash;
+      const wasPackMissing = before.result.kind === 'pack_missing';
+      const token = ++rescanToken.current;
       try {
         const hint = language === 'auto' ? '' : language;
         const ocr = await vision.recognizeLast(hint);
+        // The result may have been replaced by another scan while OCR ran.
+        const current = store.getSnapshot();
+        if (
+          token !== rescanToken.current ||
+          current.state !== 'LOCKED_READ' ||
+          current.result?.sourceHash !== scanHash
+        ) {
+          return;
+        }
         const resolvedLanguage =
           ocr.sourceLanguage || (language === 'auto' ? 'und' : language);
         const base = {
@@ -781,25 +803,46 @@ function useScannerController(
         let translatedText = '';
         let kind: 'translated' | 'english' | 'pack_missing' = 'translated';
         let cached = false;
-        const outcome = await translateText({
-          text: ocr.text,
-          sourceLanguage: resolvedLanguage,
-        });
-        if (outcome.status === 'translated') {
-          translatedText = normalizeTranslated(outcome.text);
-          cached = outcome.cached;
-        } else if (outcome.status === 'pack_missing') {
-          kind = 'pack_missing';
+        if (isEnglishLanguageCode(resolvedLanguage)) {
+          kind = 'english';
         } else {
-          // Unsupported pairs and generic failures keep the prior result;
-          // they are not an English detection.
+          const outcome = await translateText({
+            text: ocr.text,
+            sourceLanguage: resolvedLanguage,
+          });
+          if (outcome.status === 'translated') {
+            translatedText = normalizeTranslated(outcome.text);
+            cached = outcome.cached;
+          } else if (outcome.status === 'pack_missing') {
+            kind = 'pack_missing';
+          } else {
+            // Unsupported pairs and generic failures keep the prior result;
+            // they are not an English detection.
+            return;
+          }
+        }
+        const settled = store.getSnapshot();
+        if (
+          token !== rescanToken.current ||
+          settled.state !== 'LOCKED_READ' ||
+          settled.result?.sourceHash !== scanHash
+        ) {
           return;
         }
         store.send({
           type: 'RESULT_REPLACED',
           result: { ...base, kind, translatedText, cached },
+          count: wasPackMissing && kind === 'translated',
           timestampMs: Date.now(),
         });
+        if (wasPackMissing && kind === 'translated') {
+          void addScanHistory({
+            sourceLanguage: resolvedLanguage,
+            sourceText: ocr.text,
+            translatedText,
+            kind: 'translated',
+          }).catch(() => {});
+        }
       } catch {
         // The frozen frame is gone; keep the current result.
       }

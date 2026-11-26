@@ -19,6 +19,7 @@ import {
 import type { ScanResult } from '@/scanner/machine';
 import { captures, useCaptures } from '@/services/captures';
 import { useScanAllowance } from '@/services/allowance';
+import { useSourceLanguage } from '@/services/sourceLanguage';
 import { installPack, translateText } from '@/services/translationTask';
 import type { CaptureRecord } from '@/services/captureModel';
 import { rerunCaptureOcr, retryCapture } from '@/services/captureProcessing';
@@ -80,6 +81,8 @@ export function ScanResultScreen({
   const scanner = useScanner();
   const scannerRef = useRef(scanner);
   scannerRef.current = scanner;
+  const sourceLanguage = useSourceLanguage();
+  const [livePick, setLivePick] = useState<string | null>(null);
   const liveResult = live ? scanner.snapshot.result : null;
   const { records, loaded } = useCaptures();
   const record = captureId
@@ -260,12 +263,21 @@ export function ScanResultScreen({
     openSheet({
       kind: 'languagePicker',
       title: 'OCR LANGUAGE',
-      selected: liveResult.sourceLanguage,
+      selected: livePick ?? sourceLanguage.code,
       allowAuto: true,
       onSelect: (code) => {
+        setLivePick(code);
         setTranslating(true);
-        void scannerRef.current
-          .rescan(code)
+        void (async () => {
+          if (code !== 'auto' && !isEnglishLanguageCode(code)) {
+            const outcome = await installPack(code, 'en');
+            if (outcome !== 'installed') {
+              return;
+            }
+          }
+          await scannerRef.current.rescan(code);
+        })()
+          .catch(() => {})
           .finally(() => setTranslating(false));
       },
     });
@@ -292,6 +304,10 @@ export function ScanResultScreen({
       const outcome = await installPack(liveResult.sourceLanguage, 'en');
       if (outcome !== 'installed') {
         setPackError('The pack did not finish installing. Try again.');
+        return;
+      }
+      const current = scannerRef.current.snapshot.result;
+      if (!current || current.sourceHash !== liveResult.sourceHash) {
         return;
       }
       setTranslating(true);

@@ -195,7 +195,13 @@ export type ScannerEvent =
   | { type: 'CAMERA_SETTLED'; settled: boolean; timestampMs: number }
   | { type: 'CAMERA_FAILED'; error: ScanError; timestampMs: number }
   | { type: 'CAPTURE_SUCCEEDED'; result: ScanResult; timestampMs: number }
-  | { type: 'RESULT_REPLACED'; result: ScanResult; timestampMs: number }
+  | {
+      type: 'RESULT_REPLACED';
+      result: ScanResult;
+      /** Count the first translation that follows a missing pack. */
+      count?: boolean;
+      timestampMs: number;
+    }
   | { type: 'CAPTURE_FAILED'; error: ScanError; timestampMs: number }
   | { type: 'WAKE'; timestampMs: number }
   | { type: 'SCAN_AGAIN'; timestampMs: number }
@@ -852,10 +858,24 @@ export function reduceScanner(
           effects,
         };
       }
+      const counted =
+        event.count === true &&
+        context.result?.kind === 'pack_missing' &&
+        event.result.kind === 'translated';
+      const scansUsedToday =
+        context.scansUsedToday + (counted ? 1 : 0);
+      if (counted) {
+        effects.push({
+          type: 'PERSIST_SCAN',
+          dayKey: context.dayKey,
+          scansUsedToday,
+        });
+      }
       return {
         context: {
           ...context,
           result: event.result,
+          scansUsedToday,
           error: null,
           nowMs: event.timestampMs,
         },

@@ -423,6 +423,28 @@ describe('CAPTURE flow', () => {
     expect(result.context.result?.kind).toBe('pack_missing');
     expect(hasEffect(result.effects, 'PERSIST_SCAN')).toBe(false);
     expect(hasEffect(result.effects, 'HAPTIC_ERROR')).toBe(true);
+
+    const replaced = run(result.context, [
+      {
+        type: 'RESULT_REPLACED',
+        result: RESULT,
+        count: true,
+        timestampMs: 2400,
+      },
+    ]);
+    expect(replaced.context.scansUsedToday).toBe(1);
+    expect(replaced.context.result?.kind).toBe('translated');
+    expect(hasEffect(replaced.effects, 'PERSIST_SCAN')).toBe(true);
+
+    const again = run(replaced.context, [
+      {
+        type: 'RESULT_REPLACED',
+        result: RESULT,
+        count: true,
+        timestampMs: 2600,
+      },
+    ]);
+    expect(again.context.scansUsedToday).toBe(1);
   });
 
   it('shows an English detection without charging a scan', () => {

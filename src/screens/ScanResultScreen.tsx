@@ -83,6 +83,7 @@ export function ScanResultScreen({
   scannerRef.current = scanner;
   const sourceLanguage = useSourceLanguage();
   const [livePick, setLivePick] = useState<string | null>(null);
+  const [liveNotice, setLiveNotice] = useState<string | null>(null);
   const liveResult = live ? scanner.snapshot.result : null;
   const { records, loaded } = useCaptures();
   const record = captureId
@@ -267,12 +268,18 @@ export function ScanResultScreen({
       allowAuto: true,
       onSelect: (code) => {
         setTranslating(true);
+        setLiveNotice(null);
         void scannerRef.current
           .rescan(code)
-          .then((applied) => {
-            // Cancelled downloads and superseded requests keep the prior pick.
-            if (applied) {
+          .then((outcome) => {
+            if (outcome === 'applied') {
               setLivePick(code);
+            } else if (outcome === 'cancelled') {
+              setLiveNotice('The language pack was not installed.');
+            } else if (outcome === 'failed') {
+              setLiveNotice(
+                'The text could not be read in that language. Try another.',
+              );
             }
           })
           .catch(() => {})
@@ -304,11 +311,15 @@ export function ScanResultScreen({
         return;
       }
       setTranslating(true);
-      const applied = await scannerRef.current.rescan(
+      const outcome = await scannerRef.current.rescan(
         liveResult.sourceLanguage,
       );
-      if (!applied) {
+      if (outcome === 'cancelled') {
         setPackError('The pack did not finish installing. Try again.');
+      } else if (outcome === 'failed') {
+        setPackError(
+          'The pack was installed, but the text could not be translated.',
+        );
       }
     } catch {
       setPackError('The pack could not be installed. Try again.');
@@ -477,6 +488,9 @@ export function ScanResultScreen({
             style={styles.scroll}
             contentContainerStyle={styles.content}
           >
+            {live && liveNotice ? (
+              <Text style={styles.stateText}>{liveNotice}</Text>
+            ) : null}
             <ResultBody
               result={result}
               remaining={remaining}

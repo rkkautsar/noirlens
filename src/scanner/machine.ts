@@ -859,9 +859,7 @@ export function reduceScanner(
         };
       }
       const counted =
-        event.count === true &&
-        context.result?.kind === 'pack_missing' &&
-        event.result.kind === 'translated';
+        event.count === true && event.result.kind === 'translated';
       const scansUsedToday =
         context.scansUsedToday + (counted ? 1 : 0);
       if (counted) {

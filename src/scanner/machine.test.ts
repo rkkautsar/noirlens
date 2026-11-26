@@ -440,7 +440,7 @@ describe('CAPTURE flow', () => {
       {
         type: 'RESULT_REPLACED',
         result: RESULT,
-        count: true,
+        count: false,
         timestampMs: 2600,
       },
     ]);

@@ -15,7 +15,7 @@ import {
 import { AppState } from 'react-native';
 
 import vision, { type OcrCrop } from '../../modules/native-vision-translator';
-import { translateText } from '../services/translationTask';
+import { installPack, translateText } from '../services/translationTask';
 
 /** OCR rows arrive newline-separated; the translator sometimes doubles them. */
 function normalizeTranslated(text: string): string {
@@ -59,7 +59,7 @@ export interface ScannerController {
   stop: () => void;
   dismissError: () => void;
   setActive: (active: boolean) => void;
-  rescan: (language: string) => Promise<void>;
+  rescan: (language: string) => Promise<boolean>;
 }
 
 /** One scanner store for the whole app; camera and result read the same state. */
@@ -142,6 +142,7 @@ function useScannerController(
   const focusedRef = useRef(false);
   const reticleCropRef = useRef<OcrCrop | null>(null);
   const rescanToken = useRef(0);
+  const translatedScanHash = useRef<string | null>(null);
 
   useEffect(() => {
     void captureMode.hydrate();
@@ -213,6 +214,8 @@ function useScannerController(
             width: 0.6,
             height: 0.6,
           };
+        rescanToken.current += 1;
+        translatedScanHash.current = null;
         const cameraToken = await waitForCamera();
         if (cameraToken === null) {
           throw { code: 'ERR_CAMERA_CANCELLED', message: 'Camera did not start.' };
@@ -273,6 +276,9 @@ function useScannerController(
             result: { ...base, sourceLanguage, kind, translatedText, cached },
             timestampMs: Date.now(),
           });
+          if (kind === 'translated') {
+            translatedScanHash.current = base.sourceHash;
+          }
           if (kind !== 'pack_missing') {
             void addScanHistory({
               sourceLanguage,
@@ -434,6 +440,8 @@ function useScannerController(
 
       let savedFiles: string[] | null = null;
       try {
+        rescanToken.current += 1;
+        translatedScanHash.current = null;
         const cameraToken = await waitForCamera();
         if (cameraToken === null) {
           throw { code: 'ERR_CAMERA_CANCELLED', message: 'Camera did not start.' };
@@ -766,15 +774,26 @@ function useScannerController(
   );
 
   const rescan = useCallback(
-    async (language: string) => {
+    async (language: string): Promise<boolean> => {
       const before = store.getSnapshot();
       if (before.state !== 'LOCKED_READ' || !before.result) {
-        return;
+        return false;
       }
       const scanHash = before.result.sourceHash;
-      const wasPackMissing = before.result.kind === 'pack_missing';
       const token = ++rescanToken.current;
       try {
+        if (language !== 'auto' && !isEnglishLanguageCode(language)) {
+          const pack = await installPack(language, 'en');
+          const current = store.getSnapshot();
+          if (
+            token !== rescanToken.current ||
+            current.state !== 'LOCKED_READ' ||
+            current.result?.sourceHash !== scanHash ||
+            pack !== 'installed'
+          ) {
+            return false;
+          }
+        }
         const hint = language === 'auto' ? '' : language;
         const ocr = await vision.recognizeLast(hint);
         // The result may have been replaced by another scan while OCR ran.
@@ -784,7 +803,7 @@ function useScannerController(
           current.state !== 'LOCKED_READ' ||
           current.result?.sourceHash !== scanHash
         ) {
-          return;
+          return false;
         }
         const resolvedLanguage =
           ocr.sourceLanguage || (language === 'auto' ? 'und' : language);
@@ -818,7 +837,7 @@ function useScannerController(
           } else {
             // Unsupported pairs and generic failures keep the prior result;
             // they are not an English detection.
-            return;
+            return false;
           }
         }
         const settled = store.getSnapshot();
@@ -827,15 +846,19 @@ function useScannerController(
           settled.state !== 'LOCKED_READ' ||
           settled.result?.sourceHash !== scanHash
         ) {
-          return;
+          return false;
         }
+        const firstTranslation =
+          kind === 'translated' &&
+          translatedScanHash.current !== scanHash;
         store.send({
           type: 'RESULT_REPLACED',
           result: { ...base, kind, translatedText, cached },
-          count: wasPackMissing && kind === 'translated',
+          count: firstTranslation,
           timestampMs: Date.now(),
         });
-        if (wasPackMissing && kind === 'translated') {
+        if (firstTranslation) {
+          translatedScanHash.current = scanHash;
           void addScanHistory({
             sourceLanguage: resolvedLanguage,
             sourceText: ocr.text,
@@ -843,8 +866,10 @@ function useScannerController(
             kind: 'translated',
           }).catch(() => {});
         }
+        return true;
       } catch {
         // The frozen frame is gone; keep the current result.
+        return false;
       }
     },
     [store],

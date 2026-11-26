@@ -104,7 +104,7 @@ export function ScanResultScreen({
   const [captureNonce, setCaptureNonce] = useState(0);
   const [ocrError, setOcrError] = useState<string | null>(null);
   const allowance = useScanAllowance();
-  const unlimited = allowance.unlimited;
+  const unlimited = live ? scanner.snapshot.unlimited : allowance.unlimited;
   const pendingHint = useRef<string | null>(null);
   revisionRef.current = record
     ? `${record.id}:${record.ocrRevision}:${record.language}`
@@ -266,17 +266,15 @@ export function ScanResultScreen({
       selected: livePick ?? sourceLanguage.code,
       allowAuto: true,
       onSelect: (code) => {
-        setLivePick(code);
         setTranslating(true);
-        void (async () => {
-          if (code !== 'auto' && !isEnglishLanguageCode(code)) {
-            const outcome = await installPack(code, 'en');
-            if (outcome !== 'installed') {
-              return;
+        void scannerRef.current
+          .rescan(code)
+          .then((applied) => {
+            // Cancelled downloads and superseded requests keep the prior pick.
+            if (applied) {
+              setLivePick(code);
             }
-          }
-          await scannerRef.current.rescan(code);
-        })()
+          })
           .catch(() => {})
           .finally(() => setTranslating(false));
       },
@@ -301,17 +299,17 @@ export function ScanResultScreen({
     setPackBusy(true);
     setPackError(null);
     try {
-      const outcome = await installPack(liveResult.sourceLanguage, 'en');
-      if (outcome !== 'installed') {
-        setPackError('The pack did not finish installing. Try again.');
-        return;
-      }
       const current = scannerRef.current.snapshot.result;
       if (!current || current.sourceHash !== liveResult.sourceHash) {
         return;
       }
       setTranslating(true);
-      await scannerRef.current.rescan(liveResult.sourceLanguage);
+      const applied = await scannerRef.current.rescan(
+        liveResult.sourceLanguage,
+      );
+      if (!applied) {
+        setPackError('The pack did not finish installing. Try again.');
+      }
     } catch {
       setPackError('The pack could not be installed. Try again.');
     } finally {
@@ -380,7 +378,9 @@ export function ScanResultScreen({
     setCaptureNonce((value) => value + 1);
   };
 
-  const remaining = allowance.remaining;
+  const remaining = live
+    ? scanner.snapshot.remainingToday
+    : allowance.remaining;
   const historyResult = useMemo(
     () => (entry ? resultFromEntry(entry) : null),
     [entry],

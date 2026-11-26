@@ -1,9 +1,9 @@
+import { useState } from 'react';
 import {
   ActivityIndicator,
   StyleSheet,
   Text,
   View,
-  useWindowDimensions,
   type LayoutChangeEvent,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -29,7 +29,8 @@ export function AimHud({
 }) {
   const insets = useSafeAreaInsets();
   const footerInset = useAimFooterInset();
-  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
+  const [viewport, setViewport] = useState({ width: 0, height: 0 });
+  const { width: windowWidth, height: windowHeight } = viewport;
 
   const reportReticle = (event: LayoutChangeEvent) => {
     if (!onReticleFrame) {
@@ -56,7 +57,14 @@ export function AimHud({
   };
 
   return (
-    <View style={styles.container} pointerEvents="box-none">
+    <View
+      style={styles.container}
+      pointerEvents="box-none"
+      onLayout={(event) => {
+        const { width, height } = event.nativeEvent.layout;
+        setViewport({ width, height });
+      }}
+    >
       <View
         style={[
           styles.reticleArea,

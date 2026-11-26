@@ -2,30 +2,22 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { ModeTabs, type AppMode } from './ModeTabs';
 import { ChipButton } from './ui';
 import { colors, layout, typography } from '@/theme';
 
 /**
- * Fixed screen header: brand + counter, then the camera/translate mode tabs.
- * Every primary screen renders this at the same absolute position so the
- * header never shifts between camera, result, and capture.
+ * Fixed page header: brand, optional back, and the scan counter. Landing
+ * navigation lives in the tab bar; pushed pages replace the tabs with Back.
  */
 export function ChromeHeader({
-  active,
   remaining,
   unlimited,
   onOpenPaywall,
-  onCamera,
-  onTranslate,
   onBack,
 }: {
-  active: AppMode;
   remaining: number | null;
   unlimited: boolean;
   onOpenPaywall: () => void;
-  onCamera: () => void;
-  onTranslate: () => void;
   onBack?: () => void;
 }) {
   const insets = useSafeAreaInsets();
@@ -60,13 +52,6 @@ export function ChromeHeader({
           <Text style={styles.brand}>NOIRLENS</Text>
         </View>
         {counter ? <ChipButton label={counter} onPress={onOpenPaywall} /> : null}
-      </View>
-      <View pointerEvents="box-none" style={styles.tabs}>
-        <ModeTabs
-          active={active}
-          onCamera={onCamera}
-          onTranslate={onTranslate}
-        />
       </View>
     </View>
   );
@@ -103,8 +88,5 @@ const styles = StyleSheet.create({
     ...typography.label,
     color: colors.foreground,
     letterSpacing: 3,
-  },
-  tabs: {
-    alignItems: 'center',
   },
 });

@@ -1,7 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Haptics from 'expo-haptics';
-import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useEffect, useRef, useState, type ComponentRef } from 'react';
+import { useRouter } from 'expo-router';
+import { useEffect, useRef, useState, type ComponentRef } from 'react';
 import {
   Animated,
   Platform,
@@ -32,7 +32,7 @@ import { useSourceLanguage } from '@/services/sourceLanguage';
 import { captures, useCaptures } from '@/services/captures';
 import type { CaptureRecord } from '@/services/captureModel';
 import { colors, layout, typography } from '@/theme';
-import vision, { EcoCameraView } from '../modules/native-vision-translator';
+import vision, { EcoCameraView } from '../../modules/native-vision-translator';
 
 function CameraPanel({ children }: { children: React.ReactNode }) {
   const { headerHeight, footerHeight } = useShellLayout();
@@ -72,21 +72,6 @@ export default function ScannerScreen() {
   const locked = state === 'LOCKED_READ' && result !== null;
   const exhausted =
     snapshot.remainingToday === 0 && snapshot.captureMode === 'read';
-
-  const routeParams = useLocalSearchParams<{ history?: string }>();
-  const historyParam = useRef(routeParams.history);
-  historyParam.current = routeParams.history;
-  useFocusEffect(
-    useCallback(() => {
-      const value = historyParam.current;
-      const tab =
-        value === 'captures' || value === 'translations' ? value : null;
-      if (tab) {
-        openSheet({ kind: 'history', initialTab: tab });
-        router.setParams({ history: '' });
-      }
-    }, [openSheet, router]),
-  );
 
   useEffect(() => {
     if (!flight) {
@@ -213,12 +198,10 @@ export default function ScannerScreen() {
       onResponderTerminationRequest={() => false}
     >
       <ScreenShell
-        mode="camera"
         remaining={snapshot.remainingToday}
         unlimited={snapshot.unlimited}
         onPaywall={openPaywall}
-        onCamera={() => {}}
-        onTranslate={() => router.push('/translate')}
+        bottomInset={false}
         backdrop={
           <EcoCameraView style={StyleSheet.absoluteFill} ecoMode={ecoMode} />
         }
@@ -393,12 +376,14 @@ export default function ScannerScreen() {
                       }
                       onPress={() => {
                         scanner.stop();
-                        openSheet({
-                          kind: 'history',
-                          initialTab:
-                            snapshot.captureMode === 'collect'
-                              ? 'captures'
-                              : 'translations',
+                        router.push({
+                          pathname: '/history',
+                          params: {
+                            tab:
+                              snapshot.captureMode === 'collect'
+                                ? 'captures'
+                                : 'translations',
+                          },
                         });
                       }}
                       style={({ pressed }) => [

@@ -46,8 +46,11 @@ export default function RootLayout() {
           animation: 'fade',
         }}
       >
-        <Stack.Screen name="index" />
-        <Stack.Screen name="translate" />
+        <Stack.Screen name="(tabs)" />
+        <Stack.Screen
+          name="history"
+          options={{ animation: 'slide_from_right' }}
+        />
         <Stack.Screen
           name="paywall"
           options={{

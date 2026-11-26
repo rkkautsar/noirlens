@@ -14,7 +14,6 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ShowToLocal } from '@/components/ShowToLocal';
 import { ScreenShell } from '@/components/ScreenShell';
@@ -32,7 +31,7 @@ import { installPack, translateText } from '@/services/translationTask';
 import { useSourceLanguage } from '@/services/sourceLanguage';
 import { useScanAllowance } from '@/services/allowance';
 import { colors, layout, radius, typography } from '@/theme';
-import vision from '../modules/native-vision-translator';
+import vision from '../../modules/native-vision-translator';
 
 function tap() {
   if (Platform.OS !== 'web') {
@@ -42,7 +41,6 @@ function tap() {
 
 export default function TranslateScreen() {
   const router = useRouter();
-  const insets = useSafeAreaInsets();
   const preferred = useSourceLanguage();
   const allowance = useScanAllowance();
   const { openSheet } = useSheet();
@@ -209,12 +207,10 @@ export default function TranslateScreen() {
   return (
     <View style={styles.root}>
       <ScreenShell
-        mode="translate"
         remaining={allowance.remaining}
         unlimited={allowance.unlimited}
         onPaywall={() => router.push('/paywall')}
-        onCamera={() => router.dismissTo('/')}
-        onTranslate={() => {}}
+        bottomInset={false}
       >
       <View style={styles.languageBar}>
           <View style={styles.languageRow}>
@@ -348,7 +344,7 @@ export default function TranslateScreen() {
           style={[
             styles.composer,
             {
-              paddingBottom: keyboardHeight > 0 ? 8 : insets.bottom + 8,
+              paddingBottom: 8,
               marginBottom: keyboardHeight,
             },
           ]}

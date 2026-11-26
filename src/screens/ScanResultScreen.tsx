@@ -200,11 +200,7 @@ export function ScanResultScreen({
   };
 
   const newScan = () => {
-    if (router.canGoBack()) {
-      router.dismissTo({ pathname: '/', params: { history: '' } });
-    } else {
-      router.replace('/');
-    }
+    router.dismissTo('/');
   };
 
   const applyOcrLanguage = (next: string) => {
@@ -340,12 +336,9 @@ export function ScanResultScreen({
   return (
     <View style={styles.page}>
       <ScreenShell
-        mode="camera"
         remaining={remaining}
         unlimited={unlimited}
         onPaywall={() => router.push('/paywall')}
-        onCamera={newScan}
-        onTranslate={() => router.push('/translate')}
         onBack={close}
         actions={
           inspect ? (
@@ -367,9 +360,8 @@ export function ScanResultScreen({
           ) : result ? (
             <ResultActions
               result={result}
-              primary="close"
+              primary="new"
               onScanAgain={newScan}
-              onBack={close}
               onShowOriginal={
                 captureId && record ? () => setInspect(true) : undefined
               }

@@ -6,18 +6,13 @@ import {
   useContext,
   useEffect,
   useMemo,
-  useRef,
   useState,
   type ReactNode,
 } from 'react';
 
-import { usePathname, useRouter, type Href } from 'expo-router';
-import type { HistoryTab } from './HistorySheet';
+import { usePathname } from 'expo-router';
 import { AppSheet } from './AppSheet';
 
-const HistorySheet = lazy(() =>
-  import('./HistorySheet').then((module) => ({ default: module.HistorySheet })),
-);
 const LanguagePickerSheet = lazy(() =>
   import('./LanguagePickerSheet').then((module) => ({
     default: module.LanguagePickerSheet,
@@ -42,13 +37,10 @@ export type SheetRequest =
       allowAuto?: boolean;
       onSelect: (code: string) => void;
     }
-  | { kind: 'history'; initialTab?: HistoryTab };
 
 type SheetContextValue = {
   openSheet: (request: SheetRequest) => void;
   closeSheet: () => void;
-  /** Close the sheet, then push once the platform reports dismissal. */
-  navigateAfterClose: (href: Href) => void;
   sheetOpen: boolean;
 };
 
@@ -64,60 +56,19 @@ export function useSheet(): SheetContextValue {
 
 /** One presentation owner for every app sheet, mounted above the navigator. */
 export function SheetHost({ children }: { children: ReactNode }) {
-  const router = useRouter();
   const pathname = usePathname();
   const [sheet, setSheet] = useState<{
     request: SheetRequest;
     origin: string;
   } | null>(null);
-  const [pendingHref, setPendingHref] = useState<Href | null>(null);
-  const pendingRef = useRef<Href | null>(null);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const lastPath = useRef(pathname);
-
-  const takePending = useCallback(() => {
-    const href = pendingRef.current;
-    pendingRef.current = null;
-    setPendingHref(null);
-    if (timerRef.current) {
-      clearTimeout(timerRef.current);
-      timerRef.current = null;
-    }
-    return href;
-  }, []);
-
-  const finishPending = useCallback(() => {
-    const href = takePending();
-    if (href) {
-      router.push(href);
-    }
-  }, [router, takePending]);
 
   useEffect(() => {
-    if (lastPath.current === pathname) {
-      return;
-    }
-    lastPath.current = pathname;
-    // Only a sheet from another screen is stale; a sheet the newly focused
-    // screen opened is not.
+    // Close a sheet left open by a screen we navigated away from; a sheet the
+    // newly focused screen opened is not stale.
     setSheet((current) =>
       current && current.origin !== pathname ? null : current,
     );
-    takePending();
-  }, [pathname, takePending]);
-
-  useEffect(() => {
-    if (!pendingHref) {
-      return;
-    }
-    timerRef.current = setTimeout(finishPending, 250);
-    return () => {
-      if (timerRef.current) {
-        clearTimeout(timerRef.current);
-        timerRef.current = null;
-      }
-    };
-  }, [pendingHref, finishPending]);
+  }, [pathname]);
 
   const [everOpened, setEverOpened] = useState(false);
   useEffect(() => {
@@ -130,23 +81,14 @@ export function SheetHost({ children }: { children: ReactNode }) {
     (request: SheetRequest) => setSheet({ request, origin: pathname }),
     [pathname],
   );
-  const navigateAfterClose = useCallback((href: Href) => {
-    pendingRef.current = href;
-    setPendingHref(href);
-    setSheet(null);
-  }, []);
-  const handleDismiss = useCallback(() => {
-    setSheet(null);
-    finishPending();
-  }, [finishPending]);
+  const handleDismiss = closeSheet;
   const value = useMemo(
     () => ({
       openSheet,
       closeSheet,
-      navigateAfterClose,
       sheetOpen: sheet !== null,
     }),
-    [openSheet, closeSheet, navigateAfterClose, sheet],
+    [openSheet, closeSheet, sheet],
   );
 
   const languageRequest =
@@ -159,7 +101,6 @@ export function SheetHost({ children }: { children: ReactNode }) {
         <AppSheet
           visible={sheet !== null}
           onClose={handleDismiss}
-          expanded={sheet?.request.kind === 'history'}
         >
           <Suspense fallback={null}>
             {sheet?.request.kind === 'lookup' ? (
@@ -179,11 +120,6 @@ export function SheetHost({ children }: { children: ReactNode }) {
               closeSheet();
               languageRequest.onSelect(code);
             }}
-          />
-        ) : sheet?.request.kind === 'history' ? (
-          <HistorySheet
-            initialTab={sheet.request.initialTab}
-            onClose={closeSheet}
           />
             ) : null}
           </Suspense>

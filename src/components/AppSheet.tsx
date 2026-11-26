@@ -12,18 +12,13 @@ import { colors } from '@/theme';
 export function AppSheet({
   visible,
   onClose,
-  expanded = false,
   children,
 }: {
   visible: boolean;
   onClose: () => void;
-  /** Open the first detent higher (history lists). */
-  expanded?: boolean;
   children?: React.ReactNode;
 }) {
-  const snapPoints: SnapPoint[] = expanded
-    ? [{ fraction: 0.72 }, 'full']
-    : ['half', 'full'];
+  const snapPoints: SnapPoint[] = ['half', 'full'];
   return (
     <BottomSheet
       isPresented={visible}

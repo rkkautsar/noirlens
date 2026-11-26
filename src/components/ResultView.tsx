@@ -372,8 +372,8 @@ export function ResultActions({
   onShowOriginal?: () => void;
   thumbnail?: string;
   onOpenLanguages: () => void;
-  /** Saved results lead with Back; live results lead with Scan again. */
-  primary?: 'scan' | 'close';
+  /** Live results scan again in place; pushed results start a new scan. */
+  primary?: 'scan' | 'close' | 'new';
 }) {
   const [copied, setCopied] = useState(false);
   const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -409,9 +409,11 @@ export function ResultActions({
   const primaryLabel =
     primary === 'close'
       ? 'BACK'
-      : translated
-        ? 'SCAN AGAIN'
-        : 'CHOOSE LANGUAGE';
+      : primary === 'new'
+        ? 'NEW SCAN'
+        : translated
+          ? 'SCAN AGAIN'
+          : 'CHOOSE LANGUAGE';
   const primaryIcon =
     primary === 'close'
       ? 'chevron-back'
@@ -421,9 +423,11 @@ export function ResultActions({
   const primaryAction =
     primary === 'close'
       ? onBack ?? onScanAgain
-      : translated
+      : primary === 'new'
         ? onScanAgain
-        : onOpenLanguages;
+        : translated
+          ? onScanAgain
+          : onOpenLanguages;
 
   return (
     <View style={styles.actions}>

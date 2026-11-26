@@ -8,7 +8,6 @@ import { StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ChromeHeader } from './ChromeHeader';
-import type { AppMode } from './ModeTabs';
 import { colors, layout } from '@/theme';
 
 const ShellLayoutContext = createContext<{
@@ -28,26 +27,23 @@ export function useShellLayout() {
  * owns all safe-area placement and the relationship between content and dock.
  */
 export function ScreenShell({
-  mode,
   remaining,
   unlimited,
   onPaywall,
-  onCamera,
-  onTranslate,
   onBack,
+  bottomInset = true,
   backdrop,
   actions,
   dock,
   overlay,
   children,
 }: {
-  mode: AppMode;
   remaining: number | null;
   unlimited: boolean;
   onPaywall: () => void;
-  onCamera: () => void;
-  onTranslate: () => void;
   onBack?: () => void;
+  /** Landing tabs own the home-indicator inset; pushed pages own it here. */
+  bottomInset?: boolean;
   /** Full-bleed content behind the chrome (camera preview). */
   backdrop?: ReactNode;
   /** Action row above the dock. */
@@ -68,12 +64,9 @@ export function ScreenShell({
       }}
     >
       <ChromeHeader
-        active={mode}
         remaining={remaining}
         unlimited={unlimited}
         onOpenPaywall={onPaywall}
-        onCamera={onCamera}
-        onTranslate={onTranslate}
         onBack={onBack}
       />
     </View>
@@ -82,7 +75,10 @@ export function ScreenShell({
   const footer =
     actions || dock ? (
       <View
-        style={[styles.footer, { paddingBottom: insets.bottom }]}
+        style={[
+          styles.footer,
+          { paddingBottom: bottomInset ? insets.bottom : 0 },
+        ]}
         onLayout={(event) => {
           setFooterHeight(event.nativeEvent.layout.height);
         }}

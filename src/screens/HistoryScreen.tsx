@@ -1,7 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Clipboard from 'expo-clipboard';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Alert,
   FlatList,
@@ -139,6 +139,21 @@ export function HistoryScreen() {
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<HistoryTab>(initialTab);
   const captureState = useCaptures();
+  const navigating = useRef(false);
+
+  useFocusEffect(
+    useCallback(() => {
+      navigating.current = false;
+    }, []),
+  );
+
+  const openResult = (params: { id?: string; capture?: string }) => {
+    if (navigating.current) {
+      return;
+    }
+    navigating.current = true;
+    router.push({ pathname: '/result', params });
+  };
 
   const back = () => {
     if (router.canGoBack()) {
@@ -322,12 +337,7 @@ export function HistoryScreen() {
                       entry.translatedText || entry.sourceText
                     }`}
                     accessibilityHint="Opens the result to look up again"
-                    onPress={() =>
-                      router.push({
-                        pathname: '/result',
-                        params: { id: entry.id },
-                      })
-                    }
+                    onPress={() => openResult({ id: entry.id })}
                     style={({ pressed }) => [
                       styles.entry,
                       pressed && styles.pressed,
@@ -435,12 +445,7 @@ export function HistoryScreen() {
               <CaptureRow
                 record={record}
                 uri={captures.uriFor(record.thumb)}
-                onOpen={() =>
-                  router.push({
-                    pathname: '/result',
-                    params: { capture: record.id },
-                  })
-                }
+                onOpen={() => openResult({ capture: record.id })}
                 onDelete={() => deleteCapture(record)}
               />
             )}

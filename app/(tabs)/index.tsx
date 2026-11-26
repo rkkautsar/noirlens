@@ -201,6 +201,7 @@ export default function ScannerScreen() {
         remaining={snapshot.remainingToday}
         unlimited={snapshot.unlimited}
         onPaywall={openPaywall}
+        onBack={locked ? scanner.scanAgain : undefined}
         bottomInset={false}
         backdrop={
           <EcoCameraView style={StyleSheet.absoluteFill} ecoMode={ecoMode} />

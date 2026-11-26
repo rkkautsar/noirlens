@@ -417,7 +417,7 @@ export function ResultActions({
   const primaryIcon =
     primary === 'close'
       ? 'chevron-back'
-      : translated
+      : primary === 'new' || translated
         ? 'refresh'
         : 'language-outline';
   const primaryAction =

@@ -11,7 +11,6 @@ import {
 import { ScreenShell } from '@/components/ScreenShell';
 import { useSheet } from '@/components/SheetHost';
 import { ResultActions, ResultBody } from '@/components/ResultView';
-import { ScanShutter } from '@/components/ScanShutter';
 import { InspectActions, InspectBody, useInspect } from '@/components/InspectView';import { ChipButton, MicroLabel, SolidButton } from '@/components/ui';
 import {
   isEnglishLanguageCode,
@@ -371,17 +370,6 @@ export function ScanResultScreen({
                       onOpenLanguages={openResultLanguages}
             />
           ) : undefined
-        }
-        dock={
-          <ScanShutter
-            next
-            active={false}
-            scanning={false}
-            onStart={newScan}
-            onCapture={() => {}}
-            onCancel={close}
-            onLanguages={openResultLanguages}
-          />
         }
       >
         {inspect ? (

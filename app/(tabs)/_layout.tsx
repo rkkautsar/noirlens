@@ -18,8 +18,8 @@ export default function LandingTabs() {
           borderTopColor: colors.borderSoft,
         },
         tabBarActiveTintColor: colors.accent,
-        tabBarInactiveTintColor: colors.dim,
-        tabBarLabelStyle: typography.micro,
+        tabBarInactiveTintColor: colors.muted,
+        tabBarLabelStyle: { ...typography.micro, fontSize: 11 },
         tabBarHideOnKeyboard: true,
       }}
     >
@@ -29,7 +29,7 @@ export default function LandingTabs() {
           title: 'CAMERA',
           tabBarIcon: ({ focused, size }) => (
             <Ionicons
-              name="scan-outline"
+              name={focused ? 'scan' : 'scan-outline'}
               size={size}
               color={focused ? colors.accent : colors.dim}
             />
@@ -42,7 +42,7 @@ export default function LandingTabs() {
           title: 'TRANSLATE',
           tabBarIcon: ({ focused, size }) => (
             <Ionicons
-              name="language-outline"
+              name={focused ? 'language' : 'language-outline'}
               size={size}
               color={focused ? colors.accent : colors.dim}
             />

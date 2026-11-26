@@ -1,8 +1,8 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Clipboard from 'expo-clipboard';
 import * as Haptics from 'expo-haptics';
-import { useRouter } from 'expo-router';
-import { useEffect, useReducer, useRef, useState } from 'react';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import {
   Dimensions,
   Keyboard,
@@ -58,19 +58,28 @@ export default function TranslateScreen() {
   const [copied, setCopied] = useState(false);
   const [speaking, setSpeaking] = useState(false);
   const [showing, setShowing] = useState(false);
-  // Leaving the screen must not keep speaking.
-  useEffect(
-    () => () => {
-      void vision.stopSpeaking().catch(() => {});
-    },
-    [],
+  // Switching tabs must not keep speaking where Stop is unavailable.
+  useFocusEffect(
+    useCallback(
+      () => () => {
+        void vision.stopSpeaking().catch(() => {});
+        setSpeaking(false);
+      },
+      [],
+    ),
   );
+
+  const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (Platform.OS !== 'ios') {
       return undefined;
     }
     const update = (event: { endCoordinates: { screenY: number } }) => {
+      if (hideTimer.current) {
+        clearTimeout(hideTimer.current);
+        hideTimer.current = null;
+      }
       const screenY = event.endCoordinates.screenY;
       // With iOS Prefer Cross-Fade Transitions the payload can report a
       // zero-origin frame; do not treat it as full-window occlusion.
@@ -81,10 +90,20 @@ export default function TranslateScreen() {
       setKeyboardHeight(Math.max(0, windowHeight - screenY));
     };
     const show = Keyboard.addListener('keyboardWillChangeFrame', update);
-    const hide = Keyboard.addListener('keyboardWillHide', () =>
-      setKeyboardHeight(0),
-    );
+    const hide = Keyboard.addListener('keyboardWillHide', () => {
+      // Hold the offset while the tab bar animates back into layout.
+      if (hideTimer.current) {
+        clearTimeout(hideTimer.current);
+      }
+      hideTimer.current = setTimeout(() => {
+        hideTimer.current = null;
+        setKeyboardHeight(0);
+      }, 260);
+    });
     return () => {
+      if (hideTimer.current) {
+        clearTimeout(hideTimer.current);
+      }
       show.remove();
       hide.remove();
     };

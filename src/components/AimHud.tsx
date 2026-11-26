@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   StyleSheet,
@@ -30,15 +30,16 @@ export function AimHud({
   const insets = useSafeAreaInsets();
   const footerInset = useAimFooterInset();
   const [viewport, setViewport] = useState({ width: 0, height: 0 });
-  const { width: windowWidth, height: windowHeight } = viewport;
+  const [reticle, setReticle] = useState<LayoutChangeEvent['nativeEvent']['layout'] | null>(null);
 
-  const reportReticle = (event: LayoutChangeEvent) => {
-    if (!onReticleFrame) {
+  useEffect(() => {
+    if (!onReticleFrame || !reticle) {
       return;
     }
-    const { x, y, width, height } = event.nativeEvent.layout;
+    const { width: viewportWidth, height: viewportHeight } = viewport;
+    const { x, y, width, height } = reticle;
     const size = Math.min(RETICLE_SIZE, width, height);
-    if (size <= 0 || windowWidth <= 0 || windowHeight <= 0) {
+    if (size <= 0 || viewportWidth <= 0 || viewportHeight <= 0) {
       return;
     }
     // OCR sees a margin of context around the framed box, so the capture
@@ -46,15 +47,15 @@ export function AimHud({
     const pad = size * 0.16;
     const left = Math.max(0, x + (width - size) / 2 - pad);
     const top = Math.max(0, y + (height - size) / 2 - pad);
-    const cropWidth = Math.min(windowWidth - left, size + pad * 2);
-    const cropHeight = Math.min(windowHeight - top, size + pad * 2);
+    const cropWidth = Math.min(viewportWidth - left, size + pad * 2);
+    const cropHeight = Math.min(viewportHeight - top, size + pad * 2);
     onReticleFrame({
-      x: left / windowWidth,
-      y: top / windowHeight,
-      width: cropWidth / windowWidth,
-      height: cropHeight / windowHeight,
+      x: left / viewportWidth,
+      y: top / viewportHeight,
+      width: cropWidth / viewportWidth,
+      height: cropHeight / viewportHeight,
     });
-  };
+  }, [onReticleFrame, reticle, viewport]);
 
   return (
     <View
@@ -71,7 +72,7 @@ export function AimHud({
           { top: insets.top + 64, bottom: insets.bottom + 116 },
         ]}
         pointerEvents="none"
-        onLayout={reportReticle}
+        onLayout={(event) => setReticle(event.nativeEvent.layout)}
       >
         <View style={styles.reticle}>
           <View style={[styles.corner, styles.topLeft]} />

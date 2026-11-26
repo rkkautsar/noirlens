@@ -770,9 +770,16 @@ export function reduceScanner(
 
     case 'SCAN_AGAIN': {
       if (context.captureMode === 'read' && !canScan(context, tuning)) {
+        // Still leave the frozen result: gate the next capture, not the exit.
+        const slept = enterSleep(
+          context,
+          effects,
+          { clearResult: true },
+          event.timestampMs,
+        );
         return {
           context: {
-            ...showPaywallIfDue(context, event.timestampMs, tuning, effects),
+            ...showPaywallIfDue(slept, event.timestampMs, tuning, effects),
             nowMs: event.timestampMs,
           },
           effects,

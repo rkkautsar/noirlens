@@ -584,13 +584,13 @@ describe('LOCKED_READ hysteresis', () => {
     expect(hasEffect(result.effects, 'STOP_CAMERA')).toBe(true);
   });
 
-  it('keeps the result visible and opens the paywall when out of scans', () => {
+  it('leaves the frozen result and opens the paywall when out of scans', () => {
     const result = run(
       { ...locked(), scansUsedToday: 15 },
       [{ type: 'SCAN_AGAIN', timestampMs: 3000 }],
     );
-    expect(result.context.state).toBe('LOCKED_READ');
-    expect(result.context.result).not.toBeNull();
+    expect(result.context.state).toBe('SLEEP');
+    expect(result.context.result).toBeNull();
     expect(hasEffect(result.effects, 'SHOW_PAYWALL')).toBe(true);
     expect(hasEffect(result.effects, 'START_CAMERA')).toBe(false);
   });

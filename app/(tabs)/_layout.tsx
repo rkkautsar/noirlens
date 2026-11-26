@@ -20,7 +20,6 @@ export default function LandingTabs() {
         tabBarActiveTintColor: colors.accent,
         tabBarInactiveTintColor: colors.muted,
         tabBarLabelStyle: { ...typography.micro, fontSize: 11 },
-        tabBarHideOnKeyboard: true,
       }}
     >
       <Tabs.Screen

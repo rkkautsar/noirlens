@@ -2,6 +2,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Clipboard from 'expo-clipboard';
 import * as Haptics from 'expo-haptics';
 import { useFocusEffect, useRouter } from 'expo-router';
+import { useBottomTabBarHeight } from 'expo-router/js-tabs';
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import {
   Dimensions,
@@ -41,6 +42,7 @@ function tap() {
 
 export default function TranslateScreen() {
   const router = useRouter();
+  const tabBarHeight = useBottomTabBarHeight();
   const preferred = useSourceLanguage();
   const allowance = useScanAllowance();
   const { openSheet } = useSheet();
@@ -349,7 +351,9 @@ export default function TranslateScreen() {
             styles.composer,
             {
               paddingBottom: 8,
-              marginBottom: keyboardHeight,
+              // The scene ends above the reserved tab bar, so only the
+              // keyboard height beyond it needs to be compensated.
+              marginBottom: Math.max(0, keyboardHeight - tabBarHeight),
             },
           ]}
         >

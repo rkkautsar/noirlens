@@ -69,41 +69,26 @@ export default function TranslateScreen() {
     ),
   );
 
-  const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
   useEffect(() => {
     if (Platform.OS !== 'ios') {
       return undefined;
     }
     const update = (event: { endCoordinates: { screenY: number } }) => {
-      if (hideTimer.current) {
-        clearTimeout(hideTimer.current);
-        hideTimer.current = null;
-      }
       const screenY = event.endCoordinates.screenY;
-      // With iOS Prefer Cross-Fade Transitions the payload can report a
-      // zero-origin frame; do not treat it as full-window occlusion.
-      if (!Number.isFinite(screenY) || screenY <= 0) {
+      const windowHeight = Dimensions.get('window').height;
+      // Ignore zero-origin (cross-fade) frames and frames that have moved
+      // fully offscreen; only keyboardDidHide ends the offset, after the tab
+      // bar has returned to layout.
+      if (!Number.isFinite(screenY) || screenY <= 0 || screenY >= windowHeight) {
         return;
       }
-      const windowHeight = Dimensions.get('window').height;
       setKeyboardHeight(Math.max(0, windowHeight - screenY));
     };
     const show = Keyboard.addListener('keyboardWillChangeFrame', update);
-    const hide = Keyboard.addListener('keyboardWillHide', () => {
-      // Hold the offset while the tab bar animates back into layout.
-      if (hideTimer.current) {
-        clearTimeout(hideTimer.current);
-      }
-      hideTimer.current = setTimeout(() => {
-        hideTimer.current = null;
-        setKeyboardHeight(0);
-      }, 260);
-    });
+    const hide = Keyboard.addListener('keyboardDidHide', () =>
+      setKeyboardHeight(0),
+    );
     return () => {
-      if (hideTimer.current) {
-        clearTimeout(hideTimer.current);
-      }
       show.remove();
       hide.remove();
     };

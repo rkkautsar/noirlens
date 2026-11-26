@@ -369,7 +369,16 @@ export function ScanResultScreen({
               }
                       onOpenLanguages={openResultLanguages}
             />
-          ) : undefined
+          ) : (
+            <View style={styles.actions}>
+              <SolidButton
+                label="NEW SCAN"
+                icon="refresh"
+                primary
+                onPress={newScan}
+              />
+            </View>
+          )
         }
       >
         {inspect ? (
@@ -547,6 +556,10 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 20,
     textAlign: 'center',
+  },
+  actions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
   },
   busy: {
     position: 'absolute',

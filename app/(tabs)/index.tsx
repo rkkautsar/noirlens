@@ -1,7 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Haptics from 'expo-haptics';
-import { useRouter } from 'expo-router';
-import { useEffect, useRef, useState, type ComponentRef } from 'react';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { useCallback, useEffect, useRef, useState, type ComponentRef } from 'react';
 import {
   Animated,
   Platform,
@@ -24,6 +24,7 @@ import { Standby } from '@/components/Standby';
 
 import { languageShortLabel } from '@/constants/languages';
 import { useScanner } from '@/scanner/useScanner';
+import type { ScanResult } from '@/scanner/machine';
 import {
   readEcoPreviewPreference,
   writeEcoPreviewPreference,
@@ -56,6 +57,11 @@ export default function ScannerScreen() {
       setFlightTarget(null);
     },
   });
+  const scannerRef = useRef(scanner);
+  scannerRef.current = scanner;
+  const [liveOpen, setLiveOpen] = useState(false);
+  const pushedResult = useRef<ScanResult | null>(null);
+  const cameraFocused = useRef(false);
   const insets = useSafeAreaInsets();
   const source = useSourceLanguage();
   const [ecoMode, setEcoMode] = useState(true);
@@ -70,8 +76,35 @@ export default function ScannerScreen() {
   const inspectState = useInspect(result, undefined, result?.sourceHash);
   const active = state === 'PREWARM' || state === 'SCANNING';
   const locked = state === 'LOCKED_READ' && result !== null;
+  // While the pushed result page covers the camera, keep the landing surface
+  // in standby instead of rendering a duplicate in place.
+  const reading = locked && !liveOpen;
   const exhausted =
     snapshot.remainingToday === 0 && snapshot.captureMode === 'read';
+
+  useFocusEffect(
+    useCallback(() => {
+      cameraFocused.current = true;
+      scannerRef.current.setActive(true);
+      setLiveOpen(false);
+      return () => {
+        cameraFocused.current = false;
+        scannerRef.current.setActive(false);
+      };
+    }, []),
+  );
+
+  useEffect(() => {
+    if (!cameraFocused.current || !locked || !result) {
+      return;
+    }
+    if (pushedResult.current === result) {
+      return;
+    }
+    pushedResult.current = result;
+    setLiveOpen(true);
+    router.push('/result?live=1');
+  }, [locked, result, router]);
 
   useEffect(() => {
     if (!flight) {
@@ -201,7 +234,7 @@ export default function ScannerScreen() {
         remaining={snapshot.remainingToday}
         unlimited={snapshot.unlimited}
         onPaywall={openPaywall}
-        onBack={locked ? scanner.stop : undefined}
+        onBack={reading ? scanner.stop : undefined}
         bottomInset={false}
         backdrop={
           <EcoCameraView style={StyleSheet.absoluteFill} ecoMode={ecoMode} />
@@ -218,7 +251,7 @@ export default function ScannerScreen() {
               onOpenLanguages={openLanguages}
               onLookUp={openLookup}
             />
-          ) : locked ? (
+          ) : reading ? (
             <ResultActions
               result={result}
               onScanAgain={scanner.scanAgain}
@@ -234,9 +267,9 @@ export default function ScannerScreen() {
           ) : undefined
         }
         dock={
-          locked && exhausted ? undefined : (
+          reading && exhausted ? undefined : (
           <>
-            {!locked ? (
+            {!reading ? (
               <View style={styles.cameraUtilities}>
                 <View style={styles.utilityGroup}>
                   <Pressable
@@ -411,12 +444,12 @@ export default function ScannerScreen() {
             ) : null}
             {!exhausted ? (
               <ScanShutter
-                next={locked}
+                next={reading}
                 active={state === 'PREWARM'}
                 scanning={state === 'SCANNING'}
-                onStart={locked ? beginNext : scanner.beginHold}
+                onStart={reading ? beginNext : scanner.beginHold}
                 onCapture={scanner.captureNow}
-                onCancel={locked ? scanner.scanAgain : scanner.stop}
+                onCancel={reading ? scanner.scanAgain : scanner.stop}
                 onLanguages={openLanguages}
                 collect={snapshot.captureMode === 'collect'}
               />
@@ -462,7 +495,7 @@ export default function ScannerScreen() {
           <CameraPanel>
             <InspectBody controller={inspectState} />
           </CameraPanel>
-        ) : locked ? (
+        ) : reading ? (
           <CameraPanel>
             <ScrollView
               style={styles.resultScroll}

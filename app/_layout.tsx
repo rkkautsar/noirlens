@@ -10,6 +10,7 @@ import {
 import { captures } from '@/services/captures';
 import { loadCommonWords } from '@/services/commonWords';
 import { resumeCaptureProcessing } from '@/services/captureProcessing';
+import { ScannerProvider } from '@/scanner/useScanner';
 import { SheetHost } from '@/components/SheetHost';
 import { colors } from '@/theme';
 
@@ -38,6 +39,7 @@ export default function RootLayout() {
   return (
     <SafeAreaProvider initialMetrics={initialWindowMetrics}>
       <StatusBar style="light" hidden />
+      <ScannerProvider>
       <SheetHost>
       <Stack
         screenOptions={{
@@ -68,6 +70,7 @@ export default function RootLayout() {
         />
       </Stack>
       </SheetHost>
+      </ScannerProvider>
     </SafeAreaProvider>
   );
 }

@@ -22,6 +22,7 @@ import { useScanAllowance } from '@/services/allowance';
 import { installPack, translateText } from '@/services/translationTask';
 import type { CaptureRecord } from '@/services/captureModel';
 import { rerunCaptureOcr, retryCapture } from '@/services/captureProcessing';
+import { useScanner } from '@/scanner/useScanner';
 import { DEMO_HISTORY } from '@/services/demoHistory';
 import { readScanHistory, type ScanHistoryEntry } from '@/services/scanHistory';
 import { colors, layout, radius, spacing, typography } from '@/theme';
@@ -69,11 +70,17 @@ function captureBase(record: CaptureRecord): ScanResult {
 export function ScanResultScreen({
   captureId,
   scanId,
+  live = false,
 }: {
   captureId?: string;
   scanId?: string;
+  live?: boolean;
 }) {
   const router = useRouter();
+  const scanner = useScanner();
+  const scannerRef = useRef(scanner);
+  scannerRef.current = scanner;
+  const liveResult = live ? scanner.snapshot.result : null;
   const { records, loaded } = useCaptures();
   const record = captureId
     ? records.find((row) => row.id === captureId) ?? null
@@ -246,13 +253,66 @@ export function ScanResultScreen({
     });
   };
 
+  const openLiveLanguages = () => {
+    if (!liveResult) {
+      return;
+    }
+    openSheet({
+      kind: 'languagePicker',
+      title: 'OCR LANGUAGE',
+      selected: liveResult.sourceLanguage,
+      allowAuto: true,
+      onSelect: (code) => {
+        setTranslating(true);
+        void scannerRef.current
+          .rescan(code)
+          .finally(() => setTranslating(false));
+      },
+    });
+  };
+
   const openResultLanguages = () => {
-    if (captureId && record) {
+    if (live) {
+      openLiveLanguages();
+    } else if (captureId && record) {
       openOcrPicker();
     } else {
       openSheet({ kind: 'languages' });
     }
   };
+
+  const prepareLivePack = async () => {
+    if (!liveResult || packBusyRef.current) {
+      return;
+    }
+    packBusyRef.current = true;
+    setPackBusy(true);
+    setPackError(null);
+    try {
+      const outcome = await installPack(liveResult.sourceLanguage, 'en');
+      if (outcome !== 'installed') {
+        setPackError('The pack did not finish installing. Try again.');
+        return;
+      }
+      setTranslating(true);
+      await scannerRef.current.rescan(liveResult.sourceLanguage);
+    } catch {
+      setPackError('The pack could not be installed. Try again.');
+    } finally {
+      setTranslating(false);
+      packBusyRef.current = false;
+      setPackBusy(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!live) {
+      return;
+    }
+    return () => {
+      scannerRef.current.stop();
+    };
+  }, [live]);
 
   const preparePack = async () => {
     if (!record || packBusyRef.current) {
@@ -309,13 +369,26 @@ export function ScanResultScreen({
     () => (entry ? resultFromEntry(entry) : null),
     [entry],
   );
-  const result = captureId ? captureResult : historyResult;
+  const result = live ? liveResult : captureId ? captureResult : historyResult;
+  const previewUri =
+    live
+      ? result?.previewUri ??
+        (result?.previewJpegBase64
+          ? `data:image/jpeg;base64,${result.previewJpegBase64}`
+          : undefined)
+      : captureId && record
+        ? captures.uriFor(record.thumb)
+        : undefined;
   const inspectSource =
     result ?? (record && record.status === 'done' ? captureBase(record) : null);
   const inspectState = useInspect(
     inspectSource,
-    captureId && record ? captures.uriFor(record.thumb) : undefined,
-    record ? `${record.id}:${record.ocrRevision}` : result?.sourceHash,
+    previewUri,
+    live
+      ? `${result?.sourceHash ?? ''}:${result?.sourceLanguage ?? ''}`
+      : record
+        ? `${record.id}:${record.ocrRevision}`
+        : result?.sourceHash,
   );
   const captureText = record?.text.trim() ?? '';
   const pending = record
@@ -330,7 +403,7 @@ export function ScanResultScreen({
           !captureResult &&
           !captureError) ||
         translating),
-  );
+  ) || Boolean(live && translating);
 
   return (
     <View style={styles.page}>
@@ -348,7 +421,7 @@ export function ScanResultScreen({
                 setInspect(false);
               }}
               onScanAgain={newScan}
-              onOpenLanguages={openOcrPicker}
+              onOpenLanguages={live ? openLiveLanguages : openOcrPicker}
               onLookUp={(phrase, alt) => {
                 const q = phrase.trim();
                 if (q) {
@@ -362,12 +435,12 @@ export function ScanResultScreen({
               primary="new"
               onScanAgain={newScan}
               onShowOriginal={
-                captureId && record ? () => setInspect(true) : undefined
+                live || (captureId && record)
+                  ? () => setInspect(true)
+                  : undefined
               }
-              thumbnail={
-                captureId && record ? captures.uriFor(record.thumb) : undefined
-              }
-                      onOpenLanguages={openResultLanguages}
+              thumbnail={previewUri}
+              onOpenLanguages={openResultLanguages}
             />
           ) : (
             <View style={styles.actions}>
@@ -392,7 +465,9 @@ export function ScanResultScreen({
               result={result}
               remaining={remaining}
               unlimited={unlimited}
-              onPreparePack={captureId ? preparePack : undefined}
+              onPreparePack={
+                live ? prepareLivePack : captureId ? preparePack : undefined
+              }
               packBusy={packBusy}
               packError={packError}
               onLookUp={(phrase, alt) => {

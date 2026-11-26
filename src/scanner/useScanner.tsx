@@ -1,11 +1,16 @@
 import * as Haptics from 'expo-haptics';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useRouter } from 'expo-router';
 import {
+  createContext,
   useCallback,
+  useContext,
   useEffect,
+  useMemo,
   useRef,
   useSyncExternalStore,
+  type MutableRefObject,
+  type ReactNode,
 } from 'react';
 import { AppState } from 'react-native';
 
@@ -53,17 +58,68 @@ export interface ScannerController {
   captureNow: () => void;
   stop: () => void;
   dismissError: () => void;
+  setActive: (active: boolean) => void;
   rescan: (language: string) => Promise<void>;
 }
+
+/** One scanner store for the whole app; camera and result read the same state. */
+export function ScannerProvider({ children }: { children: ReactNode }) {
+  const onCaptureSavedRef = useRef<
+    ((record: CaptureRecord) => void) | undefined
+  >(undefined);
+  const controller = useScannerController(onCaptureSavedRef);
+  const registerCaptureSaved = useCallback(
+    (callback?: (record: CaptureRecord) => void) => {
+      onCaptureSavedRef.current = callback;
+      return () => {
+        if (onCaptureSavedRef.current === callback) {
+          onCaptureSavedRef.current = undefined;
+        }
+      };
+    },
+    [],
+  );
+  const value = useMemo(
+    () => ({ ...controller, registerCaptureSaved }),
+    [controller, registerCaptureSaved],
+  );
+  return (
+    <ScannerContext.Provider value={value}>{children}</ScannerContext.Provider>
+  );
+}
+
+type ScannerContextValue = ScannerController & {
+  registerCaptureSaved: (
+    callback?: (record: CaptureRecord) => void,
+  ) => () => void;
+};
+
+const ScannerContext = createContext<ScannerContextValue | null>(null);
 
 export function useScanner(options: {
   onCaptureSaved?: (record: CaptureRecord) => void;
 } = {}): ScannerController {
+  const value = useContext(ScannerContext);
+  if (!value) {
+    throw new Error('useScanner must be used inside ScannerProvider');
+  }
+  const { registerCaptureSaved, ...controller } = value;
+  const callback = options.onCaptureSaved;
+  useEffect(
+    () => (callback ? registerCaptureSaved(callback) : undefined),
+    [callback, registerCaptureSaved],
+  );
+  return controller;
+}
+
+function useScannerController(
+  onCaptureSavedRef: MutableRefObject<
+    ((record: CaptureRecord) => void) | undefined
+  >,
+): ScannerController {
   const router = useRouter();
   const routerRef = useRef(router);
   routerRef.current = router;
-  const onCaptureSavedRef = useRef(options.onCaptureSaved);
-  onCaptureSavedRef.current = options.onCaptureSaved;
 
   const storeRef = useRef<ScannerStore | null>(null);
   if (storeRef.current === null) {
@@ -86,15 +142,6 @@ export function useScanner(options: {
   const focusedRef = useRef(false);
   const reticleCropRef = useRef<OcrCrop | null>(null);
 
-  useFocusEffect(
-    useCallback(() => {
-      void activateKeepAwakeAsync().catch(() => {});
-      return () => {
-        void deactivateKeepAwake().catch(() => {});
-      };
-    }, []),
-  );
-
   useEffect(() => {
     void captureMode.hydrate();
     return captureMode.subscribe(() => {
@@ -105,25 +152,6 @@ export function useScanner(options: {
       });
     });
   }, [store]);
-
-  // Leaving the scanner (paywall, pack sheet, incoming call) must never leave
-  // the camera armed in the background. A frozen result is not interrupted.
-  useFocusEffect(
-    useCallback(() => {
-      focusedRef.current = true;
-
-      return () => {
-        focusedRef.current = false;
-        const state = storeRef.current?.getSnapshot().state;
-        if (state !== undefined && state !== 'LOCKED_READ') {
-          storeRef.current?.send({
-            type: 'SLEEP',
-            timestampMs: Date.now(),
-          });
-        }
-      };
-    }, []),
-  );
 
   useEffect(() => {
     let disposed = false;
@@ -715,6 +743,22 @@ export function useScanner(options: {
     void captureMode.set(mode);
   }, []);
 
+  const setActive = useCallback(
+    (active: boolean) => {
+      focusedRef.current = active;
+      if (active) {
+        void activateKeepAwakeAsync().catch(() => {});
+        return;
+      }
+      void deactivateKeepAwake().catch(() => {});
+      // A frozen result stays available while covered by the result page.
+      if (store.getSnapshot().state !== 'LOCKED_READ') {
+        store.send({ type: 'SLEEP', timestampMs: Date.now() });
+      }
+    },
+    [store],
+  );
+
   const rescan = useCallback(
     async (language: string) => {
       try {
@@ -772,6 +816,7 @@ export function useScanner(options: {
     captureNow,
     stop,
     dismissError,
+    setActive,
     rescan,
   };
 }

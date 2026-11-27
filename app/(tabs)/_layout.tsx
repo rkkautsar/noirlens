@@ -17,6 +17,7 @@ export default function LandingTabs() {
     >
       <Tabs.Screen name="index" />
       <Tabs.Screen name="translate" />
+      <Tabs.Screen name="conversation" />
     </Tabs>
   );
 }

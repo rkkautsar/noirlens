@@ -25,8 +25,16 @@ export function ChromeHeader({
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const pathname = usePathname();
-  const landing = pathname === '/' || pathname === '/translate';
-  const active = pathname === '/translate' ? 'translate' : 'camera';
+  const landing =
+    pathname === '/' ||
+    pathname === '/translate' ||
+    pathname === '/conversation';
+  const active =
+    pathname === '/translate'
+      ? 'translate'
+      : pathname === '/conversation'
+        ? 'conversation'
+        : 'camera';
   const counter = unlimited
     ? 'PRO'
     : remaining !== null
@@ -65,6 +73,7 @@ export function ChromeHeader({
             active={active}
             onCamera={() => router.navigate('/')}
             onTranslate={() => router.navigate('/translate')}
+            onConversation={() => router.navigate('/conversation')}
           />
         </View>
       ) : null}

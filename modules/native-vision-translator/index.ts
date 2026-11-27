@@ -73,6 +73,17 @@ export interface LanguagePackStatusPayload {
   status: LanguagePackStatus;
 }
 
+export type SpeechAuthorization =
+  | 'authorized'
+  | 'denied'
+  | 'restricted'
+  | 'undetermined';
+
+export interface SpeechPermissionPayload {
+  speech: SpeechAuthorization;
+  microphone: 'granted' | 'denied' | 'undetermined';
+}
+
 export interface EcoCameraViewProps extends ViewProps {
   ecoMode?: boolean;
   scanlineLevel?: number;
@@ -110,6 +121,12 @@ export interface NativeVisionTranslatorModule extends NativeModule {
   romanize(text: string, language: string): Promise<string>;
   speak(text: string, language: string): Promise<boolean>;
   stopSpeaking(): Promise<void>;
+  speechPermissionStatus(): Promise<SpeechPermissionPayload>;
+  requestSpeechPermissions(): Promise<SpeechPermissionPayload>;
+  startListening(turnId: string, language: string): Promise<void>;
+  /** Final on-device transcript, or an empty string when no turn was active. */
+  stopListening(turnId: string): Promise<string>;
+  cancelListening(turnId: string): Promise<void>;
   checkLanguagePackStatus(
     langCode: string,
     targetLanguage?: string,
@@ -216,6 +233,19 @@ const webMock = {
   romanize: async (text: string, _language: string) => text,
   speak: async (_text: string, _language: string) => false,
   stopSpeaking: async () => {},
+  speechPermissionStatus: async () => ({
+    speech: 'undetermined' as const,
+    microphone: 'undetermined' as const,
+  }),
+  requestSpeechPermissions: async () => ({
+    speech: 'denied' as const,
+    microphone: 'denied' as const,
+  }),
+  startListening: async () => {
+    throw new Error('Speech input requires the iOS app.');
+  },
+  stopListening: async () => '',
+  cancelListening: async () => {},
   translate: async ({
     sourceLanguage,
   }: {

@@ -23,6 +23,7 @@ import {
   languageLabel,
   languageShortLabel,
 } from '@/constants/languages';
+import { preferredLocalLanguage } from '@/services/conversationTurn';
 import {
   IDLE_TRANSLATE,
   swapPair,
@@ -47,6 +48,7 @@ export default function TranslateScreen() {
   const allowance = useScanAllowance();
   const { openSheet } = useSheet();
   const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const targetTouched = useRef(false);
 
   const [source, setSource] = useState('en');
   const [target, setTarget] = useState(() =>
@@ -99,6 +101,13 @@ export default function TranslateScreen() {
   }, []);
 
   useEffect(() => {
+    if (!preferred.loaded || targetTouched.current) {
+      return;
+    }
+    setTarget(preferredLocalLanguage(preferred.code));
+  }, [preferred.code, preferred.loaded]);
+
+  useEffect(() => {
     void vision.stopSpeaking().catch(() => {});
     setSpeaking(false);
   }, [target]);
@@ -118,6 +127,7 @@ export default function TranslateScreen() {
         if (which === 'source') {
           setSource(code);
         } else {
+          targetTouched.current = true;
           setTarget(code);
         }
         reset();
@@ -127,6 +137,7 @@ export default function TranslateScreen() {
 
   const swap = () => {
     tap();
+    targetTouched.current = true;
     const next = swapPair(source, target);
     setSource(next.source);
     setTarget(next.target);

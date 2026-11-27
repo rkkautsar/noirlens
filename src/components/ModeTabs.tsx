@@ -2,7 +2,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { colors, typography } from '@/theme';
 
-export type AppMode = 'camera' | 'translate';
+export type AppMode = 'camera' | 'translate' | 'conversation';
 
 function Tab({
   label,
@@ -38,10 +38,12 @@ export function ModeTabs({
   active,
   onCamera,
   onTranslate,
+  onConversation,
 }: {
   active: AppMode;
   onCamera: () => void;
   onTranslate: () => void;
+  onConversation: () => void;
 }) {
   return (
     <View pointerEvents="box-none" style={styles.inlineRow}>
@@ -51,6 +53,11 @@ export function ModeTabs({
         active={active === 'translate'}
         onPress={onTranslate}
       />
+      <Tab
+        label="CONVERSATION"
+        active={active === 'conversation'}
+        onPress={onConversation}
+      />
     </View>
   );
 }
@@ -59,7 +66,7 @@ const styles = StyleSheet.create({
   inlineRow: {
     flexDirection: 'row',
     justifyContent: 'center',
-    gap: 26,
+    gap: 18,
     paddingTop: 10,
     paddingBottom: 2,
   },

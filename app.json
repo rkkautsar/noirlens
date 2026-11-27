@@ -13,6 +13,8 @@
       "infoPlist": {
         "NSCameraUsageDescription": "NoirLens uses the camera only when you raise the phone, to read text from the scene. Frames never leave your device.",
         "NSMotionUsageDescription": "NoirLens uses motion sensors to arm the camera when you raise the phone and to power it down when you lower it.",
+        "NSMicrophoneUsageDescription": "NoirLens uses the microphone only while you hold to speak in Conversation. Audio is transcribed on-device.",
+        "NSSpeechRecognitionUsageDescription": "NoirLens transcribes speech on-device for two-way conversation.",
         "ITSAppUsesNonExemptEncryption": false,
         "UISupportedInterfaceOrientations": [
           "UIInterfaceOrientationPortrait"

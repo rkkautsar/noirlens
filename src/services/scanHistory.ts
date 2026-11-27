@@ -72,19 +72,31 @@ export async function readScanHistory(): Promise<ScanHistoryEntry[]> {
 
 export function addScanHistory(
   entry: Omit<ScanHistoryEntry, 'id' | 'at'>,
+  id?: string,
 ): Promise<void> {
   return serialized(async () => {
     const at = Date.now();
     // Read raw so a failed read rejects instead of overwriting history.
     const existing = parse(await readMeta(HISTORY_KEY));
-    const next: ScanHistoryEntry[] = [
-      {
-        ...entry,
-        id: `${at}-${Math.random().toString(36).slice(2, 8)}`,
-        at,
-      },
-      ...existing,
-    ].slice(0, MAX_ENTRIES);
+    let next: ScanHistoryEntry[];
+    const index =
+      id === undefined ? -1 : existing.findIndex((row) => row.id === id);
+    if (index >= 0) {
+      // The same capture was reread in another language; update its row
+      // instead of adding a second one.
+      const prior = existing[index]!;
+      next = existing.slice();
+      next[index] = { ...prior, ...entry, id: prior.id, at: prior.at };
+    } else {
+      next = [
+        {
+          ...entry,
+          id: id ?? `${at}-${Math.random().toString(36).slice(2, 8)}`,
+          at,
+        },
+        ...existing,
+      ].slice(0, MAX_ENTRIES);
+    }
     await writeMeta(HISTORY_KEY, JSON.stringify(next));
   });
 }

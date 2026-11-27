@@ -8,7 +8,6 @@ import {
   useEffect,
   useMemo,
   useRef,
-  useState,
   useSyncExternalStore,
   type MutableRefObject,
   type ReactNode,
@@ -45,12 +44,17 @@ import {
   enqueueCapture,
 } from '@/services/captureProcessing';
 import { sourceLanguage } from '@/services/sourceLanguage';
-import type { CaptureMode, ScannerEffect } from './machine';
+import type { CaptureMode, ScanResult, ScannerEffect } from './machine';
 import { ScannerStore, type ScannerSnapshot } from './store';
 
 const CAPTURE_TIMEOUT_MS = 12_000;
 
-export type RescanOutcome = 'applied' | 'cancelled' | 'failed' | 'superseded';
+export type RescanOutcome =
+  | 'applied'
+  | 'cancelled'
+  | 'failed'
+  | 'superseded'
+  | 'limit';
 
 export interface ScannerController {
   snapshot: ScannerSnapshot;
@@ -62,8 +66,12 @@ export interface ScannerController {
   stop: () => void;
   dismissError: () => void;
   setActive: (active: boolean) => void;
+  cancelRetries: () => void;
   isSaving: () => boolean;
-  rescan: (language: string) => Promise<RescanOutcome>;
+  rescan: (
+    language: string,
+    options?: { reuseOcr?: boolean },
+  ) => Promise<RescanOutcome>;
 }
 
 /** One scanner store for the whole app; camera and result read the same state. */
@@ -142,18 +150,14 @@ function useScannerController(
     store.getSnapshot,
     store.getSnapshot,
   );
-  const [saving, setSaving] = useState(false);
   const savingTokens = useRef(new Set<number>());
   const captureTokenRef = useRef(0);
-  const viewSnapshot = useMemo(
-    () => ({ ...snapshot, saving }),
-    [snapshot, saving],
-  );
 
   const focusedRef = useRef(false);
   const reticleCropRef = useRef<OcrCrop | null>(null);
   const rescanToken = useRef(0);
   const translatedCapture = useRef(false);
+  const historyId = useRef<string | null>(null);
 
   useEffect(() => {
     void captureMode.hydrate();
@@ -194,7 +198,7 @@ function useScannerController(
       capturing = true;
       captureTokenRef.current += 1;
       const token = captureTokenRef.current;
-      setSaving(false);
+      store.setSaving(false);
       let language: string | undefined;
 
       const watchdog = setTimeout(() => {
@@ -202,7 +206,7 @@ function useScannerController(
           return;
         }
         captureTokenRef.current += 1;
-        setSaving(savingTokens.current.has(captureTokenRef.current));
+        store.setSaving(savingTokens.current.has(captureTokenRef.current));
         capturing = false;
         if (store.getSnapshot().state === 'SCANNING') {
           store.send({
@@ -229,6 +233,7 @@ function useScannerController(
           };
         rescanToken.current += 1;
         translatedCapture.current = false;
+        historyId.current = `scan-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
         const cameraToken = await waitForCamera();
         if (cameraToken === null) {
           throw { code: 'ERR_CAMERA_CANCELLED', message: 'Camera did not start.' };
@@ -293,12 +298,15 @@ function useScannerController(
             translatedCapture.current = true;
           }
           if (kind !== 'pack_missing') {
-            void addScanHistory({
-              sourceLanguage,
-              sourceText: base.sourceText,
-              translatedText,
-              kind: kind === 'english' ? 'english' : 'translated',
-            }).catch(() => {});
+            void addScanHistory(
+              {
+                sourceLanguage,
+                sourceText: base.sourceText,
+                translatedText,
+                kind: kind === 'english' ? 'english' : 'translated',
+              },
+              historyId.current ?? undefined,
+            ).catch(() => {});
           }
         };
 
@@ -430,7 +438,9 @@ function useScannerController(
       capturing = true;
       captureTokenRef.current += 1;
       const token = captureTokenRef.current;
-      setSaving(false);
+      store.setSaving(false);
+      translatedCapture.current = false;
+      historyId.current = `scan-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
       const hint = sourceLanguage.current();
 
       const watchdog = setTimeout(() => {
@@ -438,7 +448,7 @@ function useScannerController(
           return;
         }
         captureTokenRef.current += 1;
-        setSaving(savingTokens.current.has(captureTokenRef.current));
+        store.setSaving(savingTokens.current.has(captureTokenRef.current));
         capturing = false;
         if (store.getSnapshot().state === 'SCANNING') {
           store.send({
@@ -457,7 +467,6 @@ function useScannerController(
       let savedFiles: string[] | null = null;
       try {
         rescanToken.current += 1;
-        translatedCapture.current = false;
         const cameraToken = await waitForCamera();
         if (cameraToken === null) {
           throw { code: 'ERR_CAMERA_CANCELLED', message: 'Camera did not start.' };
@@ -488,12 +497,12 @@ function useScannerController(
         };
         // Persistence gates the animation and the badge; OCR runs after.
         savingTokens.current.add(token);
-        setSaving(captureTokenRef.current === token);
+        store.setSaving(captureTokenRef.current === token);
         try {
           await captures.add(record);
         } finally {
           savingTokens.current.delete(token);
-          setSaving(savingTokens.current.has(captureTokenRef.current));
+          store.setSaving(savingTokens.current.has(captureTokenRef.current));
         }
         savedFiles = null;
         enqueueCapture(record.id);
@@ -588,7 +597,7 @@ function useScannerController(
           break;
         case 'STOP_CAMERA':
           captureTokenRef.current += 1;
-          setSaving(savingTokens.current.has(captureTokenRef.current));
+          store.setSaving(savingTokens.current.has(captureTokenRef.current));
           capturing = false;
           cameraStart = null;
           if (captureWatchdog !== null) {
@@ -775,6 +784,10 @@ function useScannerController(
     store.send({ type: 'STOP', timestampMs: Date.now() });
   }, [store]);
 
+  const cancelRetries = useCallback(() => {
+    rescanToken.current += 1;
+  }, []);
+
   const isSaving = useCallback(
     () => savingTokens.current.has(captureTokenRef.current),
     [],
@@ -808,7 +821,10 @@ function useScannerController(
   );
 
   const rescan = useCallback(
-    async (language: string): Promise<RescanOutcome> => {
+    async (
+      language: string,
+      options?: { reuseOcr?: boolean },
+    ): Promise<RescanOutcome> => {
       const before = store.getSnapshot();
       if (before.state !== 'LOCKED_READ' || !before.result) {
         return 'superseded';
@@ -838,16 +854,42 @@ function useScannerController(
             return 'cancelled';
           }
         }
-        const hint = language === 'auto' ? '' : language;
-        const ocr = await vision.recognizeLast(hint);
-        // The result may have been replaced by another scan while OCR ran.
-        const current = store.getSnapshot();
-        if (
-          token !== rescanToken.current ||
-          current.state !== 'LOCKED_READ' ||
-          current.result?.sourceHash !== scanHash
-        ) {
-          return 'superseded';
+        let ocr: {
+          text: string;
+          sourceLanguage: string;
+          sourceHash: string;
+          blocks: ScanResult['blocks'];
+          imageWidth: number;
+          imageHeight: number;
+          previewJpegBase64?: string;
+          previewUri?: string;
+        };
+        if (options?.reuseOcr) {
+          ocr = {
+            text: before.result.sourceText,
+            sourceLanguage: before.result.sourceLanguage,
+            sourceHash: before.result.sourceHash,
+            blocks: before.result.blocks,
+            imageWidth: before.result.imageWidth,
+            imageHeight: before.result.imageHeight,
+            previewJpegBase64: before.result.previewJpegBase64,
+            previewUri: before.result.previewUri,
+          };
+        } else {
+          const hint = language === 'auto' ? '' : language;
+          ocr = await vision.recognizeLast(hint);
+          // The result may have been replaced by another scan while OCR ran.
+          const current = store.getSnapshot();
+          if (
+            token !== rescanToken.current ||
+            current.state !== 'LOCKED_READ' ||
+            current.result?.sourceHash !== scanHash
+          ) {
+            return 'superseded';
+          }
+        }
+        if (ocr.text.trim().length === 0) {
+          return 'failed';
         }
         const resolvedLanguage =
           ocr.sourceLanguage || (language === 'auto' ? 'und' : language);
@@ -894,6 +936,34 @@ function useScannerController(
         }
         const firstTranslation =
           kind === 'translated' && !translatedCapture.current;
+        if (firstTranslation) {
+          // A retry can happen after midnight, before the rollover poll.
+          const today = localDayKey();
+          let latest = store.getSnapshot();
+          if (latest.dayKey !== today) {
+            const used = await readScanCount(today);
+            if (
+              token !== rescanToken.current ||
+              store.getSnapshot().result?.sourceHash !== scanHash
+            ) {
+              return 'superseded';
+            }
+            store.send({
+              type: 'DAY_ROLLOVER',
+              dayKey: today,
+              scansUsedToday: used,
+              timestampMs: Date.now(),
+            });
+            latest = store.getSnapshot();
+          }
+          if (
+            !latest.unlimited &&
+            latest.remainingToday !== null &&
+            latest.remainingToday <= 0
+          ) {
+            return 'limit';
+          }
+        }
         store.send({
           type: 'RESULT_REPLACED',
           result: { ...base, kind, translatedText, cached },
@@ -902,12 +972,15 @@ function useScannerController(
         });
         if (firstTranslation) {
           translatedCapture.current = true;
-          void addScanHistory({
-            sourceLanguage: resolvedLanguage,
-            sourceText: ocr.text,
-            translatedText,
-            kind: 'translated',
-          }).catch(() => {});
+          void addScanHistory(
+            {
+              sourceLanguage: resolvedLanguage,
+              sourceText: ocr.text,
+              translatedText,
+              kind: 'translated',
+            },
+            historyId.current ?? undefined,
+          ).catch(() => {});
         }
         return 'applied';
       } catch {
@@ -919,7 +992,7 @@ function useScannerController(
   );
 
   return {
-    snapshot: viewSnapshot,
+    snapshot,
     setCaptureMode,
     beginHold,
     setReticleFrame,
@@ -928,6 +1001,7 @@ function useScannerController(
     stop,
     dismissError,
     setActive,
+    cancelRetries,
     isSaving,
     rescan,
   };

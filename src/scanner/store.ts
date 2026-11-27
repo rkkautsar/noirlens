@@ -16,6 +16,7 @@ import {
 
 export interface ScannerSnapshot {
   state: ScannerState;
+  dayKey: string;
   mode: ScannerArmMode;
   captureMode: CaptureMode;
   result: ScanResult | null;
@@ -37,6 +38,7 @@ function buildSnapshot(
 ): ScannerSnapshot {
   return {
     state: context.state,
+    dayKey: context.dayKey,
     mode: context.armMode,
     captureMode: context.captureMode,
     result: context.result,
@@ -52,6 +54,7 @@ function buildSnapshot(
 function affectsUI(previous: ScannerContext, next: ScannerContext): boolean {
   return (
     previous.state !== next.state ||
+    previous.dayKey !== next.dayKey ||
     previous.armMode !== next.armMode ||
     previous.captureMode !== next.captureMode ||
     previous.result !== next.result ||
@@ -72,6 +75,7 @@ export class ScannerStore {
   private snapshot: ScannerSnapshot;
   private listeners = new Set<() => void>();
   private effectHandler: ScannerEffectHandler | null = null;
+  private saving = false;
   private readonly tuning: ScannerTuning;
 
   constructor(options: {
@@ -106,13 +110,27 @@ export class ScannerStore {
 
   getSnapshot = (): ScannerSnapshot => this.snapshot;
 
+  setSaving(saving: boolean): void {
+    if (this.saving === saving) {
+      return;
+    }
+    this.saving = saving;
+    this.snapshot = { ...this.snapshot, saving };
+    for (const listener of this.listeners) {
+      listener();
+    }
+  }
+
   send(event: ScannerEvent): void {
     const previous = this.context;
     const { context, effects } = reduceScanner(previous, event, this.tuning);
     this.context = context;
 
     if (affectsUI(previous, context)) {
-      this.snapshot = buildSnapshot(context, this.tuning);
+      this.snapshot = {
+        ...buildSnapshot(context, this.tuning),
+        saving: this.saving,
+      };
       for (const listener of this.listeners) {
         listener();
       }

@@ -1,5 +1,5 @@
-import { useRouter } from 'expo-router';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   ScrollView,
@@ -101,10 +101,11 @@ export function ScanResultScreen({
   const [packError, setPackError] = useState<string | null>(null);
   const revisionRef = useRef('');
   const packBusyRef = useRef(false);
+  const liveRequest = useRef(0);
   const [languageBusy, setLanguageBusy] = useState(false);
   const [captureNonce, setCaptureNonce] = useState(0);
   const [ocrError, setOcrError] = useState<string | null>(null);
-  const allowance = useScanAllowance();
+  const allowance = useScanAllowance(!live);
   const unlimited = live ? scanner.snapshot.unlimited : allowance.unlimited;
   const pendingHint = useRef<string | null>(null);
   revisionRef.current = record
@@ -202,6 +203,9 @@ export function ScanResultScreen({
   }, [captureId, record, captureNonce]);
 
   const close = () => {
+    if (live) {
+      scannerRef.current.stop();
+    }
     if (router.canGoBack()) {
       router.back();
     } else {
@@ -210,6 +214,9 @@ export function ScanResultScreen({
   };
 
   const newScan = () => {
+    if (live) {
+      scannerRef.current.stop();
+    }
     router.dismissTo('/');
   };
 
@@ -267,11 +274,15 @@ export function ScanResultScreen({
       selected: livePick ?? sourceLanguage.code,
       allowAuto: true,
       onSelect: (code) => {
+        const request = ++liveRequest.current;
         setTranslating(true);
         setLiveNotice(null);
         void scannerRef.current
           .rescan(code)
           .then((outcome) => {
+            if (request !== liveRequest.current) {
+              return;
+            }
             if (outcome === 'applied') {
               setLivePick(code);
             } else if (outcome === 'cancelled') {
@@ -280,10 +291,16 @@ export function ScanResultScreen({
               setLiveNotice(
                 'The text could not be read in that language. Try another.',
               );
+            } else if (outcome === 'limit') {
+              router.push('/paywall');
             }
           })
           .catch(() => {})
-          .finally(() => setTranslating(false));
+          .finally(() => {
+            if (request === liveRequest.current) {
+              setTranslating(false);
+            }
+          });
       },
     });
   };
@@ -303,6 +320,7 @@ export function ScanResultScreen({
       return;
     }
     packBusyRef.current = true;
+    const request = ++liveRequest.current;
     setPackBusy(true);
     setPackError(null);
     setLiveNotice(null);
@@ -314,6 +332,7 @@ export function ScanResultScreen({
       setTranslating(true);
       const outcome = await scannerRef.current.rescan(
         liveResult.sourceLanguage,
+        { reuseOcr: true },
       );
       if (outcome === 'cancelled') {
         setPackError('The pack did not finish installing. Try again.');
@@ -321,15 +340,32 @@ export function ScanResultScreen({
         setPackError(
           'The pack was installed, but the text could not be translated.',
         );
+      } else if (outcome === 'limit') {
+        router.push('/paywall');
       }
     } catch {
       setPackError('The pack could not be installed. Try again.');
     } finally {
-      setTranslating(false);
+      if (request === liveRequest.current) {
+        setTranslating(false);
+      }
       packBusyRef.current = false;
       setPackBusy(false);
     }
   };
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!live) {
+        return;
+      }
+      return () => {
+        // Invalidate pending retries as soon as the page loses focus; the
+        // result itself is cleared on Back/New Scan or unmount.
+        scannerRef.current.cancelRetries();
+      };
+    }, [live]),
+  );
 
   useEffect(() => {
     if (!live) {
@@ -346,6 +382,7 @@ export function ScanResultScreen({
     }
     const startedRevision = revisionRef.current;
     packBusyRef.current = true;
+    const request = ++liveRequest.current;
     setPackBusy(true);
     setPackError(null);
     setLiveNotice(null);

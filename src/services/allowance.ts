@@ -28,7 +28,7 @@ export interface AllowanceSnapshot {
  * local-day ledger, re-reads at local midnight, and keeps "not loaded yet"
  * distinct from "zero left".
  */
-export function useScanAllowance(): AllowanceSnapshot {
+export function useScanAllowance(enabled = true): AllowanceSnapshot {
   const entitlement = useEntitlementState();
   const unlimited = entitlement.loaded ? entitlements.isUnlimited() : false;
   const [dayKey, setDayKey] = useState(() => localDayKey());
@@ -39,6 +39,9 @@ export function useScanAllowance(): AllowanceSnapshot {
   }, []);
 
   useEffect(() => {
+    if (!enabled) {
+      return;
+    }
     let active = true;
     void readScanCount(dayKey)
       .then((scans) => {
@@ -50,9 +53,12 @@ export function useScanAllowance(): AllowanceSnapshot {
     return () => {
       active = false;
     };
-  }, [dayKey]);
+  }, [dayKey, enabled]);
 
   useEffect(() => {
+    if (!enabled) {
+      return;
+    }
     const timer = setInterval(() => {
       const next = localDayKey();
       if (next !== dayKey) {
@@ -60,7 +66,7 @@ export function useScanAllowance(): AllowanceSnapshot {
       }
     }, 60_000);
     return () => clearInterval(timer);
-  }, [dayKey]);
+  }, [dayKey, enabled]);
 
   return {
     loaded: entitlement.loaded && (unlimited || count !== null),

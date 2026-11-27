@@ -144,6 +144,7 @@ function useScannerController(
   );
   const [saving, setSaving] = useState(false);
   const savingTokens = useRef(new Set<number>());
+  const captureTokenRef = useRef(0);
   const viewSnapshot = useMemo(
     () => ({ ...snapshot, saving }),
     [snapshot, saving],
@@ -193,6 +194,8 @@ function useScannerController(
       }
       capturing = true;
       const token = ++captureToken;
+      captureTokenRef.current = token;
+      setSaving(false);
       let language: string | undefined;
 
       const watchdog = setTimeout(() => {
@@ -426,6 +429,8 @@ function useScannerController(
       }
       capturing = true;
       const token = ++captureToken;
+      captureTokenRef.current = token;
+      setSaving(false);
       const hint = sourceLanguage.current();
 
       const watchdog = setTimeout(() => {
@@ -482,12 +487,12 @@ function useScannerController(
         };
         // Persistence gates the animation and the badge; OCR runs after.
         savingTokens.current.add(token);
-        setSaving(true);
+        setSaving(captureTokenRef.current === token);
         try {
           await captures.add(record);
         } finally {
           savingTokens.current.delete(token);
-          setSaving(savingTokens.current.size > 0);
+          setSaving(savingTokens.current.has(captureTokenRef.current));
         }
         savedFiles = null;
         enqueueCapture(record.id);
@@ -761,14 +766,17 @@ function useScannerController(
   const stop = useCallback(() => {
     // A committed collection write cannot be recalled; stopping here only
     // invalidates its confirmation.
-    if (savingTokens.current.size > 0) {
+    if (savingTokens.current.has(captureTokenRef.current)) {
       return;
     }
     rescanToken.current += 1;
     store.send({ type: 'STOP', timestampMs: Date.now() });
   }, [store]);
 
-  const isSaving = useCallback(() => savingTokens.current.size > 0, []);
+  const isSaving = useCallback(
+    () => savingTokens.current.has(captureTokenRef.current),
+    [],
+  );
 
   const dismissError = useCallback(() => {
     store.send({ type: 'DISMISS_ERROR', timestampMs: Date.now() });

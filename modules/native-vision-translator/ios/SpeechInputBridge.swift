@@ -159,7 +159,8 @@ final class SpeechInputBridge: NSObject {
 
     // Free stale reservations before asking for the new pair; otherwise an
     // installation at the reservation quota fails before it can release them.
-    for reserved in AssetInventory.reservedLocales
+    let reservedLocales = await AssetInventory.reservedLocales
+    for reserved in reservedLocales
     where !wanted.contains(reserved.identifier.lowercased()) {
       _ = await AssetInventory.release(reservedLocale: reserved)
     }

@@ -9,6 +9,7 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   View,
 } from 'react-native';
@@ -85,6 +86,7 @@ function ConversationPane({
   requesting,
   retrying,
   permission,
+  header,
   onEnable,
   onStart,
   onRelease,
@@ -99,6 +101,7 @@ function ConversationPane({
   requesting: boolean;
   retrying: boolean;
   permission: SpeechPermissionPayload | null;
+  header?: React.ReactNode;
   onEnable: () => void;
   onStart: () => void;
   onRelease: () => void;
@@ -133,6 +136,7 @@ function ConversationPane({
 
   return (
     <View style={[styles.pane, flipped && styles.flipped]}>
+      {header}
       <ScrollView
         ref={scrollRef}
         style={styles.logScroll}
@@ -268,10 +272,12 @@ export default function ConversationScreen() {
   const [error, setError] = useState<string | null>(null);
   const [retry, setRetry] = useState<PendingRetry | null>(null);
   const [retrying, setRetrying] = useState(false);
+  const [ttsEnabled, setTtsEnabled] = useState(true);
 
   const phaseRef = useRef<Phase>('idle');
   const retryToken = useRef(0);
   const packRequest = useRef<string | null>(null);
+  const ttsRef = useRef(true);
   const activeRef = useRef<Side | null>(null);
   const turnId = useRef<string | null>(null);
   const turnCounter = useRef(0);
@@ -351,6 +357,9 @@ export default function ConversationScreen() {
       }
       if (outcome.status === 'translated') {
         append(side === 'en' ? 'local' : 'en', outcome.text);
+        if (ttsRef.current) {
+          void vision.speak(outcome.text, target).catch(() => {});
+        }
         setError(null);
         setRetry(null);
       } else if (outcome.status === 'pack_missing') {
@@ -383,6 +392,7 @@ export default function ConversationScreen() {
     if (phaseRef.current !== 'idle' || retrying) {
       return;
     }
+    void vision.stopSpeaking().catch(() => {});
     cancelRetry();
     const id = `conversation-${Date.now()}-${++turnCounter.current}`;
     turnId.current = id;
@@ -484,6 +494,9 @@ export default function ConversationScreen() {
       }
       if (translated.status === 'translated') {
         append(current.recipient, translated.text);
+        if (ttsRef.current) {
+          void vision.speak(translated.text, current.target).catch(() => {});
+        }
         setError(null);
         setRetry(null);
       } else {
@@ -511,6 +524,7 @@ export default function ConversationScreen() {
       }
       return () => {
         cancelTurn();
+        void vision.stopSpeaking().catch(() => {});
       };
       // The turn refs are stable; the cleanup only invalidates this screen's
       // active native turn.
@@ -536,6 +550,7 @@ export default function ConversationScreen() {
         if (turnId.current !== null) {
           cancelTurn();
         }
+        void vision.stopSpeaking().catch(() => {});
         return;
       }
       void vision
@@ -620,6 +635,28 @@ export default function ConversationScreen() {
           requesting={requesting}
           retrying={retrying}
           permission={permission}
+          header={
+            <View style={styles.ttsRow}>
+              <Text style={styles.ttsLabel}>SPEAK TRANSLATIONS</Text>
+              <Switch
+                accessibilityLabel="Speak translations"
+                value={ttsEnabled}
+                onValueChange={(next) => {
+                  ttsRef.current = next;
+                  setTtsEnabled(next);
+                  if (!next) {
+                    void vision.stopSpeaking().catch(() => {});
+                  }
+                }}
+                trackColor={{
+                  false: colors.border,
+                  true: colors.accentSoft,
+                }}
+                thumbColor={ttsEnabled ? colors.accent : colors.dim}
+                ios_backgroundColor={colors.border}
+              />
+            </View>
+          }
           onEnable={() => void enableSpeech()}
           onStart={() => void beginTurn('en')}
           onRelease={() => releaseTurn('en')}
@@ -674,8 +711,22 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   messageText: {
-    ...typography.body,
+    fontSize: 22,
+    lineHeight: 30,
+    letterSpacing: -0.1,
+    fontWeight: '500',
     color: colors.foreground,
+  },
+  ttsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingBottom: 6,
+  },
+  ttsLabel: {
+    ...typography.micro,
+    color: colors.muted,
+    letterSpacing: 1.2,
   },
   divider: {
     height: 1,

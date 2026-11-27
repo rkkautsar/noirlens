@@ -283,12 +283,20 @@ export function ScanShutter({
               ? 'Double tap to capture. Use the Cancel action to stop aiming.'
               : 'Double tap to aim the camera. Double tap again to capture.'
         }
-        accessibilityActions={[
-          { name: 'activate', label: active ? 'Capture' : 'Start aiming' },
-          { name: 'cancel', label: 'Cancel scan' },
-          { name: 'languages', label: 'Choose languages' },
-        ]}
-        onAccessibilityTap={activate}
+        accessibilityState={{ busy: scanning, disabled: scanning }}
+        accessibilityActions={
+          scanning
+            ? [
+                { name: 'cancel', label: 'Cancel scan' },
+                { name: 'languages', label: 'Choose languages' },
+              ]
+            : [
+                { name: 'activate', label: active ? 'Capture' : 'Start aiming' },
+                { name: 'cancel', label: 'Cancel scan' },
+                { name: 'languages', label: 'Choose languages' },
+              ]
+        }
+        onAccessibilityTap={scanning ? undefined : activate}
         onAccessibilityAction={(event) => {
           onAccessibilityAction(event.nativeEvent.actionName);
         }}

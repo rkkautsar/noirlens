@@ -189,6 +189,27 @@ export function ScanShutter({
     });
   }, [drag, progress]);
 
+  const activate = () => {
+    if (scanning) {
+      return;
+    }
+    if (active) {
+      onCapture();
+    } else {
+      onStart();
+    }
+  };
+
+  const onAccessibilityAction = (name: string) => {
+    if (name === 'activate') {
+      activate();
+    } else if (name === 'cancel') {
+      onCancel();
+    } else if (name === 'languages') {
+      onLanguages();
+    }
+  };
+
   const leftOpacity = drag.interpolate({
     inputRange: [-96, -24, 0],
     outputRange: [1, 0.36, 0.36],
@@ -242,18 +263,35 @@ export function ScanShutter({
       ]}
     >
       <View
+        accessible
         accessibilityRole="button"
         accessibilityLabel={
           scanning
             ? 'Reading the sign'
             : active
-              ? 'Release to capture'
+              ? 'Capture now'
               : next
-                ? 'Hold for the next scan. Swipe left to cancel, right for languages.'
+                ? 'Start next scan'
                 : collect
-                  ? 'Hold to save a capture. Swipe left to cancel, right for languages.'
-                  : 'Hold to scan. Swipe left to cancel, right for languages.'
+                  ? 'Start capture'
+                  : 'Start scan'
         }
+        accessibilityHint={
+          scanning
+            ? undefined
+            : active
+              ? 'Double tap to capture. Use the Cancel action to stop aiming.'
+              : 'Double tap to aim the camera. Double tap again to capture.'
+        }
+        accessibilityActions={[
+          { name: 'activate', label: active ? 'Capture' : 'Start aiming' },
+          { name: 'cancel', label: 'Cancel scan' },
+          { name: 'languages', label: 'Choose languages' },
+        ]}
+        onAccessibilityTap={activate}
+        onAccessibilityAction={(event) => {
+          onAccessibilityAction(event.nativeEvent.actionName);
+        }}
         style={[
           styles.bar,
           active && styles.barActive,

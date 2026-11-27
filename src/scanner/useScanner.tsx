@@ -44,7 +44,12 @@ import {
   enqueueCapture,
 } from '@/services/captureProcessing';
 import { sourceLanguage } from '@/services/sourceLanguage';
-import type { CaptureMode, ScanResult, ScannerEffect } from './machine';
+import {
+  DEFAULT_TUNING,
+  type CaptureMode,
+  type ScanResult,
+  type ScannerEffect,
+} from './machine';
 import { ScannerStore, type ScannerSnapshot } from './store';
 
 const CAPTURE_TIMEOUT_MS = 12_000;
@@ -158,6 +163,8 @@ function useScannerController(
   const rescanToken = useRef(0);
   const translatedCapture = useRef(false);
   const historyId = useRef<string | null>(null);
+  const packRequest = useRef<string | null>(null);
+  const packRequestSeq = useRef(0);
 
   useEffect(() => {
     void captureMode.hydrate();
@@ -712,6 +719,10 @@ function useScannerController(
         currentDay = today;
         void readScanCount(today)
           .then((used) => {
+            // A retry may already have installed this day and charged it.
+            if (store.getSnapshot().dayKey === today) {
+              return;
+            }
             store.send({
               type: 'DAY_ROLLOVER',
               dayKey: today,
@@ -774,6 +785,15 @@ function useScannerController(
     store.send({ type: 'CAPTURE_NOW', timestampMs: Date.now() });
   }, [store]);
 
+  const cancelPackRequest = useCallback(() => {
+    const id = packRequest.current;
+    if (id === null) {
+      return;
+    }
+    packRequest.current = null;
+    void vision.cancelLanguagePack(id).catch(() => {});
+  }, []);
+
   const stop = useCallback(() => {
     // A committed collection write cannot be recalled; stopping here only
     // invalidates its confirmation.
@@ -781,12 +801,14 @@ function useScannerController(
       return;
     }
     rescanToken.current += 1;
+    cancelPackRequest();
     store.send({ type: 'STOP', timestampMs: Date.now() });
-  }, [store]);
+  }, [cancelPackRequest, store]);
 
   const cancelRetries = useCallback(() => {
     rescanToken.current += 1;
-  }, []);
+    cancelPackRequest();
+  }, [cancelPackRequest]);
 
   const isSaving = useCallback(
     () => savingTokens.current.has(captureTokenRef.current),
@@ -830,6 +852,9 @@ function useScannerController(
         return 'superseded';
       }
       const scanHash = before.result.sourceHash;
+      if (packRequest.current !== null) {
+        cancelPackRequest();
+      }
       const token = ++rescanToken.current;
       const ownsResult = () => {
         const latest = store.getSnapshot();
@@ -841,7 +866,16 @@ function useScannerController(
       };
       try {
         if (language !== 'auto' && !isEnglishLanguageCode(language)) {
-          const pack = await installPack(language, 'en');
+          const requestId = `pack-${Date.now()}-${++packRequestSeq.current}`;
+          packRequest.current = requestId;
+          let pack;
+          try {
+            pack = await installPack(language, 'en', requestId);
+          } finally {
+            if (packRequest.current === requestId) {
+              packRequest.current = null;
+            }
+          }
           const current = store.getSnapshot();
           if (
             token !== rescanToken.current ||
@@ -948,18 +982,22 @@ function useScannerController(
             ) {
               return 'superseded';
             }
-            store.send({
-              type: 'DAY_ROLLOVER',
-              dayKey: today,
-              scansUsedToday: used,
-              timestampMs: Date.now(),
-            });
+            // The midnight poll may have installed the day while this read
+            // was in flight; keep its value instead of overwriting a charge.
+            if (store.getSnapshot().dayKey !== today) {
+              store.send({
+                type: 'DAY_ROLLOVER',
+                dayKey: today,
+                scansUsedToday: used,
+                timestampMs: Date.now(),
+              });
+            }
             latest = store.getSnapshot();
           }
+          const unlimitedNow = entitlements.isUnlimited();
           if (
-            !latest.unlimited &&
-            latest.remainingToday !== null &&
-            latest.remainingToday <= 0
+            !unlimitedNow &&
+            latest.scansUsedToday >= DEFAULT_TUNING.freeDailyLimit
           ) {
             return 'limit';
           }

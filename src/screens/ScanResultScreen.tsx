@@ -363,6 +363,10 @@ export function ScanResultScreen({
         // Invalidate pending retries as soon as the page loses focus; the
         // result itself is cleared on Back/New Scan or unmount.
         scannerRef.current.cancelRetries();
+        liveRequest.current += 1;
+        setTranslating(false);
+        packBusyRef.current = false;
+        setPackBusy(false);
       };
     }, [live]),
   );

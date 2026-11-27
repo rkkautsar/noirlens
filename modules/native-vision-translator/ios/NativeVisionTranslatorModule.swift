@@ -215,11 +215,16 @@ public final class NativeVisionTranslatorModule: Module {
     }
 
     AsyncFunction("prepareLanguagePack") {
-      (langCode: String, targetLanguage: String?) async throws -> [String: Any] in
+      (langCode: String, targetLanguage: String?, requestId: String?) async throws -> [String: Any] in
       try await TranslationBridge.prepare(
         languageCode: langCode,
-        targetLanguage: targetLanguage ?? "en"
+        targetLanguage: targetLanguage ?? "en",
+        requestId: requestId
       )
+    }
+
+    AsyncFunction("cancelLanguagePack") { (requestId: String) in
+      await TranslationBridge.cancelPrepare(requestId)
     }
 
     AsyncFunction("speak") { (text: String, language: String) async -> Bool in

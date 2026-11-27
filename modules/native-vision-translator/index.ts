@@ -7,7 +7,11 @@ import {
   WEB_DEMO_TRANSLATION,
 } from '../../src/services/demoNameRanges';
 
-export type LanguagePackStatus = 'installed' | 'supported' | 'unsupported';
+export type LanguagePackStatus =
+  | 'installed'
+  | 'supported'
+  | 'unsupported'
+  | 'cancelled';
 
 export interface OcrBlockPayload {
   text: string;
@@ -113,7 +117,9 @@ export interface NativeVisionTranslatorModule extends NativeModule {
   prepareLanguagePack(
     langCode: string,
     targetLanguage?: string,
+    requestId?: string,
   ): Promise<LanguagePackStatusPayload>;
+  cancelLanguagePack(requestId: string): Promise<void>;
   checkLanguagePackStatuses(
     languages: string[],
     targetLanguage?: string,
@@ -232,6 +238,7 @@ const webMock = {
     targetLanguage: 'en',
     status: 'installed' as const,
   }),
+  cancelLanguagePack: async () => {},
   checkLanguagePackStatuses: async (languages: string[]) =>
     languages.map((language) => ({
       language,

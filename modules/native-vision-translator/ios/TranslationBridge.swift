@@ -15,6 +15,13 @@ import UIKit
 @MainActor
 enum TranslationBridge {
   private static let defaultTarget = Locale.Language(identifier: "en")
+  private static var cancelledPackRequests: Set<String> = []
+
+  /// Marks an in-flight pack request so presentation can be skipped if the
+  /// caller has already navigated away.
+  static func cancelPrepare(_ requestId: String) {
+    cancelledPackRequests.insert(requestId)
+  }
 
   static func status(
     for languageCode: String,
@@ -155,8 +162,14 @@ enum TranslationBridge {
 
   static func prepare(
     languageCode: String,
-    targetLanguage: String = "en"
+    targetLanguage: String = "en",
+    requestId: String? = nil
   ) async throws -> [String: Any] {
+    defer {
+      if let requestId {
+        cancelledPackRequests.remove(requestId)
+      }
+    }
     let code = normalizedCode(languageCode)
     let targetCode = normalizedCode(targetLanguage)
     let source = language(from: code)
@@ -188,7 +201,20 @@ enum TranslationBridge {
       )
     }
 
-    _ = try await presentHost(text: nil, source: source, target: target)
+    if let requestId, cancelledPackRequests.contains(requestId) {
+      return [
+        "language": code,
+        "targetLanguage": targetCode,
+        "status": "cancelled"
+      ]
+    }
+
+    _ = try await presentHost(
+      text: nil,
+      source: source,
+      target: target,
+      requestId: requestId
+    )
 
     // A completed prepareTranslation downloaded or confirmed the pack; the
     // availability query can still report .supported for a moment, so trust
@@ -243,7 +269,8 @@ enum TranslationBridge {
   private static func presentHost(
     text: String?,
     source: Locale.Language,
-    target: Locale.Language
+    target: Locale.Language,
+    requestId: String? = nil
   ) async throws -> String? {
     var root = topViewController()
     // A sheet being dismissed (e.g. History -> result) still hosts the top
@@ -261,6 +288,15 @@ enum TranslationBridge {
         name: "PresentationBusy",
         description: "A sheet is still closing; the translation host could not be presented.",
         code: "ERR_PRESENTATION_BUSY"
+      )
+    }
+
+    // The caller may have left while we waited for a stable controller.
+    if let requestId, cancelledPackRequests.contains(requestId) {
+      throw Exception(
+        name: "LanguagePackCancelled",
+        description: "The language pack request was cancelled.",
+        code: "ERR_LANGUAGE_PACK_CANCELLED"
       )
     }
 

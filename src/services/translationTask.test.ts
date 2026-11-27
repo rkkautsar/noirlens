@@ -51,5 +51,11 @@ describe('translationTask', () => {
     await expect(installPack('fr')).resolves.toBe('installed');
     prepareLanguagePack.mockRejectedValue(new Error('nope'));
     await expect(installPack('fr')).resolves.toBe('failed');
+    prepareLanguagePack.mockResolvedValue({ status: 'cancelled' });
+    await expect(installPack('fr', 'en', 'req-1')).resolves.toBe('cancelled');
+    prepareLanguagePack.mockRejectedValue({
+      code: 'ERR_LANGUAGE_PACK_CANCELLED',
+    });
+    await expect(installPack('fr', 'en', 'req-2')).resolves.toBe('cancelled');
   });
 });

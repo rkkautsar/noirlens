@@ -126,19 +126,36 @@ async function runTranslation({
   }
 }
 
-export type PackOutcome = 'installed' | 'not_installed' | 'failed';
+export type PackOutcome =
+  | 'installed'
+  | 'not_installed'
+  | 'cancelled'
+  | 'failed';
 
 export async function installPack(
   sourceLanguage: string,
   targetLanguage = 'en',
+  requestId?: string,
 ): Promise<PackOutcome> {
   try {
     const status = await vision.prepareLanguagePack(
       sourceLanguage,
       targetLanguage,
+      requestId,
     );
+    if (status.status === 'cancelled') {
+      return 'cancelled';
+    }
     return status.status === 'installed' ? 'installed' : 'not_installed';
-  } catch {
+  } catch (error) {
+    if (
+      typeof error === 'object' &&
+      error !== null &&
+      'code' in error &&
+      error.code === 'ERR_LANGUAGE_PACK_CANCELLED'
+    ) {
+      return 'cancelled';
+    }
     return 'failed';
   }
 }

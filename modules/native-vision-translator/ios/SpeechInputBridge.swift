@@ -4,9 +4,10 @@ import Foundation
 import Speech
 import UIKit
 
-/// One push-to-talk utterance at a time. The caller reserves a turn before
-/// the first bridge call; stop and cancel are safe if they arrive before the
-/// audio engine is ready. Recognition never falls back to Apple's servers.
+/// One push-to-talk utterance at a time, backed by the iOS 26 SpeechAnalyzer
+/// pipeline. The caller reserves a turn before the first bridge call; stop and
+/// cancel are safe if they arrive before the analyzer is ready. Recognition
+/// never falls back to Apple's servers.
 @MainActor
 final class SpeechInputBridge: NSObject {
   static let shared = SpeechInputBridge()
@@ -17,13 +18,12 @@ final class SpeechInputBridge: NSObject {
   }
 
   private let audioEngine = AVAudioEngine()
-  private var recognizer: SFSpeechRecognizer?
-  private var request: SFSpeechAudioBufferRecognitionRequest?
-  private var task: SFSpeechRecognitionTask?
+  private var analyzer: SpeechAnalyzer?
+  private var transcriber: SpeechTranscriber?
+  private var inputContinuation: AsyncStream<AnalyzerInput>.Continuation?
+  private var resultTask: Task<String, Error>?
   private var activeTurn: String?
   private var cancelledTurns: [String] = []
-  private var latestTranscript = ""
-  private var terminalResult: Result<String, Error>?
   private var stopContinuation: CheckedContinuation<String, Error>?
   private var stopTimeout: Task<Void, Never>?
   private var tapInstalled = false
@@ -100,7 +100,25 @@ final class SpeechInputBridge: NSObject {
     return permissionStatus()
   }
 
-  func start(turnId: String, language: String) throws {
+  /// Downloads the on-device model ahead of the first hold. AssetInventory
+  /// shares installed models between apps and requests are consolidated.
+  func prepareAssets(language: String) async {
+    guard SpeechTranscriber.isAvailable else {
+      return
+    }
+    let requested = speechLocale(for: language)
+    guard let locale = await SpeechTranscriber.supportedLocale(equivalentTo: requested) else {
+      return
+    }
+    let transcriber = SpeechTranscriber(locale: locale, preset: .transcription)
+    if let request = try? await AssetInventory.assetInstallationRequest(
+      supporting: [transcriber]
+    ) {
+      try? await request.downloadAndInstall()
+    }
+  }
+
+  func start(turnId: String, language: String) async throws {
     guard activeTurn == nil else {
       throw speechError("Busy", "Another speech turn is already active.", "ERR_SPEECH_BUSY")
     }
@@ -111,13 +129,9 @@ final class SpeechInputBridge: NSObject {
     guard UIApplication.shared.applicationState == .active else {
       throw speechError("Inactive", "Return to the app to speak.", "ERR_SPEECH_INACTIVE")
     }
-    activeTurn = turnId
-    latestTranscript = ""
-    terminalResult = nil
 
     let status = permissionStatus()
     guard status["speech"] == "authorized", status["microphone"] == "granted" else {
-      activeTurn = nil
       throw speechError(
         "SpeechPermission",
         "Speech recognition and microphone access are required.",
@@ -125,62 +139,134 @@ final class SpeechInputBridge: NSObject {
       )
     }
 
-    let locale = speechLocale(for: language)
-    guard let recognizer = SFSpeechRecognizer(locale: locale),
-          recognizer.isAvailable,
-          recognizer.supportsOnDeviceRecognition
-    else {
-      activeTurn = nil
-      throw speechError(
-        "SpeechUnavailable",
-        "On-device speech recognition is unavailable for this language.",
-        "ERR_SPEECH_ON_DEVICE_UNAVAILABLE"
-      )
-    }
+    activeTurn = turnId
 
     do {
-      let session = AVAudioSession.sharedInstance()
-      try session.setCategory(.record, mode: .measurement)
-      try session.setActive(true)
-      sessionActive = true
+      guard SpeechTranscriber.isAvailable else {
+        throw speechError(
+          "SpeechUnavailable",
+          "Speech transcription is unavailable on this device.",
+          "ERR_SPEECH_ON_DEVICE_UNAVAILABLE"
+        )
+      }
+      let requested = speechLocale(for: language)
+      guard let locale = await SpeechTranscriber.supportedLocale(equivalentTo: requested) else {
+        throw speechError(
+          "SpeechUnavailable",
+          "Speech transcription is unavailable for this language.",
+          "ERR_SPEECH_ON_DEVICE_UNAVAILABLE"
+        )
+      }
 
-      let request = SFSpeechAudioBufferRecognitionRequest()
-      request.requiresOnDeviceRecognition = true
-      request.shouldReportPartialResults = true
-      request.taskHint = .dictation
+      let transcriber = SpeechTranscriber(locale: locale, preset: .transcription)
+      if let request = try await AssetInventory.assetInstallationRequest(
+        supporting: [transcriber]
+      ) {
+        try await request.downloadAndInstall()
+      }
+
+      guard activeTurn == turnId else {
+        throw speechError("Cancelled", "The speech turn was cancelled.", "ERR_SPEECH_CANCELLED")
+      }
+      guard let analyzerFormat = await SpeechAnalyzer.bestAvailableAudioFormat(
+        compatibleWith: [transcriber]
+      ) else {
+        throw speechError(
+          "SpeechUnavailable",
+          "The speech model could not be loaded.",
+          "ERR_SPEECH_ON_DEVICE_UNAVAILABLE"
+        )
+      }
 
       let input = audioEngine.inputNode
-      let format = input.outputFormat(forBus: 0)
-      guard format.sampleRate > 0, format.channelCount > 0 else {
+      let inputFormat = input.outputFormat(forBus: 0)
+      guard inputFormat.sampleRate > 0, inputFormat.channelCount > 0 else {
         throw speechError(
           "SpeechInputUnavailable",
           "No microphone input is available.",
           "ERR_SPEECH_ON_DEVICE_UNAVAILABLE"
         )
       }
-      input.installTap(onBus: 0, bufferSize: 1024, format: format) {
-        [weak request] buffer, _ in
-        request?.append(buffer)
+      guard let converter = AVAudioConverter(from: inputFormat, to: analyzerFormat) else {
+        throw speechError(
+          "SpeechInputUnavailable",
+          "The microphone format is not supported.",
+          "ERR_SPEECH_START"
+        )
+      }
+
+      let session = AVAudioSession.sharedInstance()
+      try session.setCategory(.record, mode: .measurement)
+      try session.setActive(true)
+      sessionActive = true
+
+      let (inputSequence, continuation) = AsyncStream.makeStream(of: AnalyzerInput.self)
+      let analyzer = SpeechAnalyzer(modules: [transcriber], options: nil)
+
+      self.transcriber = transcriber
+      self.analyzer = analyzer
+      self.inputContinuation = continuation
+      self.resultTask = Task {
+        var transcript = AttributedString()
+        for try await result in transcriber.results {
+          if result.isFinal {
+            transcript.append(result.text)
+          }
+        }
+        return String(transcript.characters)
+      }
+
+      try await analyzer.start(inputSequence: inputSequence)
+      guard activeTurn == turnId else {
+        throw speechError("Cancelled", "The speech turn was cancelled.", "ERR_SPEECH_CANCELLED")
+      }
+
+      let ratio = analyzerFormat.sampleRate / inputFormat.sampleRate
+      input.installTap(onBus: 0, bufferSize: 1024, format: inputFormat) {
+        buffer, _ in
+        let capacity = AVAudioFrameCount(
+          (Double(buffer.frameLength) * ratio).rounded(.up)
+        ) + 1024
+        guard let converted = AVAudioPCMBuffer(
+          pcmFormat: analyzerFormat,
+          frameCapacity: capacity
+        ) else {
+          return
+        }
+        var conversionError: NSError?
+        var supplied = false
+        let conversionStatus = converter.convert(
+          to: converted,
+          error: &conversionError
+        ) { _, outStatus in
+          if supplied {
+            outStatus.pointee = .noDataNow
+            return nil
+          }
+          supplied = true
+          outStatus.pointee = .haveData
+          return buffer
+        }
+        guard conversionStatus == .haveData || conversionStatus == .inputRanDry,
+              converted.frameLength > 0
+        else {
+          return
+        }
+        continuation.yield(AnalyzerInput(buffer: converted))
       }
       tapInstalled = true
 
       audioEngine.prepare()
       try audioEngine.start()
-
-      self.recognizer = recognizer
-      self.request = request
-      task = recognizer.recognitionTask(with: request) { [weak self] result, error in
-        Task { @MainActor [weak self] in
-          self?.handle(result: result, error: error, turnId: turnId)
-        }
-      }
     } catch let error as Exception {
-      cleanupAudio()
-      activeTurn = nil
+      if activeTurn == turnId {
+        finishTurn(.failure(error), turnId: turnId)
+      }
       throw error
     } catch {
-      cleanupAudio()
-      activeTurn = nil
+      if activeTurn == turnId {
+        finishTurn(.failure(error), turnId: turnId)
+      }
       throw speechError(
         "SpeechStartFailed",
         "The microphone could not start.",
@@ -196,19 +282,18 @@ final class SpeechInputBridge: NSObject {
     guard stopContinuation == nil else {
       throw speechError("Busy", "The transcript is already finishing.", "ERR_SPEECH_BUSY")
     }
-    if let terminalResult {
-      finishTurn(terminalResult)
-      return try terminalResult.get()
-    }
-    guard request != nil else {
-      finishTurn(.failure(speechError("NoSpeech", "No speech was detected.", "ERR_SPEECH_EMPTY")))
+    guard let analyzer, inputContinuation != nil else {
+      finishTurn(
+        .failure(speechError("NoSpeech", "No speech was detected.", "ERR_SPEECH_EMPTY")),
+        turnId: turnId
+      )
       throw speechError("NoSpeech", "No speech was detected.", "ERR_SPEECH_EMPTY")
     }
 
     return try await withCheckedThrowingContinuation { continuation in
       stopContinuation = continuation
       stopTimeout = Task { @MainActor [weak self] in
-        try? await Task.sleep(nanoseconds: 3_000_000_000)
+        try? await Task.sleep(nanoseconds: 5_000_000_000)
         guard let self, !Task.isCancelled else {
           return
         }
@@ -219,11 +304,36 @@ final class SpeechInputBridge: NSObject {
               "The final transcript did not arrive.",
               "ERR_SPEECH_TIMEOUT"
             )
-          )
+          ),
+          turnId: turnId
         )
       }
-      request?.endAudio()
+
       stopAudio()
+      let stream = inputContinuation
+      inputContinuation = nil
+      stream?.finish()
+
+      Task { @MainActor [weak self] in
+        guard let self else {
+          return
+        }
+        let result: Result<String, Error>
+        do {
+          try await analyzer.finalizeAndFinishThroughEndOfInput()
+          let text = try await self.resultTask?.value
+          let trimmed = (text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+          result = trimmed.isEmpty
+            ? .failure(speechError("NoSpeech", "No speech was detected.", "ERR_SPEECH_EMPTY"))
+            : .success(trimmed)
+        } catch {
+          result = .failure(error)
+        }
+        guard self.activeTurn == turnId else {
+          return
+        }
+        self.finishTurn(result, turnId: turnId)
+      }
     }
   }
 
@@ -240,61 +350,39 @@ final class SpeechInputBridge: NSObject {
     cancelActive()
   }
 
-  private func handle(
-    result: SFSpeechRecognitionResult?,
-    error: Error?,
-    turnId: String
-  ) {
-    guard activeTurn == turnId else {
-      return
-    }
-    if let result {
-      latestTranscript = result.bestTranscription.formattedString
-        .trimmingCharacters(in: .whitespacesAndNewlines)
-      if result.isFinal {
-        terminalResult = latestTranscript.isEmpty
-          ? .failure(speechError("NoSpeech", "No speech was detected.", "ERR_SPEECH_EMPTY"))
-          : .success(latestTranscript)
-        stopAudio()
-        if stopContinuation != nil {
-          finishTurn(terminalResult!)
-        }
-      }
-    }
-    if let error {
-      terminalResult = .failure(error)
-      stopAudio()
-      if stopContinuation != nil {
-        finishTurn(terminalResult!)
-      }
-    }
-  }
-
   private func cancelActive() {
-    guard activeTurn != nil else {
+    guard let turnId = activeTurn else {
       return
     }
     finishTurn(
       .failure(
         speechError("SpeechCancelled", "The speech turn was cancelled.", "ERR_SPEECH_CANCELLED")
-      )
+      ),
+      turnId: turnId
     )
   }
 
-  private func finishTurn(_ result: Result<String, Error>) {
+  private func finishTurn(_ result: Result<String, Error>, turnId: String) {
+    guard activeTurn == turnId else {
+      return
+    }
     let continuation = stopContinuation
     stopContinuation = nil
     stopTimeout?.cancel()
     stopTimeout = nil
-    task?.cancel()
-    task = nil
-    request?.endAudio()
-    request = nil
-    recognizer = nil
+    resultTask?.cancel()
+    resultTask = nil
+    if let analyzer {
+      Task {
+        await analyzer.cancelAndFinishNow()
+      }
+    }
+    analyzer = nil
+    transcriber = nil
+    inputContinuation?.finish()
+    inputContinuation = nil
     cleanupAudio()
     activeTurn = nil
-    terminalResult = nil
-    latestTranscript = ""
     continuation?.resume(with: result)
   }
 

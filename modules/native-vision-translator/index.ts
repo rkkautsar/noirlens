@@ -123,6 +123,7 @@ export interface NativeVisionTranslatorModule extends NativeModule {
   stopSpeaking(): Promise<void>;
   speechPermissionStatus(): Promise<SpeechPermissionPayload>;
   requestSpeechPermissions(): Promise<SpeechPermissionPayload>;
+  prepareSpeechAssets(language: string): Promise<void>;
   startListening(turnId: string, language: string): Promise<void>;
   /** Final on-device transcript, or an empty string when no turn was active. */
   stopListening(turnId: string): Promise<string>;
@@ -241,6 +242,7 @@ const webMock = {
     speech: 'denied' as const,
     microphone: 'denied' as const,
   }),
+  prepareSpeechAssets: async () => {},
   startListening: async () => {
     throw new Error('Speech input requires the iOS app.');
   },

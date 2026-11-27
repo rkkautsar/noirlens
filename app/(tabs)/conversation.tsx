@@ -537,6 +537,12 @@ export default function ConversationScreen() {
     setRetry(null);
     setError(null);
     cancelTurn();
+    if (Platform.OS !== 'web') {
+      void vision.prepareSpeechAssets('en');
+      void vision.prepareSpeechAssets(
+        conversationSourceLanguage('local', localLanguage),
+      );
+    }
     // A changed pair relabels both sides, so old turns cannot remain.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [localLanguage]);

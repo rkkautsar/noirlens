@@ -21,9 +21,12 @@ final class SpeechInputBridge: NSObject {
   private var analyzer: SpeechAnalyzer?
   private var transcriber: SpeechTranscriber?
   private var inputContinuation: AsyncStream<AnalyzerInput>.Continuation?
+  private var audioConverter: AVAudioConverter?
   private var resultTask: Task<String, Error>?
   private var activeTurn: String?
   private var cancelledTurns: [String] = []
+  private var prepareQueue: Task<Void, Error>?
+  private var prepareGeneration = 0
   private var stopContinuation: CheckedContinuation<String, Error>?
   private var stopTimeout: Task<Void, Never>?
   private var tapInstalled = false
@@ -100,25 +103,78 @@ final class SpeechInputBridge: NSObject {
     return permissionStatus()
   }
 
-  /// Downloads the on-device model ahead of the first hold. AssetInventory
-  /// shares installed models between apps and requests are consolidated.
-  func prepareAssets(language: String) async {
+  /// Downloads the on-device models ahead of the first hold and releases
+  /// locales that are no longer part of the active pair. AssetInventory shares
+  /// installed models between apps and consolidates duplicate requests.
+  func prepareAssets(languages: [String]) async {
+    _ = try? await enqueueAssets(
+      languages: languages,
+      reservations: languages
+    )
+  }
+
+  private func enqueueAssets(
+    languages: [String],
+    reservations: [String]
+  ) async throws {
+    prepareGeneration += 1
+    let generation = prepareGeneration
+    let previous = prepareQueue
+    let task = Task { @MainActor [weak self] in
+      _ = try? await previous?.value
+      guard let self, generation == self.prepareGeneration else {
+        return
+      }
+      try await self.performPrepare(
+        languages: languages,
+        reservations: reservations
+      )
+    }
+    prepareQueue = task
+    try await task.value
+  }
+
+  private func performPrepare(
+    languages: [String],
+    reservations: [String]
+  ) async throws {
     guard SpeechTranscriber.isAvailable else {
       return
     }
-    let requested = speechLocale(for: language)
-    guard let locale = await SpeechTranscriber.supportedLocale(equivalentTo: requested) else {
-      return
+    var installLocales: [Locale] = []
+    for language in Set(languages) {
+      let requested = speechLocale(for: language)
+      guard let locale = await SpeechTranscriber.supportedLocale(equivalentTo: requested) else {
+        continue
+      }
+      installLocales.append(locale)
     }
-    let transcriber = SpeechTranscriber(locale: locale, preset: .transcription)
-    if let request = try? await AssetInventory.assetInstallationRequest(
-      supporting: [transcriber]
-    ) {
-      try? await request.downloadAndInstall()
+    var wanted: Set<String> = []
+    for language in Set(reservations) {
+      let requested = speechLocale(for: language)
+      if let locale = await SpeechTranscriber.supportedLocale(equivalentTo: requested) {
+        wanted.insert(locale.identifier.lowercased())
+      }
+    }
+
+    // Free stale reservations before asking for the new pair; otherwise an
+    // installation at the reservation quota fails before it can release them.
+    for reserved in AssetInventory.reservedLocales
+    where !wanted.contains(reserved.identifier.lowercased()) {
+      _ = await AssetInventory.release(reservedLocale: reserved)
+    }
+
+    for locale in installLocales {
+      let transcriber = SpeechTranscriber(locale: locale, preset: .transcription)
+      if let request = try await AssetInventory.assetInstallationRequest(
+        supporting: [transcriber]
+      ) {
+        try await request.downloadAndInstall()
+      }
     }
   }
 
-  func start(turnId: String, language: String) async throws {
+  func start(turnId: String, language: String, languages: [String]) async throws {
     guard activeTurn == nil else {
       throw speechError("Busy", "Another speech turn is already active.", "ERR_SPEECH_BUSY")
     }
@@ -158,14 +214,29 @@ final class SpeechInputBridge: NSObject {
         )
       }
 
-      let transcriber = SpeechTranscriber(locale: locale, preset: .transcription)
-      if let request = try await AssetInventory.assetInstallationRequest(
-        supporting: [transcriber]
-      ) {
-        try await request.downloadAndInstall()
+      guard activeTurn == turnId,
+            UIApplication.shared.applicationState == .active
+      else {
+        throw speechError("Cancelled", "The speech turn was cancelled.", "ERR_SPEECH_CANCELLED")
       }
 
-      guard activeTurn == turnId else {
+      let transcriber = SpeechTranscriber(locale: locale, preset: .transcription)
+      let assetStatus = await AssetInventory.status(forModules: [transcriber])
+      guard activeTurn == turnId,
+            UIApplication.shared.applicationState == .active
+      else {
+        throw speechError("Cancelled", "The speech turn was cancelled.", "ERR_SPEECH_CANCELLED")
+      }
+      if assetStatus != .installed {
+        try await enqueueAssets(
+          languages: [language],
+          reservations: languages
+        )
+      }
+
+      guard activeTurn == turnId,
+            UIApplication.shared.applicationState == .active
+      else {
         throw speechError("Cancelled", "The speech turn was cancelled.", "ERR_SPEECH_CANCELLED")
       }
       guard let analyzerFormat = await SpeechAnalyzer.bestAvailableAudioFormat(
@@ -177,6 +248,16 @@ final class SpeechInputBridge: NSObject {
           "ERR_SPEECH_ON_DEVICE_UNAVAILABLE"
         )
       }
+      guard activeTurn == turnId,
+            UIApplication.shared.applicationState == .active
+      else {
+        throw speechError("Cancelled", "The speech turn was cancelled.", "ERR_SPEECH_CANCELLED")
+      }
+
+      let session = AVAudioSession.sharedInstance()
+      try session.setCategory(.record, mode: .measurement)
+      try session.setActive(true)
+      sessionActive = true
 
       let input = audioEngine.inputNode
       let inputFormat = input.outputFormat(forBus: 0)
@@ -195,16 +276,12 @@ final class SpeechInputBridge: NSObject {
         )
       }
 
-      let session = AVAudioSession.sharedInstance()
-      try session.setCategory(.record, mode: .measurement)
-      try session.setActive(true)
-      sessionActive = true
-
       let (inputSequence, continuation) = AsyncStream.makeStream(of: AnalyzerInput.self)
       let analyzer = SpeechAnalyzer(modules: [transcriber], options: nil)
 
       self.transcriber = transcriber
       self.analyzer = analyzer
+      self.audioConverter = converter
       self.inputContinuation = continuation
       self.resultTask = Task {
         var transcript = AttributedString()
@@ -217,7 +294,9 @@ final class SpeechInputBridge: NSObject {
       }
 
       try await analyzer.start(inputSequence: inputSequence)
-      guard activeTurn == turnId else {
+      guard activeTurn == turnId,
+            UIApplication.shared.applicationState == .active
+      else {
         throw speechError("Cancelled", "The speech turn was cancelled.", "ERR_SPEECH_CANCELLED")
       }
 
@@ -312,6 +391,7 @@ final class SpeechInputBridge: NSObject {
       stopAudio()
       let stream = inputContinuation
       inputContinuation = nil
+      drainConverter(into: stream)
       stream?.finish()
 
       Task { @MainActor [weak self] in
@@ -379,11 +459,39 @@ final class SpeechInputBridge: NSObject {
     }
     analyzer = nil
     transcriber = nil
+    audioConverter = nil
     inputContinuation?.finish()
     inputContinuation = nil
     cleanupAudio()
     activeTurn = nil
     continuation?.resume(with: result)
+  }
+
+  private func drainConverter(into stream: AsyncStream<AnalyzerInput>.Continuation?) {
+    guard let converter = audioConverter, let stream else {
+      return
+    }
+    let format = converter.outputFormat
+    let capacity = AVAudioFrameCount(4096)
+    for _ in 0..<4 {
+      guard let converted = AVAudioPCMBuffer(
+        pcmFormat: format,
+        frameCapacity: capacity
+      ) else {
+        return
+      }
+      var conversionError: NSError?
+      let status = converter.convert(to: converted, error: &conversionError) { _, outStatus in
+        outStatus.pointee = .endOfStream
+        return nil
+      }
+      if converted.frameLength > 0 {
+        stream.yield(AnalyzerInput(buffer: converted))
+      }
+      if status != .haveData {
+        break
+      }
+    }
   }
 
   private func stopAudio() {

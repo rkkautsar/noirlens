@@ -32,7 +32,7 @@ import vision, {
 } from '../../modules/native-vision-translator';
 
 type Side = ConversationSide;
-type Phase = 'idle' | 'listening' | 'translating';
+type Phase = 'idle' | 'preparing' | 'listening' | 'translating';
 
 interface Message {
   id: number;
@@ -123,6 +123,7 @@ function ConversationPane({
   }, [newestId]);
 
   const label = languageLabel(language);
+  const preparing = active && phase === 'preparing';
   const listening = active && phase === 'listening';
   const busy = phase !== 'idle' || retrying;
   const enabled = ready && !busy;
@@ -193,16 +194,18 @@ function ConversationPane({
           accessible
           accessibilityRole="button"
           accessibilityLabel={
-            listening
-              ? `Stop speaking ${label}`
-              : `Hold to speak ${label}. Double tap to start or stop.`
+            preparing
+              ? 'Preparing the speech model'
+              : listening
+                ? `Stop speaking ${label}`
+                : `Hold to speak ${label}. Double tap to start or stop.`
           }
           accessibilityState={{
-            disabled: !enabled && !listening,
-            busy: listening,
+            disabled: !enabled && !listening && !preparing,
+            busy: listening || preparing,
           }}
           onAccessibilityTap={() => {
-            if (listening) {
+            if (listening || preparing) {
               onRelease();
             } else if (enabled) {
               onStart();
@@ -241,13 +244,15 @@ function ConversationPane({
               listening && styles.controlLabelListening,
             ]}
           >
-            {listening
-              ? `LISTENING · ${label}`
-              : phase === 'translating'
-                ? 'TRANSLATING…'
-                : Platform.OS === 'web'
-                  ? 'SPEECH INPUT REQUIRES THE IOS APP'
-                  : `HOLD TO SPEAK · ${label}`}
+            {preparing
+              ? 'PREPARING SPEECH MODEL…'
+              : listening
+                ? `LISTENING · ${label}`
+                : phase === 'translating'
+                  ? 'TRANSLATING…'
+                  : Platform.OS === 'web'
+                    ? 'SPEECH INPUT REQUIRES THE IOS APP'
+                    : `HOLD TO SPEAK · ${label}`}
           </Text>
         </View>
       )}
@@ -403,12 +408,15 @@ export default function ConversationScreen() {
     setActiveSide(side);
     setError(null);
     setRetry(null);
-    setTurnPhase('listening');
+    setTurnPhase('preparing');
 
     const language =
       side === 'en' ? 'en' : conversationSourceLanguage('local', localLanguage);
     try {
-      await vision.startListening(id, language);
+      await vision.startListening(id, language, [
+        'en',
+        conversationSourceLanguage('local', localLanguage),
+      ]);
     } catch (caught) {
       if (turnId.current !== id) {
         return;
@@ -426,6 +434,7 @@ export default function ConversationScreen() {
       return;
     }
     started.current = true;
+    setTurnPhase('listening');
     if (released.current) {
       void finishTurn(id, side);
     }
@@ -437,7 +446,12 @@ export default function ConversationScreen() {
     }
     released.current = true;
     const id = turnId.current;
-    if (id !== null && started.current && !finishing.current) {
+    if (id !== null && !started.current && !finishing.current) {
+      void vision.cancelListening(id).catch(() => {});
+      resetTurn();
+      return;
+    }
+    if (id !== null && !finishing.current) {
       void finishTurn(id, side);
     }
   };
@@ -538,10 +552,10 @@ export default function ConversationScreen() {
     setError(null);
     cancelTurn();
     if (Platform.OS !== 'web') {
-      void vision.prepareSpeechAssets('en');
-      void vision.prepareSpeechAssets(
+      void vision.prepareSpeechAssets([
+        'en',
         conversationSourceLanguage('local', localLanguage),
-      );
+      ]);
     }
     // A changed pair relabels both sides, so old turns cannot remain.
     // eslint-disable-next-line react-hooks/exhaustive-deps

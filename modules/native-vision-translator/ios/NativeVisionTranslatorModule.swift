@@ -243,12 +243,17 @@ public final class NativeVisionTranslatorModule: Module {
       await SpeechInputBridge.shared.requestPermissions()
     }
 
-    AsyncFunction("prepareSpeechAssets") { (language: String) async in
-      await SpeechInputBridge.shared.prepareAssets(language: language)
+    AsyncFunction("prepareSpeechAssets") { (languages: [String]) async in
+      await SpeechInputBridge.shared.prepareAssets(languages: languages)
     }
 
-    AsyncFunction("startListening") { (turnId: String, language: String) in
-      try await SpeechInputBridge.shared.start(turnId: turnId, language: language)
+    AsyncFunction("startListening") {
+      (turnId: String, language: String, languages: [String]) in
+      try await SpeechInputBridge.shared.start(
+        turnId: turnId,
+        language: language,
+        languages: languages
+      )
     }
 
     AsyncFunction("stopListening") { (turnId: String) async throws -> String in

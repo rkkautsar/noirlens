@@ -123,8 +123,12 @@ export interface NativeVisionTranslatorModule extends NativeModule {
   stopSpeaking(): Promise<void>;
   speechPermissionStatus(): Promise<SpeechPermissionPayload>;
   requestSpeechPermissions(): Promise<SpeechPermissionPayload>;
-  prepareSpeechAssets(language: string): Promise<void>;
-  startListening(turnId: string, language: string): Promise<void>;
+  prepareSpeechAssets(languages: string[]): Promise<void>;
+  startListening(
+    turnId: string,
+    language: string,
+    languages: string[],
+  ): Promise<void>;
   /** Final on-device transcript, or an empty string when no turn was active. */
   stopListening(turnId: string): Promise<string>;
   cancelListening(turnId: string): Promise<void>;

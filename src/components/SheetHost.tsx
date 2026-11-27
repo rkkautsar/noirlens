@@ -36,6 +36,7 @@ export type SheetRequest =
       selected: string;
       allowAuto?: boolean;
       travelerOnly?: boolean;
+      packTarget?: string;
       onSelect: (code: string) => void;
     }
 
@@ -118,6 +119,7 @@ export function SheetHost({ children }: { children: ReactNode }) {
             selected={languageRequest.selected}
             allowAuto={languageRequest.allowAuto}
             travelerOnly={languageRequest.travelerOnly}
+            packTarget={languageRequest.packTarget}
             onSelect={(code) => {
               closeSheet();
               languageRequest.onSelect(code);

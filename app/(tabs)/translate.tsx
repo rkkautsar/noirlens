@@ -138,6 +138,7 @@ export default function TranslateScreen() {
       kind: 'languagePicker',
       title: which === 'source' ? 'TRANSLATE FROM' : 'TRANSLATE TO',
       selected: which === 'source' ? source : target,
+      packTarget: which === 'source' ? target : source,
       onSelect: (code) => {
         if (which === 'source') {
           setSource(code);

@@ -292,9 +292,6 @@ export default function ConversationScreen() {
   const started = useRef(false);
   const released = useRef(false);
   const finishing = useRef(false);
-  const focused = useRef(true);
-  const languageRequestToken = useRef(0);
-  const languagePackRequest = useRef<string | null>(null);
 
   const setTurnPhase = (next: Phase) => {
     phaseRef.current = next;
@@ -461,58 +458,6 @@ export default function ConversationScreen() {
     }
   };
 
-  const selectLocalLanguage = async (code: string) => {
-    languageRequestToken.current += 1;
-    const previousRequest = languagePackRequest.current;
-    languagePackRequest.current = null;
-    if (previousRequest !== null) {
-      void vision.cancelLanguagePack(previousRequest).catch(() => {});
-    }
-    if (code === localLanguage) {
-      return;
-    }
-    const token = languageRequestToken.current;
-    const requestId = `conversation-language-${Date.now()}-${token}`;
-    languagePackRequest.current = requestId;
-    const current = () =>
-      token === languageRequestToken.current && focused.current;
-    try {
-      const status = await vision.checkLanguagePackStatus(code);
-      if (!current()) {
-        return;
-      }
-      if (status.status === 'installed') {
-        await sourceLanguage.set(code);
-        return;
-      }
-      if (status.status === 'supported') {
-        const prepared = await vision.prepareLanguagePack(
-          code,
-          undefined,
-          requestId,
-        );
-        if (!current()) {
-          return;
-        }
-        if (prepared.status === 'installed') {
-          await sourceLanguage.set(code);
-        } else {
-          setError(`${languageLabel(code)} pack was not installed.`);
-        }
-        return;
-      }
-      setError(`${languageLabel(code)} is not supported for translation.`);
-    } catch {
-      if (current()) {
-        setError(`The ${languageLabel(code)} pack could not be installed.`);
-      }
-    } finally {
-      if (languagePackRequest.current === requestId) {
-        languagePackRequest.current = null;
-      }
-    }
-  };
-
   const enableSpeech = async () => {
     if (requesting) {
       return;
@@ -587,7 +532,6 @@ export default function ConversationScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      focused.current = true;
       if (Platform.OS !== 'web') {
         void vision
           .speechPermissionStatus()
@@ -595,13 +539,6 @@ export default function ConversationScreen() {
           .catch(() => {});
       }
       return () => {
-        focused.current = false;
-        languageRequestToken.current += 1;
-        const request = languagePackRequest.current;
-        languagePackRequest.current = null;
-        if (request !== null) {
-          void vision.cancelLanguagePack(request).catch(() => {});
-        }
         cancelTurn();
         void vision.stopSpeaking().catch(() => {});
       };
@@ -731,8 +668,9 @@ export default function ConversationScreen() {
                     title: 'CONVERSATION LANGUAGE',
                     selected: localLanguage,
                     travelerOnly: true,
+                    packTarget: 'en',
                     onSelect: (code) => {
-                      void selectLocalLanguage(code);
+                      void sourceLanguage.set(code).catch(() => {});
                     },
                   })
                 }

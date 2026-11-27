@@ -238,7 +238,6 @@ export default function ScannerScreen() {
         unlimited={snapshot.unlimited}
         onPaywall={openPaywall}
         onBack={reading ? scanner.stop : undefined}
-        bottomInset={false}
         backdrop={
           <EcoCameraView style={StyleSheet.absoluteFill} ecoMode={ecoMode} />
         }

@@ -2,8 +2,8 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Clipboard from 'expo-clipboard';
 import * as Haptics from 'expo-haptics';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { useBottomTabBarHeight } from 'expo-router/js-tabs';
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   Dimensions,
   Keyboard,
@@ -42,7 +42,7 @@ function tap() {
 
 export default function TranslateScreen() {
   const router = useRouter();
-  const tabBarHeight = useBottomTabBarHeight();
+  const insets = useSafeAreaInsets();
   const preferred = useSourceLanguage();
   const allowance = useScanAllowance();
   const { openSheet } = useSheet();
@@ -216,7 +216,6 @@ export default function TranslateScreen() {
         remaining={allowance.remaining}
         unlimited={allowance.unlimited}
         onPaywall={() => router.push('/paywall')}
-        bottomInset={false}
       >
       <View style={styles.languageBar}>
           <View style={styles.languageRow}>
@@ -351,9 +350,7 @@ export default function TranslateScreen() {
             styles.composer,
             {
               paddingBottom: 8,
-              // The scene ends above the reserved tab bar, so only the
-              // keyboard height beyond it needs to be compensated.
-              marginBottom: Math.max(0, keyboardHeight - tabBarHeight),
+              marginBottom: Math.max(0, keyboardHeight - insets.bottom),
             },
           ]}
         >

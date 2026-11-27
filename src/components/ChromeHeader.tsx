@@ -1,13 +1,15 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { usePathname, useRouter } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { ModeTabs } from './ModeTabs';
 import { ChipButton } from './ui';
 import { colors, layout, typography } from '@/theme';
 
 /**
- * Fixed page header: brand, optional back, and the scan counter. Landing
- * navigation lives in the tab bar; pushed pages replace the tabs with Back.
+ * Fixed page header: brand, optional back, the scan counter, and the top
+ * camera/translate switcher on landing. Pushed pages replace tabs with Back.
  */
 export function ChromeHeader({
   remaining,
@@ -21,6 +23,10 @@ export function ChromeHeader({
   onBack?: () => void;
 }) {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
+  const pathname = usePathname();
+  const landing = pathname === '/' || pathname === '/translate';
+  const active = pathname === '/translate' ? 'translate' : 'camera';
   const counter = unlimited
     ? 'PRO'
     : remaining !== null
@@ -53,6 +59,15 @@ export function ChromeHeader({
         </View>
         {counter ? <ChipButton label={counter} onPress={onOpenPaywall} /> : null}
       </View>
+      {landing ? (
+        <View pointerEvents="box-none" style={styles.tabs}>
+          <ModeTabs
+            active={active}
+            onCamera={() => router.navigate('/')}
+            onTranslate={() => router.navigate('/translate')}
+          />
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -88,5 +103,8 @@ const styles = StyleSheet.create({
     ...typography.label,
     color: colors.foreground,
     letterSpacing: 3,
+  },
+  tabs: {
+    alignItems: 'center',
   },
 });

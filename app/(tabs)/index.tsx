@@ -187,6 +187,9 @@ export default function ScannerScreen() {
   };
 
   const openLanguages = () => {
+    if (scanner.isSaving()) {
+      return;
+    }
     if (state === 'PREWARM' || state === 'SCANNING') {
       scanner.stop();
     }
@@ -372,6 +375,8 @@ export default function ScannerScreen() {
                         ? 'Source language: Auto. Open language settings.'
                         : `Source language: ${languageShortLabel(source.code)}. Open language settings.`
                     }
+                    disabled={snapshot.saving}
+                    accessibilityState={{ disabled: snapshot.saving }}
                     onPress={openLanguages}
                     style={({ pressed }) => [
                       styles.sourceButton,
@@ -451,6 +456,7 @@ export default function ScannerScreen() {
                 onCapture={scanner.captureNow}
                 onCancel={reading ? scanner.scanAgain : scanner.stop}
                 onLanguages={openLanguages}
+                isSaving={scanner.isSaving}
                 collect={snapshot.captureMode === 'collect'}
                 saving={snapshot.saving}
               />

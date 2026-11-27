@@ -46,6 +46,7 @@ export function ScanShutter({
   onCapture,
   onCancel,
   onLanguages,
+  isSaving,
   collect = false,
 }: {
   active: boolean;
@@ -56,6 +57,7 @@ export function ScanShutter({
   onCapture: () => void;
   onCancel: () => void;
   onLanguages: () => void;
+  isSaving?: () => boolean;
   collect?: boolean;
 }) {
   const [zone, setZone] = useState<Zone | null>(null);
@@ -65,8 +67,22 @@ export function ScanShutter({
   const zoneRef = useRef<Zone | null>(null);
   const directZone = useRef<Zone | null>(null);
   const fired = useRef(false);
-  const latest = useRef({ onStart, onCapture, onCancel, onLanguages, scanning });
-  latest.current = { onStart, onCapture, onCancel, onLanguages, scanning };
+  const latest = useRef({
+    onStart,
+    onCapture,
+    onCancel,
+    onLanguages,
+    isSaving,
+    scanning,
+  });
+  latest.current = {
+    onStart,
+    onCapture,
+    onCancel,
+    onLanguages,
+    isSaving,
+    scanning,
+  };
 
   const responder = useMemo(() => {
     const clear = () => {
@@ -79,6 +95,9 @@ export function ScanShutter({
 
     const fire = (target: Zone) => {
       if (fired.current) {
+        return;
+      }
+      if (latest.current.isSaving?.()) {
         return;
       }
       fired.current = true;
@@ -203,6 +222,12 @@ export function ScanShutter({
   };
 
   const onAccessibilityAction = (name: string) => {
+    if (
+      (name === 'cancel' || name === 'languages') &&
+      (saving || isSaving?.())
+    ) {
+      return;
+    }
     if (name === 'activate') {
       activate();
     } else if (name === 'cancel') {

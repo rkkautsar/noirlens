@@ -62,6 +62,7 @@ export interface ScannerController {
   stop: () => void;
   dismissError: () => void;
   setActive: (active: boolean) => void;
+  isSaving: () => boolean;
   rescan: (language: string) => Promise<RescanOutcome>;
 }
 
@@ -142,6 +143,7 @@ function useScannerController(
     store.getSnapshot,
   );
   const [saving, setSaving] = useState(false);
+  const savingTokens = useRef(new Set<number>());
   const viewSnapshot = useMemo(
     () => ({ ...snapshot, saving }),
     [snapshot, saving],
@@ -479,11 +481,13 @@ function useScannerController(
           ocrRevision: 0,
         };
         // Persistence gates the animation and the badge; OCR runs after.
+        savingTokens.current.add(token);
         setSaving(true);
         try {
           await captures.add(record);
         } finally {
-          setSaving(false);
+          savingTokens.current.delete(token);
+          setSaving(savingTokens.current.size > 0);
         }
         savedFiles = null;
         enqueueCapture(record.id);
@@ -755,9 +759,16 @@ function useScannerController(
   }, [store]);
 
   const stop = useCallback(() => {
+    // A committed collection write cannot be recalled; stopping here only
+    // invalidates its confirmation.
+    if (savingTokens.current.size > 0) {
+      return;
+    }
     rescanToken.current += 1;
     store.send({ type: 'STOP', timestampMs: Date.now() });
   }, [store]);
+
+  const isSaving = useCallback(() => savingTokens.current.size > 0, []);
 
   const dismissError = useCallback(() => {
     store.send({ type: 'DISMISS_ERROR', timestampMs: Date.now() });
@@ -907,6 +918,7 @@ function useScannerController(
     stop,
     dismissError,
     setActive,
+    isSaving,
     rescan,
   };
 }

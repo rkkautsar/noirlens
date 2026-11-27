@@ -8,6 +8,7 @@ import {
   useEffect,
   useMemo,
   useRef,
+  useState,
   useSyncExternalStore,
   type MutableRefObject,
   type ReactNode,
@@ -139,6 +140,11 @@ function useScannerController(
     store.subscribe,
     store.getSnapshot,
     store.getSnapshot,
+  );
+  const [saving, setSaving] = useState(false);
+  const viewSnapshot = useMemo(
+    () => ({ ...snapshot, saving }),
+    [snapshot, saving],
   );
 
   const focusedRef = useRef(false);
@@ -473,7 +479,12 @@ function useScannerController(
           ocrRevision: 0,
         };
         // Persistence gates the animation and the badge; OCR runs after.
-        await captures.add(record);
+        setSaving(true);
+        try {
+          await captures.add(record);
+        } finally {
+          setSaving(false);
+        }
         savedFiles = null;
         enqueueCapture(record.id);
         if (token !== captureToken) {
@@ -887,7 +898,7 @@ function useScannerController(
   );
 
   return {
-    snapshot,
+    snapshot: viewSnapshot,
     setCaptureMode,
     beginHold,
     setReticleFrame,

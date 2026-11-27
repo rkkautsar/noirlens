@@ -21,6 +21,8 @@ export interface ScannerSnapshot {
   result: ScanResult | null;
   error: ScanError | null;
   scansUsedToday: number;
+  /** A collection write is in flight and cannot be cancelled. */
+  saving: boolean;
   /** null means unlimited. */
   remainingToday: number | null;
   unlimited: boolean;
@@ -40,6 +42,7 @@ function buildSnapshot(
     result: context.result,
     error: context.error,
     scansUsedToday: context.scansUsedToday,
+    saving: false,
     remainingToday: remainingScans(context, tuning),
     unlimited: context.unlimited,
     hydrated: context.hydrated,

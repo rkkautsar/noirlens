@@ -452,6 +452,7 @@ export default function ScannerScreen() {
                 onCancel={reading ? scanner.scanAgain : scanner.stop}
                 onLanguages={openLanguages}
                 collect={snapshot.captureMode === 'collect'}
+                saving={snapshot.saving}
               />
             ) : null}
           </>

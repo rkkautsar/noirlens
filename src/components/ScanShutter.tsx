@@ -41,6 +41,7 @@ export function ScanShutter({
   active,
   scanning,
   next = false,
+  saving = false,
   onStart,
   onCapture,
   onCancel,
@@ -50,6 +51,7 @@ export function ScanShutter({
   active: boolean;
   scanning: boolean;
   next?: boolean;
+  saving?: boolean;
   onStart: () => void;
   onCapture: () => void;
   onCancel: () => void;
@@ -286,14 +288,12 @@ export function ScanShutter({
         accessibilityState={{ busy: scanning }}
         accessibilityActions={
           scanning
-            ? [
-                // A collection save is already committing; Cancel cannot
-                // recall it and only suppresses the save feedback.
-                ...(collect
-                  ? []
-                  : [{ name: 'cancel', label: 'Cancel scan' }]),
-                { name: 'languages', label: 'Choose languages' },
-              ]
+            ? collect && saving
+              ? undefined
+              : [
+                  { name: 'cancel', label: 'Cancel scan' },
+                  { name: 'languages', label: 'Choose languages' },
+                ]
             : [
                 { name: 'activate', label: active ? 'Capture' : 'Start aiming' },
                 { name: 'cancel', label: 'Cancel scan' },

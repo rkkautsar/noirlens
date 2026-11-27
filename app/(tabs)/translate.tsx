@@ -48,10 +48,12 @@ export default function TranslateScreen() {
   const { openSheet } = useSheet();
   const [keyboardHeight, setKeyboardHeight] = useState(0);
 
-  const [source, setSource] = useState(() =>
-    preferred.code !== 'auto' ? preferred.code : 'en',
+  const [source, setSource] = useState('en');
+  const [target, setTarget] = useState(() =>
+    preferred.code !== 'auto' && preferred.code !== 'en'
+      ? preferred.code
+      : 'ja',
   );
-  const [target, setTarget] = useState('en');
   const [input, setInput] = useState('');
   const [request, dispatch] = useReducer(translateReducer, IDLE_TRANSLATE);
   const requestCounter = useRef(0);

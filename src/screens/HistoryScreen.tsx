@@ -329,6 +329,9 @@ export function HistoryScreen() {
             }
             renderItem={({ item: entry }) => {
               const isCopied = copied === entry.id;
+              const text = entry.translatedText || entry.sourceText;
+              const excerpt =
+                text.length > 60 ? `${text.slice(0, 57)}…` : text;
               return (
                 <View style={styles.entryWrap}>
                   <Pressable
@@ -372,7 +375,14 @@ export function HistoryScreen() {
                   </Pressable>
                   <Pressable
                     accessibilityRole="button"
-                    accessibilityLabel={isCopied ? 'Copied' : 'Copy scan'}
+                    accessibilityLabel={
+                      isCopied ? 'Copied' : `Copy scan: ${excerpt}`
+                    }
+                    accessibilityHint={
+                      isCopied
+                        ? undefined
+                        : 'Copies the scan text to the clipboard'
+                    }
                     hitSlop={10}
                     onPress={() => {
                       void copy(entry);

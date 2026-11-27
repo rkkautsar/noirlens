@@ -373,7 +373,13 @@ enum TranslationBridge {
 }
 
 @MainActor
+private final class PackCancellationState {
+  var isCancelled = false
+}
+
+@MainActor
 private final class TranslationHostCoordinator {
+  private let cancellation = PackCancellationState()
   private var host: UIHostingController<TranslationHostView>?
   private var continuation: CheckedContinuation<String?, Error>?
   private var selfReference: TranslationHostCoordinator?
@@ -395,7 +401,8 @@ private final class TranslationHostCoordinator {
         source: source,
         target: target,
         text: text,
-        requestId: requestId
+        requestId: requestId,
+        cancellation: cancellation
       ) { @MainActor [weak self] result in
         self?.finish(result)
       }
@@ -427,6 +434,7 @@ private final class TranslationHostCoordinator {
 
   @MainActor
   func cancel() {
+    cancellation.isCancelled = true
     finish(.failure(TranslationBridge.packCancelledError()))
   }
 
@@ -449,6 +457,7 @@ private struct TranslationHostView: View {
   /// nil requests the pack download prompt without translating.
   let text: String?
   let requestId: String?
+  let cancellation: PackCancellationState
   let completion: @MainActor (Result<String?, Error>) -> Void
 
   @State private var configuration: TranslationSession.Configuration?
@@ -457,7 +466,9 @@ private struct TranslationHostView: View {
     Color.clear
       .frame(width: 1, height: 1)
       .translationTask(configuration) { session in
-        if await MainActor.run(body: { TranslationBridge.isPackCancelled(requestId) }) {
+        if Task.isCancelled || await MainActor.run(body: {
+          cancellation.isCancelled || TranslationBridge.isPackCancelled(requestId)
+        }) {
           await MainActor.run {
             completion(.failure(TranslationBridge.packCancelledError()))
           }

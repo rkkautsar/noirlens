@@ -466,9 +466,10 @@ private struct TranslationHostView: View {
     Color.clear
       .frame(width: 1, height: 1)
       .translationTask(configuration) { session in
-        if Task.isCancelled || await MainActor.run(body: {
+        let hostCancelled = await MainActor.run(body: {
           cancellation.isCancelled || TranslationBridge.isPackCancelled(requestId)
-        }) {
+        })
+        if Task.isCancelled || hostCancelled {
           await MainActor.run {
             completion(.failure(TranslationBridge.packCancelledError()))
           }

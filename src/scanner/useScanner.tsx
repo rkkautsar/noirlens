@@ -169,7 +169,6 @@ function useScannerController(
   useEffect(() => {
     let disposed = false;
     let capturing = false;
-    let captureToken = 0;
     let captureWatchdog: ReturnType<typeof setTimeout> | null = null;
     let pollingStatus = false;
     let statusTimer: ReturnType<typeof setInterval> | null = null;
@@ -193,16 +192,17 @@ function useScannerController(
         return;
       }
       capturing = true;
-      const token = ++captureToken;
-      captureTokenRef.current = token;
+      captureTokenRef.current += 1;
+      const token = captureTokenRef.current;
       setSaving(false);
       let language: string | undefined;
 
       const watchdog = setTimeout(() => {
-        if (token !== captureToken) {
+        if (token !== captureTokenRef.current) {
           return;
         }
-        captureToken += 1;
+        captureTokenRef.current += 1;
+        setSaving(savingTokens.current.has(captureTokenRef.current));
         capturing = false;
         if (store.getSnapshot().state === 'SCANNING') {
           store.send({
@@ -238,7 +238,7 @@ function useScannerController(
           crop,
           cameraToken,
         );
-        if (token !== captureToken) {
+        if (token !== captureTokenRef.current) {
           return;
         }
 
@@ -279,7 +279,7 @@ function useScannerController(
           sourceLanguage: string = language ?? 'und',
         ) => {
           if (
-            token !== captureToken ||
+            token !== captureTokenRef.current ||
             store.getSnapshot().state !== 'SCANNING'
           ) {
             return;
@@ -332,7 +332,7 @@ function useScannerController(
             .map((status) => status.language);
 
           for (const candidate of installed) {
-            if (token !== captureToken) {
+            if (token !== captureTokenRef.current) {
               return;
             }
             const outcome = await translateText({
@@ -340,7 +340,7 @@ function useScannerController(
               sourceLanguage: candidate,
             });
             if (outcome.status === 'translated') {
-              if (token !== captureToken) {
+              if (token !== captureTokenRef.current) {
                 return;
               }
               sendResult(
@@ -360,7 +360,7 @@ function useScannerController(
             text: ocr.text,
             sourceLanguage: language,
           });
-          if (token !== captureToken) {
+          if (token !== captureTokenRef.current) {
             return;
           }
           if (outcome.status === 'translated') {
@@ -404,7 +404,7 @@ function useScannerController(
           }
         }
       } catch (error) {
-        if (token !== captureToken) {
+        if (token !== captureTokenRef.current) {
           return;
         }
         // A drop or app background during the frame wait is not a scan error.
@@ -417,7 +417,7 @@ function useScannerController(
         }
       } finally {
         clearTimeout(watchdog);
-        if (token === captureToken) {
+        if (token === captureTokenRef.current) {
           capturing = false;
         }
       }
@@ -428,16 +428,17 @@ function useScannerController(
         return;
       }
       capturing = true;
-      const token = ++captureToken;
-      captureTokenRef.current = token;
+      captureTokenRef.current += 1;
+      const token = captureTokenRef.current;
       setSaving(false);
       const hint = sourceLanguage.current();
 
       const watchdog = setTimeout(() => {
-        if (token !== captureToken) {
+        if (token !== captureTokenRef.current) {
           return;
         }
-        captureToken += 1;
+        captureTokenRef.current += 1;
+        setSaving(savingTokens.current.has(captureTokenRef.current));
         capturing = false;
         if (store.getSnapshot().state === 'SCANNING') {
           store.send({
@@ -463,7 +464,7 @@ function useScannerController(
         }
         const still = await vision.captureStill(cameraToken);
         savedFiles = [still.image, still.thumb];
-        if (token !== captureToken) {
+        if (token !== captureTokenRef.current) {
           return;
         }
         const at = Date.now();
@@ -496,13 +497,13 @@ function useScannerController(
         }
         savedFiles = null;
         enqueueCapture(record.id);
-        if (token !== captureToken) {
+        if (token !== captureTokenRef.current) {
           return;
         }
         onCaptureSavedRef.current?.(record);
         store.send({ type: 'CAPTURE_SAVED', timestampMs: Date.now() });
       } catch (error) {
-        if (token !== captureToken) {
+        if (token !== captureTokenRef.current) {
           return;
         }
         store.send({
@@ -586,7 +587,8 @@ function useScannerController(
             });
           break;
         case 'STOP_CAMERA':
-          captureToken += 1;
+          captureTokenRef.current += 1;
+          setSaving(savingTokens.current.has(captureTokenRef.current));
           capturing = false;
           cameraStart = null;
           if (captureWatchdog !== null) {

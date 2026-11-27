@@ -24,8 +24,9 @@ import {
   type ConversationSide,
 } from '@/services/conversationTurn';
 import { useScanAllowance } from '@/services/allowance';
-import { useSourceLanguage } from '@/services/sourceLanguage';
+import { sourceLanguage, useSourceLanguage } from '@/services/sourceLanguage';
 import { installPack, translateText } from '@/services/translationTask';
+import { useSheet } from '@/components/SheetHost';
 import { colors, layout, radius, typography } from '@/theme';
 import vision, {
   type SpeechPermissionPayload,
@@ -265,6 +266,7 @@ export default function ConversationScreen() {
   const insets = useSafeAreaInsets();
   const allowance = useScanAllowance();
   const preferred = useSourceLanguage();
+  const { openSheet } = useSheet();
   const localLanguage = preferredLocalLanguage(preferred.code);
 
   const [messages, setMessages] = useState<Message[]>([]);
@@ -290,6 +292,9 @@ export default function ConversationScreen() {
   const started = useRef(false);
   const released = useRef(false);
   const finishing = useRef(false);
+  const focused = useRef(true);
+  const languageRequestToken = useRef(0);
+  const languagePackRequest = useRef<string | null>(null);
 
   const setTurnPhase = (next: Phase) => {
     phaseRef.current = next;
@@ -456,6 +461,58 @@ export default function ConversationScreen() {
     }
   };
 
+  const selectLocalLanguage = async (code: string) => {
+    languageRequestToken.current += 1;
+    const previousRequest = languagePackRequest.current;
+    languagePackRequest.current = null;
+    if (previousRequest !== null) {
+      void vision.cancelLanguagePack(previousRequest).catch(() => {});
+    }
+    if (code === localLanguage) {
+      return;
+    }
+    const token = languageRequestToken.current;
+    const requestId = `conversation-language-${Date.now()}-${token}`;
+    languagePackRequest.current = requestId;
+    const current = () =>
+      token === languageRequestToken.current && focused.current;
+    try {
+      const status = await vision.checkLanguagePackStatus(code);
+      if (!current()) {
+        return;
+      }
+      if (status.status === 'installed') {
+        await sourceLanguage.set(code);
+        return;
+      }
+      if (status.status === 'supported') {
+        const prepared = await vision.prepareLanguagePack(
+          code,
+          undefined,
+          requestId,
+        );
+        if (!current()) {
+          return;
+        }
+        if (prepared.status === 'installed') {
+          await sourceLanguage.set(code);
+        } else {
+          setError(`${languageLabel(code)} pack was not installed.`);
+        }
+        return;
+      }
+      setError(`${languageLabel(code)} is not supported for translation.`);
+    } catch {
+      if (current()) {
+        setError(`The ${languageLabel(code)} pack could not be installed.`);
+      }
+    } finally {
+      if (languagePackRequest.current === requestId) {
+        languagePackRequest.current = null;
+      }
+    }
+  };
+
   const enableSpeech = async () => {
     if (requesting) {
       return;
@@ -530,6 +587,7 @@ export default function ConversationScreen() {
 
   useFocusEffect(
     useCallback(() => {
+      focused.current = true;
       if (Platform.OS !== 'web') {
         void vision
           .speechPermissionStatus()
@@ -537,6 +595,13 @@ export default function ConversationScreen() {
           .catch(() => {});
       }
       return () => {
+        focused.current = false;
+        languageRequestToken.current += 1;
+        const request = languagePackRequest.current;
+        languagePackRequest.current = null;
+        if (request !== null) {
+          void vision.cancelLanguagePack(request).catch(() => {});
+        }
         cancelTurn();
         void vision.stopSpeaking().catch(() => {});
       };
@@ -656,9 +721,38 @@ export default function ConversationScreen() {
           retrying={retrying}
           permission={permission}
           header={
-            <View style={styles.ttsRow}>
-              <Text style={styles.ttsLabel}>SPEAK TRANSLATIONS</Text>
-              <Switch
+            <View style={styles.optionsRow}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Conversation language: ${languageLabel(localLanguage)}. Change language.`}
+                onPress={() =>
+                  openSheet({
+                    kind: 'languagePicker',
+                    title: 'CONVERSATION LANGUAGE',
+                    selected: localLanguage,
+                    travelerOnly: true,
+                    onSelect: (code) => {
+                      void selectLocalLanguage(code);
+                    },
+                  })
+                }
+                style={({ pressed: pressedChip }) => [
+                  styles.languageChip,
+                  pressedChip && styles.languageChipPressed,
+                ]}
+              >
+                <Ionicons
+                  name="language-outline"
+                  size={14}
+                  color={colors.accent}
+                />
+                <Text style={styles.languageChipText}>
+                  {languageLabel(localLanguage)}
+                </Text>
+              </Pressable>
+              <View style={styles.ttsControl}>
+                <Text style={styles.ttsLabel}>SPEAK</Text>
+                <Switch
                 accessibilityLabel="Speak translations"
                 value={ttsEnabled}
                 onValueChange={(next) => {
@@ -673,8 +767,9 @@ export default function ConversationScreen() {
                   true: colors.accentSoft,
                 }}
                 thumbColor={ttsEnabled ? colors.accent : colors.dim}
-                ios_backgroundColor={colors.border}
-              />
+                  ios_backgroundColor={colors.border}
+                />
+              </View>
             </View>
           }
           onEnable={() => void enableSpeech()}
@@ -737,11 +832,35 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: colors.foreground,
   },
-  ttsRow: {
+  optionsRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    gap: 10,
     paddingBottom: 6,
+  },
+  languageChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.pill,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+  },
+  languageChipPressed: {
+    backgroundColor: colors.surface,
+  },
+  languageChipText: {
+    ...typography.micro,
+    color: colors.foreground,
+    letterSpacing: 0.6,
+  },
+  ttsControl: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   ttsLabel: {
     ...typography.micro,

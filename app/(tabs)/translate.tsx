@@ -49,6 +49,7 @@ export default function TranslateScreen() {
   const { openSheet } = useSheet();
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const targetTouched = useRef(false);
+  const packRetry = useRef(0);
 
   const [source, setSource] = useState('en');
   const [target, setTarget] = useState(() =>
@@ -104,8 +105,20 @@ export default function TranslateScreen() {
     if (!preferred.loaded || targetTouched.current) {
       return;
     }
-    setTarget(preferredLocalLanguage(preferred.code));
-  }, [preferred.code, preferred.loaded]);
+    const next = preferredLocalLanguage(preferred.code);
+    if (next === target) {
+      return;
+    }
+    // The inherited target changed: discard the old result and invalidate any
+    // translation still in flight before showing the new pair.
+    requestCounter.current += 1;
+    packRetry.current += 1;
+    dispatch({ type: 'reset' });
+    setNotice(null);
+    setCopied(false);
+    setPreparing(false);
+    setTarget(next);
+  }, [preferred.code, preferred.loaded, target]);
 
   useEffect(() => {
     void vision.stopSpeaking().catch(() => {});
@@ -113,9 +126,11 @@ export default function TranslateScreen() {
   }, [target]);
 
   const reset = () => {
+    packRetry.current += 1;
     dispatch({ type: 'reset' });
     setNotice(null);
     setCopied(false);
+    setPreparing(false);
   };
 
   const openPicker = (which: 'source' | 'target') => {
@@ -176,9 +191,13 @@ export default function TranslateScreen() {
   };
 
   const prepare = async () => {
+    const token = ++packRetry.current;
     setPreparing(true);
     setNotice(null);
     const outcome = await installPack(source, target);
+    if (token !== packRetry.current) {
+      return;
+    }
     if (outcome === 'installed') {
       await run();
     } else {
@@ -188,7 +207,9 @@ export default function TranslateScreen() {
           : 'The pack did not finish installing. Try again.',
       );
     }
-    setPreparing(false);
+    if (token === packRetry.current) {
+      setPreparing(false);
+    }
   };
 
   const copy = async () => {

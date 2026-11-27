@@ -14,11 +14,13 @@ export function LanguagePickerSheet({
   selected,
   onSelect,
   allowAuto = false,
+  travelerOnly = false,
 }: {
   title: string;
   selected: string;
   onSelect: (code: string) => void;
   allowAuto?: boolean;
+  travelerOnly?: boolean;
 }) {
   return (
     <View style={styles.root}>
@@ -47,7 +49,7 @@ export function LanguagePickerSheet({
             </Text>
           </Pressable>
         ) : null}
-        {TRANSLATE_LANGUAGES.map((language) => {
+        {(travelerOnly ? TRAVELER_LANGUAGES : TRANSLATE_LANGUAGES).map((language) => {
           const active = language.code === selected;
           return (
             <Pressable

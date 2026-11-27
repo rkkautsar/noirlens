@@ -35,6 +35,7 @@ export type SheetRequest =
       title: string;
       selected: string;
       allowAuto?: boolean;
+      travelerOnly?: boolean;
       onSelect: (code: string) => void;
     }
 
@@ -116,6 +117,7 @@ export function SheetHost({ children }: { children: ReactNode }) {
             title={languageRequest.title}
             selected={languageRequest.selected}
             allowAuto={languageRequest.allowAuto}
+            travelerOnly={languageRequest.travelerOnly}
             onSelect={(code) => {
               closeSheet();
               languageRequest.onSelect(code);

@@ -129,16 +129,17 @@ function CaptureRow({
 /** Full-page history: pushed from the camera, stays mounted under a result. */
 /** Bounded to the visible prefix so long scans don't allocate per row. */
 function excerptFor(text: string): string {
-  let excerpt = '';
-  let count = 0;
+  const characters: string[] = [];
   for (const character of text) {
-    if (count === 57) {
-      return `${excerpt}…`;
+    if (characters.length === 61) {
+      break;
     }
-    excerpt += character;
-    count += 1;
+    characters.push(character);
   }
-  return text;
+  if (characters.length <= 60) {
+    return text;
+  }
+  return `${characters.slice(0, 57).join('')}…`;
 }
 
 export function HistoryScreen() {

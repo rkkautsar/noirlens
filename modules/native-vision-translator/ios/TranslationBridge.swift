@@ -16,11 +16,40 @@ import UIKit
 enum TranslationBridge {
   private static let defaultTarget = Locale.Language(identifier: "en")
   private static var cancelledPackRequests: Set<String> = []
+  private static var activePackRequests: Set<String> = []
+  private static var packHosts: [String: TranslationHostCoordinator] = [:]
 
-  /// Marks an in-flight pack request so presentation can be skipped if the
-  /// caller has already navigated away.
+  static func packCancelledError() -> Exception {
+    Exception(
+      name: "LanguagePackCancelled",
+      description: "The language pack request was cancelled.",
+      code: "ERR_LANGUAGE_PACK_CANCELLED"
+    )
+  }
+
+  static func isPackCancelled(_ requestId: String?) -> Bool {
+    guard let requestId else {
+      return false
+    }
+    return cancelledPackRequests.contains(requestId)
+  }
+
+  /// Marks an active pack request so presentation can be skipped or dismissed
+  /// if the caller has already navigated away.
   static func cancelPrepare(_ requestId: String) {
     cancelledPackRequests.insert(requestId)
+    packHosts[requestId]?.cancel()
+    if activePackRequests.contains(requestId) {
+      return
+    }
+    // The cancel can be dispatched just before this request registers.
+    // Keep it briefly so that case still wins, then discard it.
+    Task { @MainActor in
+      try? await Task.sleep(nanoseconds: 2_000_000_000)
+      if !activePackRequests.contains(requestId) {
+        cancelledPackRequests.remove(requestId)
+      }
+    }
   }
 
   static func status(
@@ -165,9 +194,14 @@ enum TranslationBridge {
     targetLanguage: String = "en",
     requestId: String? = nil
   ) async throws -> [String: Any] {
+    if let requestId {
+      activePackRequests.insert(requestId)
+    }
     defer {
       if let requestId {
+        activePackRequests.remove(requestId)
         cancelledPackRequests.remove(requestId)
+        packHosts[requestId] = nil
       }
     }
     let code = normalizedCode(languageCode)
@@ -292,15 +326,14 @@ enum TranslationBridge {
     }
 
     // The caller may have left while we waited for a stable controller.
-    if let requestId, cancelledPackRequests.contains(requestId) {
-      throw Exception(
-        name: "LanguagePackCancelled",
-        description: "The language pack request was cancelled.",
-        code: "ERR_LANGUAGE_PACK_CANCELLED"
-      )
+    if isPackCancelled(requestId) {
+      throw packCancelledError()
     }
 
     let coordinator = TranslationHostCoordinator()
+    if let requestId {
+      packHosts[requestId] = coordinator
+    }
     return try await coordinator.run(
       text: text,
       source: source,
@@ -359,7 +392,8 @@ private final class TranslationHostCoordinator {
       let view = TranslationHostView(
         source: source,
         target: target,
-        text: text
+        text: text,
+        requestId: requestId
       ) { @MainActor [weak self] result in
         self?.finish(result)
       }
@@ -389,6 +423,11 @@ private final class TranslationHostCoordinator {
     }
   }
 
+  @MainActor
+  func cancel() {
+    finish(.failure(TranslationBridge.packCancelledError()))
+  }
+
   private func finish(_ result: Result<String?, Error>) {
     attachmentCheck?.cancel()
     attachmentCheck = nil
@@ -407,6 +446,7 @@ private struct TranslationHostView: View {
   let target: Locale.Language
   /// nil requests the pack download prompt without translating.
   let text: String?
+  let requestId: String?
   let completion: @MainActor (Result<String?, Error>) -> Void
 
   @State private var configuration: TranslationSession.Configuration?
@@ -415,6 +455,12 @@ private struct TranslationHostView: View {
     Color.clear
       .frame(width: 1, height: 1)
       .translationTask(configuration) { session in
+        if await MainActor.run(body: { TranslationBridge.isPackCancelled(requestId) }) {
+          await MainActor.run {
+            completion(.failure(TranslationBridge.packCancelledError()))
+          }
+          return
+        }
         do {
           if let text {
             let response = try await session.translate(text)

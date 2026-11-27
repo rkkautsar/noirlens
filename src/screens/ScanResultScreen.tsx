@@ -101,6 +101,7 @@ export function ScanResultScreen({
   const [packError, setPackError] = useState<string | null>(null);
   const revisionRef = useRef('');
   const packBusyRef = useRef(false);
+  const packOwner = useRef(0);
   const liveRequest = useRef(0);
   const [languageBusy, setLanguageBusy] = useState(false);
   const [captureNonce, setCaptureNonce] = useState(0);
@@ -320,6 +321,7 @@ export function ScanResultScreen({
       return;
     }
     packBusyRef.current = true;
+    const owner = ++packOwner.current;
     const request = ++liveRequest.current;
     setPackBusy(true);
     setPackError(null);
@@ -349,8 +351,10 @@ export function ScanResultScreen({
       if (request === liveRequest.current) {
         setTranslating(false);
       }
-      packBusyRef.current = false;
-      setPackBusy(false);
+      if (packOwner.current === owner) {
+        packBusyRef.current = false;
+        setPackBusy(false);
+      }
     }
   };
 
@@ -364,6 +368,7 @@ export function ScanResultScreen({
         // result itself is cleared on Back/New Scan or unmount.
         scannerRef.current.cancelRetries();
         liveRequest.current += 1;
+        packOwner.current += 1;
         setTranslating(false);
         packBusyRef.current = false;
         setPackBusy(false);
@@ -386,6 +391,7 @@ export function ScanResultScreen({
     }
     const startedRevision = revisionRef.current;
     packBusyRef.current = true;
+    const owner = ++packOwner.current;
     const request = ++liveRequest.current;
     setPackBusy(true);
     setPackError(null);

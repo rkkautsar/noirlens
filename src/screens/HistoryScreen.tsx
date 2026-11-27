@@ -330,8 +330,11 @@ export function HistoryScreen() {
             renderItem={({ item: entry }) => {
               const isCopied = copied === entry.id;
               const text = entry.translatedText || entry.sourceText;
+              const characters = Array.from(text);
               const excerpt =
-                text.length > 60 ? `${text.slice(0, 57)}…` : text;
+                characters.length > 60
+                  ? `${characters.slice(0, 57).join('')}…`
+                  : text;
               return (
                 <View style={styles.entryWrap}>
                   <Pressable

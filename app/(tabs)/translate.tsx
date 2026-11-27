@@ -49,7 +49,7 @@ export default function TranslateScreen() {
   const [keyboardHeight, setKeyboardHeight] = useState(0);
 
   const [source, setSource] = useState(() =>
-    preferred.code !== 'auto' ? preferred.code : 'ja',
+    preferred.code !== 'auto' ? preferred.code : 'en',
   );
   const [target, setTarget] = useState('en');
   const [input, setInput] = useState('');

@@ -283,11 +283,15 @@ export function ScanShutter({
               ? 'Double tap to capture. Use the Cancel action to stop aiming.'
               : 'Double tap to aim the camera. Double tap again to capture.'
         }
-        accessibilityState={{ busy: scanning, disabled: scanning }}
+        accessibilityState={{ busy: scanning }}
         accessibilityActions={
           scanning
             ? [
-                { name: 'cancel', label: 'Cancel scan' },
+                // A collection save is already committing; Cancel cannot
+                // recall it and only suppresses the save feedback.
+                ...(collect
+                  ? []
+                  : [{ name: 'cancel', label: 'Cancel scan' }]),
                 { name: 'languages', label: 'Choose languages' },
               ]
             : [

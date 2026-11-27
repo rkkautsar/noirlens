@@ -338,6 +338,7 @@ enum TranslationBridge {
       text: text,
       source: source,
       target: target,
+      requestId: requestId,
       from: presenter
     )
   }
@@ -382,6 +383,7 @@ private final class TranslationHostCoordinator {
     text: String?,
     source: Locale.Language,
     target: Locale.Language,
+    requestId: String? = nil,
     from root: UIViewController
   ) async throws -> String? {
     try await withCheckedThrowingContinuation {

@@ -127,6 +127,20 @@ function CaptureRow({
 }
 
 /** Full-page history: pushed from the camera, stays mounted under a result. */
+/** Bounded to the visible prefix so long scans don't allocate per row. */
+function excerptFor(text: string): string {
+  let excerpt = '';
+  let count = 0;
+  for (const character of text) {
+    if (count === 57) {
+      return `${excerpt}…`;
+    }
+    excerpt += character;
+    count += 1;
+  }
+  return text;
+}
+
 export function HistoryScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -330,11 +344,7 @@ export function HistoryScreen() {
             renderItem={({ item: entry }) => {
               const isCopied = copied === entry.id;
               const text = entry.translatedText || entry.sourceText;
-              const characters = Array.from(text);
-              const excerpt =
-                characters.length > 60
-                  ? `${characters.slice(0, 57).join('')}…`
-                  : text;
+              const excerpt = excerptFor(text);
               return (
                 <View style={styles.entryWrap}>
                   <Pressable
